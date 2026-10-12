@@ -48,7 +48,7 @@ Voor toekomstige wijzigingen:
 
 De controleworkflow kan het **exact geteste artifact** naar GitHub Pages deployen, nadat alle controles geslaagd zijn. Deployment is actief wanneer de repositoryvariabele `ANCHOR_PAGES_ENABLED` op `true` staat. Daarna publiceert een push naar `main` de nieuwe geteste versie; de workflow kan ook handmatig worden gestart. `release.json` identificeert de appversie en bij een CI-build de broncommit.
 
-Bij de voorbereiding op 12 oktober 2026 weigerde GitHub Pages deze privérepository wegens het huidige abonnement (HTTP 422). De broncode blijft privé tot de eigenaar een publicatiekeuze heeft gemaakt. Activering vereist Pages met buildtype `workflow`, een geschikt abonnement of een openbare repository, en vervolgens de bovengenoemde variabele. De controleworkflow kan ondertussen gewoon draaien.
+De eigenaar heeft op 12 oktober 2026 gekozen voor een openbare repository en GitHub Pages. Het publicatieadres is [Anchor](https://freddywinkel.github.io/Anchor/). Pages gebruikt buildtype `workflow` met de bovengenoemde repositoryvariabele. De broncode is openbaar; persoonlijke registraties en back-ups worden niet in deze repository opgeslagen. Controleer de geslaagde deploymentrun en `release.json` voor de daadwerkelijk gepubliceerde versie.
 
 Gegevens uit de lokale preview verhuizen niet vanzelf naar een nieuw webadres: sla eerst open concepten op, exporteer de Anchor-back-up op het oude adres en importeer die op het nieuwe adres. Updates op datzelfde nieuwe adres behouden de bestaande opslag.
 

@@ -24,7 +24,7 @@ Op verzoek is opnieuw vanaf broncode, datacontract en gebruikersgedrag gecontrol
 
 De offline-status herkent na herladen ook de actieve eigen worker, zodat Instellingen niet blijvend ‘wordt voorbereid’ toont voor een reeds beschikbare offlineversie. Deze toestand is getest na meerdere offline herladingen.
 
-De release krijgt controleerbare metadata, artifactvalidatie en een deploymentjob die pas na alle checks hetzelfde geteste bestand publiceert. De live controle gebruikt uitsluitend fictieve gegevens in een nieuw browserprofiel. GitHub weigerde het aanzetten van Pages voor de privérepository met HTTP 422 wegens het huidige abonnement; publicatie vereist nog een hosting-/zichtbaarheidskeuze. Er is geen wijziging gedaan aan Substance Recovery of de zichtbaarheid van de Anchor-repository.
+De release krijgt controleerbare metadata, artifactvalidatie en een deploymentjob die pas na alle checks hetzelfde geteste bestand publiceert. De live controle gebruikt uitsluitend fictieve gegevens in een nieuw browserprofiel. GitHub weigerde aanvankelijk het aanzetten van Pages voor de privérepository met HTTP 422 wegens het huidige abonnement. De eigenaar heeft vervolgens expliciet gekozen voor een openbare Anchor-repository met GitHub Pages. Er is geen wijziging gedaan aan Substance Recovery. Een geslaagde deployment en een daarop uitgevoerde `pnpm verify:live` leveren afzonderlijk bewijs voor de daadwerkelijk gepubliceerde commit.
 
 ## Product en afbakening
 
