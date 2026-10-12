@@ -616,7 +616,7 @@ test("Anchor laat synthetische oude appopslag en database ongewijzigd", async ({
 test("geïnstalleerde serviceworker opent offline en bewaart nieuwe registraties", async ({
   page,
   context,
-}) => {
+}, testInfo) => {
   await createCraving(page, "Opgeslagen toen er verbinding was.");
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
@@ -628,14 +628,44 @@ test("geïnstalleerde serviceworker opent offline en bewaart nieuwe registraties
     )
     .toBe(true);
   await context.setOffline(true);
-  await page.reload();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await expect(page.getByText(/^Je bent offline\./)).toBeVisible();
+  const offlineDocument = await page.reload();
+  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  // Chromium 151 reports onLine=true after an offline SW reload, despite blocked
+  // network requests. Prove offline delivery independently of that browser hint.
+  const networkEvidence = await page.evaluate(async () => {
+    let uncachedRequestFailed = false;
+    try {
+      await fetch(`/Anchor/offline-probe-${crypto.randomUUID()}`, {
+        cache: "no-store",
+      });
+    } catch {
+      uncachedRequestFailed = true;
+    }
+    return { onlineHint: navigator.onLine, uncachedRequestFailed };
+  });
+  await testInfo.attach("offline-evidence", {
+    body: Buffer.from(
+      JSON.stringify({
+        browser: context.browser()?.version(),
+        fromServiceWorker: offlineDocument?.fromServiceWorker(),
+        ...networkEvidence,
+      }),
+    ),
+    contentType: "application/json",
+  });
+  expect(offlineDocument?.fromServiceWorker()).toBe(true);
+  expect(networkEvidence.uncachedRequestFailed).toBe(true);
+  await expect(page.getByText(/^Je bent offline\./)).toHaveCount(
+    networkEvidence.onlineHint ? 0 : 1,
+  );
   await page
     .getByLabel(/^Gedrag \(wat deed je\?\)/)
     .fill("Ook offline aangevuld.");
   await page.getByRole("button", { name: "Wijzigingen opslaan" }).click();
-  await page.reload();
+  const savedDocument = await page.reload();
+  expect(savedDocument?.fromServiceWorker()).toBe(true);
   await expect(page.getByLabel(/^Gedrag \(wat deed je\?\)/)).toHaveValue(
     "Ook offline aangevuld.",
   );
