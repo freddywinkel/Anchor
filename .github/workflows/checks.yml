@@ -1,0 +1,38 @@
+name: Anchor checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm test
+      - run: pnpm audit
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:browser
+      - run: pnpm test:secondary
+      - run: pnpm test:update
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Anchor-validation
+          path: |
+            dist/
+            playwright-report/
+            tmp/update-check/result.json
+          retention-days: 14
