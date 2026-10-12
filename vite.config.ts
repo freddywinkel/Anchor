@@ -6,13 +6,28 @@ const base = process.env.BASE_PATH || "/Anchor/";
 const packageVersion = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf8"),
 ).version as string;
+const appVersion = process.env.APP_BUILD || packageVersion;
 export default defineConfig({
   base,
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.APP_BUILD || packageVersion),
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
   plugins: [
     react(),
+    {
+      name: "anchor-release-metadata",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "release.json",
+          source: JSON.stringify({
+            app: "Anchor",
+            version: appVersion,
+            commit: process.env.GITHUB_SHA || null,
+          }),
+        });
+      },
+    },
     VitePWA({
       registerType: "prompt",
       injectRegister: false,
@@ -47,7 +62,7 @@ export default defineConfig({
       workbox: {
         cacheId: "anchor-app",
         cleanupOutdatedCaches: true,
-        globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,json}"],
         navigateFallback: "index.html",
         navigateFallbackAllowlist: [
           new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),

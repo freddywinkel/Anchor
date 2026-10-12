@@ -44,9 +44,13 @@ Voor toekomstige wijzigingen:
 1. Werk vanuit een branch, behoud de bestaande opslagstructuur en voeg voor een schemawijziging expliciete, geteste migraties toe. Verhoog de schemaversie niet met een reset als alternatief.
 2. Verhoog de appversie in `package.json`. Een build kan daarnaast een herkenbare `APP_BUILD`-waarde krijgen; de schemaversie staat hiervan los.
 3. Voer de controles hieronder uit, inclusief echte A→B-update met bewaarde gegevens en concepten.
-4. Publiceer bij een later geautoriseerde release de inhoud van `dist/` op dezelfde HTTPS-origin en hetzelfde pad. Het standaardpad is `/Anchor/`; `BASE_PATH` kan bij het bouwen worden ingesteld met een begin- en eindslash.
+4. Publiceer de gecontroleerde inhoud van `dist/` op dezelfde HTTPS-origin en hetzelfde pad. Het standaardpad is `/Anchor/`; `BASE_PATH` kan bij het bouwen worden ingesteld met een begin- en eindslash.
 
-Deze repository bevat een controleworkflow, **geen automatische deployment**. Het aanmaken van de repository publiceert nog geen website.
+De controleworkflow kan het **exact geteste artifact** naar GitHub Pages deployen, nadat alle controles geslaagd zijn. Deployment is actief wanneer de repositoryvariabele `ANCHOR_PAGES_ENABLED` op `true` staat. Daarna publiceert een push naar `main` de nieuwe geteste versie; de workflow kan ook handmatig worden gestart. `release.json` identificeert de appversie en bij een CI-build de broncommit.
+
+Bij de voorbereiding op 12 oktober 2026 weigerde GitHub Pages deze privérepository wegens het huidige abonnement (HTTP 422). De broncode blijft privé tot de eigenaar een publicatiekeuze heeft gemaakt. Activering vereist Pages met buildtype `workflow`, een geschikt abonnement of een openbare repository, en vervolgens de bovengenoemde variabele. De controleworkflow kan ondertussen gewoon draaien.
+
+Gegevens uit de lokale preview verhuizen niet vanzelf naar een nieuw webadres: sla eerst open concepten op, exporteer de Anchor-back-up op het oude adres en importeer die op het nieuwe adres. Updates op datzelfde nieuwe adres behouden de bestaande opslag.
 
 ## Controles
 
@@ -55,11 +59,14 @@ pnpm typecheck
 pnpm test
 pnpm audit
 pnpm build
+pnpm verify:pwa
 pnpm exec playwright install chromium
 pnpm test:browser
 pnpm test:secondary
 pnpm test:update
 ```
+
+Na deployment: stel `ANCHOR_LIVE_URL` en `EXPECTED_COMMIT` in en voer `pnpm verify:live` uit. Deze controle gebruikt een schoon browserprofiel met fictieve invoer voor de live pagina, offline opslaan/herladen en back-upexport.
 
 De browsertests gebruiken lokaal Google Chrome en in CI het geïnstalleerde Chromium. De updatetest gebruikt Chromium en bouwt twee tijdelijke versies op poort 8801; hij raakt geen eigen browserprofiel of persoonlijke registraties. Browserchecks gebruiken poort 8800. Sluit bij een handmatige controle een oude previewserver of bouw eerst de actuele versie.
 

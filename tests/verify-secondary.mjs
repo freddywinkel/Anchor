@@ -167,13 +167,40 @@ try {
   );
   await screenshot("desktop-plan-dark");
   await navigate("#/growth");
+  await page.getByLabel("Wat wil je onthouden?").fill("Fietsen was fijn.");
+  await page.getByLabel("Datum", { exact: true }).fill("");
   await page
     .getByLabel("Wat wil je onthouden?")
     .fill("Fietsen met de zon op mijn gezicht.");
   await page.getByLabel("Als favoriet bewaren", { exact: true }).check();
+  await navigate("#/settings");
+  await navigate("#/growth");
+  await expect(page.getByLabel("Datum", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Wat wil je onthouden?")).toHaveValue(
+    "Fietsen met de zon op mijn gezicht.",
+  );
   await page.reload();
   await expect(page.getByLabel("Wat wil je onthouden?")).toHaveValue(
     "Fietsen met de zon op mijn gezicht.",
+  );
+  await expect(page.getByLabel("Datum", { exact: true })).toHaveValue("");
+  await page
+    .getByRole("button", { name: "Moment bewaren", exact: true })
+    .click();
+  expect((await data()).growth).toHaveLength(0);
+  expect(
+    await page
+      .getByLabel("Datum", { exact: true })
+      .evaluate((input) => input.validity.valueMissing),
+  ).toBe(true);
+  expect((await drafts()).growth).toMatchObject({
+    date: "",
+    text: "Fietsen met de zon op mijn gezicht.",
+    favorite: true,
+  });
+  await page.getByLabel("Datum", { exact: true }).fill(today());
+  saveCheck(
+    "Growth text edited after clearing its date survives navigation and reload; an incomplete date cannot be saved",
   );
   await page
     .getByRole("button", { name: "Moment bewaren", exact: true })
@@ -366,7 +393,7 @@ try {
       afterDate: today(),
       afterTime: "10:20",
       activity: "Schilderen",
-      attempted: true,
+      attempted: false,
       emotions: ["Onrustig"],
       note: "Een nameting op een latere dag.",
     },
@@ -393,12 +420,24 @@ try {
   await expect(
     hp.getByRole("img", { name: /1 stemmingsmetingen/ }),
   ).toBeVisible();
-  await hp.getByText("Alle meetwaarden als tekst (1)", { exact: true }).click();
+  await hp
+    .getByText("Meetwaarden van de grafiek als tekst (1)", { exact: true })
+    .click();
   await expect(hp.locator(".dp-observation-details")).toContainText(
     "Stemming +1",
   );
+  await expect(hp.locator(".dp-observation-details")).toContainText("Nameting");
+  await expect(hp.locator(".dp-observation-details")).not.toContainText(
+    "Na activiteit",
+  );
+  await expect(
+    hp.getByRole("button", { name: /^Bekijk momentcheck-in/ }),
+  ).toBeEnabled();
+  await expect(hp.locator(".dp-history-list")).toContainText(
+    "Activiteit niet geprobeerd",
+  );
   saveCheck(
-    "History displays craving narratives; graph includes afterDate in week even when baseline is older",
+    "An in-week follow-up retains its older check-in in the list and never implies an untried activity happened",
   );
   for (const needle of [
     "keuken",
@@ -432,7 +471,170 @@ try {
     "Ik wil iets nemen",
   );
   saveCheck("Craving history opens complete editable record");
+  const readOnlyPage = await hc.newPage();
+  await readOnlyPage.goto(base + "#/history");
+  await expect(
+    readOnlyPage.getByText(/Alleen lezen\. Sluit andere Anchor-tabbladen/),
+  ).toBeVisible();
+  await readOnlyPage.getByLabel("Soort registratie").selectOption("craving");
+  await readOnlyPage.getByRole("searchbox").fill("keuken");
+  await readOnlyPage.getByRole("button", { name: /^Bekijk craving/ }).click();
+  await expect(
+    readOnlyPage.getByRole("textbox", { name: /^Gedachte/ }),
+  ).toHaveValue("Ik wil iets nemen");
+  await expect(
+    readOnlyPage.getByRole("textbox", { name: /^Gedachte/ }),
+  ).toBeDisabled();
+  await readOnlyPage.goto(base + "#/settings");
+  await expect(
+    readOnlyPage.getByRole("radio", { name: "Licht Warm papier" }),
+  ).toBeDisabled();
+  await expect(
+    readOnlyPage.getByLabel("Fijne momenten op Vandaag"),
+  ).toBeDisabled();
+  await expect(
+    readOnlyPage.getByRole("button", { name: "Back-up importeren" }),
+  ).toBeDisabled();
+  await expect(
+    readOnlyPage.getByText(
+      "Een back-up bevat alleen opgeslagen registraties.",
+      { exact: false },
+    ),
+  ).toBeVisible();
+  const readOnlyDownload = readOnlyPage.waitForEvent("download");
+  await readOnlyPage
+    .getByRole("button", { name: "Back-up exporteren" })
+    .click();
+  expect((await readOnlyDownload).suggestedFilename()).toMatch(/anchor.*json/i);
+  await readOnlyPage.getByRole("button", { name: "Privacy en opslag" }).click();
+  await expect(readOnlyPage.getByRole("dialog")).toContainText("Anchor");
+  await readOnlyPage.close();
+  saveCheck(
+    "Read-only tabs can filter, open records, export and read privacy while all data-changing settings remain disabled",
+  );
   await hc.close();
+
+  const longState = createEmptyState();
+  longState.goals = [
+    {
+      id: "long-goal",
+      target: "Other substance",
+      name: "EenZeerLangeMiddelnaam".repeat(9),
+      direction: "Een eigen richting",
+      note: "Samenhangende tekst. ".repeat(40),
+    },
+  ];
+  longState.growth = [
+    {
+      id: "long-growth",
+      date: today(),
+      text: "LangeNotitieZonderSpaties".repeat(50),
+      favorite: true,
+    },
+  ];
+  longState.cravings = [
+    {
+      ...historyState.cravings[0],
+      situation: "SituatieZonderSpaties".repeat(40),
+      thought: "Een lange gedachte. ".repeat(50),
+    },
+  ];
+  const longContext = await browser.newContext({
+    viewport: { width: 320, height: 900 },
+    locale: "nl-NL",
+    reducedMotion: "reduce",
+  });
+  await longContext.addInitScript(
+    ({ key, state }) => {
+      if (!localStorage.getItem(key))
+        localStorage.setItem(key, JSON.stringify(state));
+    },
+    { key: STORAGE_KEY, state: longState },
+  );
+  const longPage = await longContext.newPage();
+  for (const hash of ["#/plan", "#/growth", "#/history"]) {
+    await longPage.goto(base + hash);
+    await expect(longPage.getByRole("heading", { level: 1 })).toBeVisible();
+    await longPage.evaluate(
+      () => (document.documentElement.style.fontSize = "200%"),
+    );
+    expect(
+      await longPage.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
+  await longContext.close();
+  saveCheck(
+    "Long goal names, narrative text and unbroken words reflow at 320px with 200 percent text",
+  );
+  const historyOfYears = createEmptyState();
+  for (let index = 0; index < 3000; index++) {
+    const day = new Date(`${today()}T12:00:00`);
+    day.setDate(day.getDate() - Math.floor(index / 4));
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    historyOfYears.moments.push({
+      id: `history-${index}`,
+      date,
+      time: `${8 + (index % 4) * 3}:00`.padStart(5, "0"),
+      kind: "checkin",
+      before: { mood: (index % 5) - 2, eis: 40 },
+      after: null,
+      afterDate: null,
+      afterTime: null,
+      activity: "",
+      attempted: null,
+      emotions: [],
+      note: `Korte persoonlijke aantekening ${index}.`,
+    });
+  }
+  const historyContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    locale: "nl-NL",
+    timezoneId: "Europe/Amsterdam",
+    reducedMotion: "reduce",
+  });
+  await historyContext.addInitScript(
+    ({ key, state }) => {
+      if (!localStorage.getItem(key))
+        localStorage.setItem(key, JSON.stringify(state));
+    },
+    { key: STORAGE_KEY, state: historyOfYears },
+  );
+  const historyPage = await historyContext.newPage();
+  await historyPage.goto(base + "#/history");
+  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(28);
+  await historyPage.getByLabel("Periode").selectOption("all");
+  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(50);
+  await expect(historyPage.locator(".dp-observation-details li")).toHaveCount(
+    40,
+  );
+  await expect(
+    historyPage.getByText("3000 gevonden", { exact: true }),
+  ).toBeVisible();
+  expect(
+    await historyPage.evaluate(() => document.querySelectorAll("*").length),
+  ).toBeLessThan(2000);
+  await historyPage
+    .getByRole("button", { name: "Meer registraties tonen" })
+    .click();
+  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(100);
+  await expect(
+    historyPage.locator(".dp-history-list > li > button").nth(50),
+  ).toBeFocused();
+  await historyPage.getByRole("searchbox").fill("aantekening 2999.");
+  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(1);
+  await expect(historyPage.locator(".dp-history-list")).toContainText(
+    "aantekening 2999.",
+  );
+  await historyPage.getByRole("searchbox").fill("");
+  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(50);
+  await historyPage.getByLabel("Periode").selectOption("week");
+  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(28);
+  await historyContext.close();
+  saveCheck(
+    "A 3000-record history renders 50 entries and 40 text observations while pagination, focus, full-history search and filters remain correct",
+  );
   expect(report.errors).toEqual([]);
   saveCheck("No browser runtime errors");
 } catch (error) {

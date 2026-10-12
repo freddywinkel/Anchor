@@ -58,13 +58,21 @@ export function HistoryView({
   const [period, setPeriod] = useState("week");
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(50);
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => setVisibleCount(50), [period, kind, query]);
   const entries = useMemo(() => {
     const start = recentStart();
+    const withinPeriod = (date: string) =>
+      period === "all" || (date >= start && date <= today());
     const search = query.trim().toLocaleLowerCase("nl-NL");
     const moments = state.moments
       .filter(
         (item) =>
-          (period === "all" || (item.date >= start && item.date <= today())) &&
+          (withinPeriod(item.date) ||
+            (item.after !== null &&
+              item.afterDate !== null &&
+              withinPeriod(item.afterDate))) &&
           (kind === "all" || item.kind === kind) &&
           `${item.note} ${item.activity} ${item.emotions.join(" ")} check-in`
             .toLocaleLowerCase("nl-NL")
@@ -127,7 +135,7 @@ export function HistoryView({
                 date: m.date,
                 time: m.time,
                 mood: m.before.mood,
-                label: m.activity ? "Voor activiteit" : "Moment",
+                label: "Moment",
               },
             ]
           : []),
@@ -138,7 +146,7 @@ export function HistoryView({
                 date: m.afterDate || m.date,
                 time: m.afterTime || m.time,
                 mood: m.after.mood,
-                label: "Na activiteit",
+                label: "Nameting",
               },
             ]
           : []),
@@ -151,6 +159,7 @@ export function HistoryView({
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   const graphPoints = observations.slice(-40);
+  const visibleEntries = entries.slice(0, visibleCount);
   return (
     <div className="dp-history">
       <div className="dp-history-filters">
@@ -233,7 +242,7 @@ export function HistoryView({
                       r="5"
                       vectorEffect="non-scaling-stroke"
                       className={
-                        point.label === "Na activiteit"
+                        point.label === "Nameting"
                           ? "dp-plot-after"
                           : "dp-plot-before"
                       }
@@ -254,19 +263,18 @@ export function HistoryView({
               </div>
               <p className="dp-plot-key">
                 <span>
-                  <i aria-hidden="true" /> Moment / vooraf
+                  <i aria-hidden="true" /> Moment
                 </span>
                 <span>
-                  <i className="dp-key-after" aria-hidden="true" /> Na
-                  activiteit
+                  <i className="dp-key-after" aria-hidden="true" /> Nameting
                 </span>
               </p>
               <details className="dp-observation-details">
                 <summary>
-                  Alle meetwaarden als tekst ({observations.length})
+                  Meetwaarden van de grafiek als tekst ({graphPoints.length})
                 </summary>
                 <ul>
-                  {observations.map((point) => (
+                  {graphPoints.map((point) => (
                     <li key={point.id}>
                       <span>
                         {dateLabel(point.date)} · {point.time} · {point.label}
@@ -278,8 +286,9 @@ export function HistoryView({
               </details>
               {observations.length > 40 && (
                 <p className="dp-muted">
-                  De grafiek toont de laatste 40 metingen. In de tekstlijst
-                  staan alle gefilterde waarden.
+                  De grafiek en tekstlijst tonen de laatste 40 metingen binnen
+                  je selectie. Oudere metingen kun je via de registraties
+                  openen.
                 </p>
               )}
               <p className="dp-muted">
@@ -303,8 +312,12 @@ export function HistoryView({
           </p>
         </div>
         {entries.length ? (
-          <ol className="dp-history-list">
-            {entries.map((entry) => (
+          <ol
+            className="dp-history-list"
+            id="anchor-history-records"
+            ref={listRef}
+          >
+            {visibleEntries.map((entry) => (
               <li
                 key={
                   entry.type === "day"
@@ -356,6 +369,11 @@ export function HistoryView({
                   )}
                   {entry.type === "moment" && entry.item.activity && (
                     <span className="dp-history-state">
+                      {entry.item.attempted === true
+                        ? "Activiteit geprobeerd · "
+                        : entry.item.attempted === false
+                          ? "Activiteit niet geprobeerd · "
+                          : ""}
                       {entry.item.after
                         ? `Nameting op ${dateLabel(entry.item.afterDate || entry.date)} om ${entry.item.afterTime}`
                         : "Nameting nog niet ingevuld"}
@@ -393,6 +411,31 @@ export function HistoryView({
             >
               Filters wissen
             </button>
+          </div>
+        )}
+        {entries.length > 50 && (
+          <div className="dp-history-pagination">
+            <p className="dp-muted" role="status">
+              Je ziet {visibleEntries.length} van {entries.length} registraties.
+            </p>
+            {visibleCount < entries.length && (
+              <button
+                className="dp-button"
+                type="button"
+                aria-controls="anchor-history-records"
+                onClick={() => {
+                  const firstAdded = visibleEntries.length;
+                  setVisibleCount((count) => count + 50);
+                  requestAnimationFrame(() =>
+                    listRef.current
+                      ?.querySelectorAll<HTMLButtonElement>("li > button")
+                      [firstAdded]?.focus(),
+                  );
+                }}
+              >
+                Meer registraties tonen
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -1177,12 +1220,16 @@ export function SettingsView({
   onExport,
   onImport,
   onPrivacy,
+  readOnly = false,
+  blocked = false,
 }: {
   state: AppState;
   onSave: Save;
   onExport: () => void;
   onImport: () => void;
   onPrivacy: () => void;
+  readOnly?: boolean;
+  blocked?: boolean;
 }) {
   const [error, setError] = useState("");
   const save = (next: AppState, message: string) =>
@@ -1209,6 +1256,7 @@ export function SettingsView({
             >
               <input
                 type="radio"
+                disabled={readOnly || blocked}
                 name="anchor-theme"
                 value={value}
                 checked={state.theme === value}
@@ -1235,6 +1283,7 @@ export function SettingsView({
           </span>
           <input
             type="checkbox"
+            disabled={readOnly || blocked}
             checked={state.homeShowGrowth}
             onChange={(event) =>
               save(
@@ -1260,14 +1309,26 @@ export function SettingsView({
           te herstellen.
         </p>
         <p className="dp-muted">
+          Een back-up bevat alleen opgeslagen registraties. Sla open concepten
+          eerst op als je die ook wilt meenemen.
+        </p>
+        <p className="dp-muted">
           Een back-up bevat persoonlijke gegevens en is niet versleuteld. Bewaar
           het bestand op een plek die je vertrouwt.
         </p>
         <div className="dp-row-actions">
-          <button className="dp-button primary" onClick={onExport}>
+          <button
+            className="dp-button primary"
+            onClick={onExport}
+            disabled={blocked}
+          >
             Back-up exporteren
           </button>
-          <button className="dp-button quiet" onClick={onImport}>
+          <button
+            className="dp-button quiet"
+            onClick={onImport}
+            disabled={readOnly || blocked}
+          >
             Back-up importeren
           </button>
         </div>

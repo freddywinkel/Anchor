@@ -1,6 +1,6 @@
 {
   "name": "anchor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.9.0",
@@ -16,6 +16,8 @@
     "test": "node --test --test-concurrency=1 tests/*.test.ts",
     "test:browser": "playwright test",
     "test:secondary": "node tests/verify-secondary.mjs",
+    "verify:pwa": "node scripts/verify-pwa.mjs",
+    "verify:live": "node tests/verify-live.mjs",
     "audit:dependencies": "pnpm audit --prod",
     "test:update": "node tests/verify-update.mjs"
   },

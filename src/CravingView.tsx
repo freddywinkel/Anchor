@@ -27,10 +27,13 @@ const narrativeFields = [
 
 function validDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const year = Number(value.slice(0, 4));
   const parsed = new Date(`${value}T12:00:00`);
   return (
+    year >= 1900 &&
+    year <= 2199 &&
     Number.isFinite(parsed.getTime()) &&
-    parsed.getFullYear() === Number(value.slice(0, 4)) &&
+    parsed.getFullYear() === year &&
     parsed.getMonth() + 1 === Number(value.slice(5, 7)) &&
     parsed.getDate() === Number(value.slice(8, 10))
   );
@@ -106,7 +109,7 @@ export function CravingView({
       !validDate(value.date) ||
       !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time)
     ) {
-      setError("Vul een geldige datum en tijd in.");
+      setError("Vul een geldige datum tussen 1900 en 2199 en een tijd in.");
       return;
     }
     if (!narrativeFields.some((field) => value[field].trim())) {
@@ -195,6 +198,8 @@ export function CravingView({
                 id={`${prefix}-date`}
                 type="date"
                 required
+                min="1900-01-01"
+                max="2199-12-31"
                 value={value.date}
                 aria-describedby={dateHintId}
                 onChange={(event) => update("date", event.target.value)}
@@ -222,7 +227,9 @@ export function CravingView({
         >
           <h2 id={`${prefix}-situation-title`}>De situatie</h2>
           <label className="dp-field" htmlFor={`${prefix}-situation`}>
-            Situatie (wie, wat, waar)
+            <span id={`${prefix}-situation-label`}>
+              Situatie (wie, wat, waar)
+            </span>
             <span className="dp-hint" id={`${prefix}-situation-hint`}>
               Wie waren erbij, wat gebeurde er en waar was je?
             </span>
@@ -231,6 +238,7 @@ export function CravingView({
               rows={3}
               maxLength={4000}
               value={value.situation}
+              aria-labelledby={`${prefix}-situation-label`}
               aria-describedby={`${prefix}-situation-hint`}
               onChange={(event) => update("situation", event.target.value)}
             />
@@ -243,7 +251,7 @@ export function CravingView({
             Deze drie onderdelen kun je los van elkaar invullen.
           </p>
           <label className="dp-field" htmlFor={`${prefix}-thought`}>
-            Gedachte
+            <span id={`${prefix}-thought-label`}>Gedachte</span>
             <span className="dp-hint" id={`${prefix}-thought-hint`}>
               Wat ging er door je hoofd?
             </span>
@@ -252,12 +260,13 @@ export function CravingView({
               rows={3}
               maxLength={4000}
               value={value.thought}
+              aria-labelledby={`${prefix}-thought-label`}
               aria-describedby={`${prefix}-thought-hint`}
               onChange={(event) => update("thought", event.target.value)}
             />
           </label>
           <label className="dp-field" htmlFor={`${prefix}-body`}>
-            Lichamelijke sensatie
+            <span id={`${prefix}-body-label`}>Lichamelijke sensatie</span>
             <span className="dp-hint" id={`${prefix}-body-hint`}>
               Wat voelde je in je lichaam?
             </span>
@@ -266,12 +275,13 @@ export function CravingView({
               rows={3}
               maxLength={4000}
               value={value.bodySensation}
+              aria-labelledby={`${prefix}-body-label`}
               aria-describedby={`${prefix}-body-hint`}
               onChange={(event) => update("bodySensation", event.target.value)}
             />
           </label>
           <label className="dp-field" htmlFor={`${prefix}-emotion`}>
-            Emotie
+            <span id={`${prefix}-emotion-label`}>Emotie</span>
             <span className="dp-hint" id={`${prefix}-emotion-hint`}>
               Welke emotie of emoties merkte je?
             </span>
@@ -280,6 +290,7 @@ export function CravingView({
               rows={3}
               maxLength={4000}
               value={value.emotion}
+              aria-labelledby={`${prefix}-emotion-label`}
               aria-describedby={`${prefix}-emotion-hint`}
               onChange={(event) => update("emotion", event.target.value)}
             />
@@ -292,7 +303,7 @@ export function CravingView({
         >
           <h2 id={`${prefix}-behavior-title`}>Je gedrag</h2>
           <label className="dp-field" htmlFor={`${prefix}-behavior`}>
-            Gedrag (wat deed je?)
+            <span id={`${prefix}-behavior-label`}>Gedrag (wat deed je?)</span>
             <span className="dp-hint" id={`${prefix}-behavior-hint`}>
               Beschrijf in je eigen woorden wat je deed.
             </span>
@@ -301,6 +312,7 @@ export function CravingView({
               rows={3}
               maxLength={4000}
               value={value.behavior}
+              aria-labelledby={`${prefix}-behavior-label`}
               aria-describedby={`${prefix}-behavior-hint`}
               onChange={(event) => update("behavior", event.target.value)}
             />

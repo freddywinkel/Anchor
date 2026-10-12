@@ -2,6 +2,30 @@
 
 Auditdatum: 12 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Een publieke deployment en installatie op een fysiek apparaat zijn hiermee niet aangetoond.
 
+## Aanvullende ground-up audit — versie 1.0.1
+
+Op verzoek is opnieuw vanaf broncode, datacontract en gebruikersgedrag gecontroleerd. De onderstaande bevindingen zijn gereproduceerd en opgelost; de opslagkeys en schemaversie zijn behouden.
+
+| Bevinding                                                                                                                                              | Herstel en bewijs                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Een opslagobject precies op de lengtegrens kon door een langere revisie onleesbaar worden na een succesvolle save.                                     | De uiteindelijke serialisatie wordt vóór schrijven begrensd, ook bij import. Grensgevallen hebben regressietests.                                                     |
+| Bij een tijdelijk lege/half ingevoerde datum kon nieuw geschreven concepttekst verloren gaan.                                                          | Concepten bewaren begrensde onvolledige datums; definitieve opslag blijft strikt. Een browserproef bewaart de tekst na navigatie en herladen.                         |
+| Een gewijzigde opslag kon na het downloaden van de veiligheidskopie toch worden vervangen wanneer een achtergrondlezing de interne snapshot ververste. | Herstel vergelijkt nu de exacte bytes van de gedownloade snapshot. De veiligheidskopie gebruikt de werkelijke actuele opslag.                                         |
+| Een nameting aanpassen verschoof het oorspronkelijke tijdstip naar het moment van bewerken.                                                            | Datum en tijd van bestaande nametingen blijven behouden en worden zichtbaar vermeld.                                                                                  |
+| Niet-bestaande kalenderdagen in een dag-URL werden als een andere datum getoond.                                                                       | Exacte kalendercontrole met hetzelfde jaarbereik als de opslag.                                                                                                       |
+| Een onafgemaakte nameting bleef na herladen verborgen.                                                                                                 | Het formulier opent ook op basis van het opgeslagen concept.                                                                                                          |
+| Een recente nameting bij een oudere check-in stond wel in de grafiek maar niet in de bereikbare lijst.                                                 | De periodefilter vindt de voor- óf nameting; het oorspronkelijke record blijft bereikbaar.                                                                            |
+| De tekst ‘Na activiteit’ kon een niet-geprobeerde activiteit toch als uitgevoerd presenteren.                                                          | Neutrale nametinglabels en expliciete geprobeerd/niet-geprobeerd-weergave.                                                                                            |
+| Alleen-lezen blokkeerde ook zoeken, bekijken en exporteren.                                                                                            | Alleen wijzigingen zijn afgeschermd; geschiedenis, lezen, export en privacy blijven beschikbaar.                                                                      |
+| Toetsenbordfocus op een klein scherm kon achter de vaste onderste navigatie vallen.                                                                    | Gemeten navigatiehoogte, scrollruimte en actieve focuscorrectie, ook bij een gewijzigde zichtbare viewport. Getest op 320 px in beide thema's bij 100% en 200% tekst. |
+| Een geschiedenis van 3000 korte registraties renderde ruim 45.000 DOM-elementen en veroorzaakte lange taken.                                           | De lijst begint met 50 registraties en kan per 50 worden uitgebreid; zoeken en filters werken over alle gegevens. De tekstweergave volgt dezelfde 40 grafiekpunten.   |
+| Cravingvelden hadden herhaalde schermlezerlabels en onduidelijke native datumgrenzen.                                                                  | Korte toegankelijke veldnamen met afzonderlijke uitleg; native grenzen komen overeen met de opslag.                                                                   |
+| Gelijke IDs uit verschillende recordsoorten konden botsen in de tijdlijn.                                                                              | React-sleutels bevatten nu ook de recordsoort; bestaande record-IDs blijven behouden.                                                                                 |
+
+De offline-status herkent na herladen ook de actieve eigen worker, zodat Instellingen niet blijvend ‘wordt voorbereid’ toont voor een reeds beschikbare offlineversie. Deze toestand is getest na meerdere offline herladingen.
+
+De release krijgt controleerbare metadata, artifactvalidatie en een deploymentjob die pas na alle checks hetzelfde geteste bestand publiceert. De live controle gebruikt uitsluitend fictieve gegevens in een nieuw browserprofiel. GitHub weigerde het aanzetten van Pages voor de privérepository met HTTP 422 wegens het huidige abonnement; publicatie vereist nog een hosting-/zichtbaarheidskeuze. Er is geen wijziging gedaan aan Substance Recovery of de zichtbaarheid van de Anchor-repository.
+
 ## Product en afbakening
 
 Anchor is een Nederlandstalig persoonlijk dagboek met een rustige dagweergave. De nieuwe app heeft eigen broncode, opslag, manifest en serviceworker. Substance Recovery blijft een afzonderlijke app. Een vergelijking van alle 514 bestaande, niet-genegeerde bronbestanden van die repository vond geen gewijzigde inhoud; Git-status en HEAD bleven gelijk.
@@ -57,16 +81,16 @@ Bij toekomstige releases: behoud bestaande opslagkeys, voeg zo nodig expliciete 
 
 ## Verificatie en resterende grenzen
 
-| Controle                              | Vastgesteld resultaat                                                                                                             |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| TypeScript en productiebuild          | Geslaagd.                                                                                                                         |
-| Opslagtests                           | 39 geslaagd: schema, corrupte data, revisieconflicten, back-ups, concepten en fouten.                                             |
-| App-browsertests                      | 17 geslaagd: kernflows, isolatie, concepten/herstel, meervoudige check-ins, import, twee tabbladen, offline en responsive invoer. |
-| Aanvullende secundaire browseraudit   | 18 geslaagd: doelen, plan, groei, voorkeuren, foutscenario's, filters, latere nameting en 320 px/200% tekst. Geen runtimefouten.  |
-| Dependency-audit                      | Nul gerapporteerde kwetsbaarheden op auditdatum.                                                                                  |
-| Oude repository behouden              | 514 bestanden inhoudelijk identiek; status en HEAD ongewijzigd.                                                                   |
-| Oude-client-update                    | Twee opeenvolgende echte A→B-overgangen geslaagd, met conceptblokkade, identieke gegevens en offline herladen van B.              |
-| Publieke deployment / fysiek apparaat | Niet aangetoond door deze audit.                                                                                                  |
+| Controle                              | Vastgesteld resultaat                                                                                                                                |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TypeScript en productiebuild          | Geslaagd.                                                                                                                                            |
+| Opslagtests                           | 47 geslaagd: schema, corrupte data, revisieconflicten, back-ups, concepten en fouten.                                                                |
+| App-browsertests                      | 24 geslaagd: kernflows, isolatie, concepten/herstel, meervoudige check-ins, import, twee tabbladen, offline en responsive invoer.                    |
+| Aanvullende secundaire browseraudit   | 22 geslaagd: grote geschiedenis, doelen, plan, groei, voorkeuren, foutscenario's, filters, latere nameting en 320 px/200% tekst. Geen runtimefouten. |
+| Dependency-audit                      | Nul gerapporteerde kwetsbaarheden op auditdatum.                                                                                                     |
+| Oude repository behouden              | 514 bestanden inhoudelijk identiek; status en HEAD ongewijzigd.                                                                                      |
+| Oude-client-update                    | Twee opeenvolgende echte A→B-overgangen geslaagd, met conceptblokkade, identieke gegevens en offline herladen van B.                                 |
+| Publieke deployment / fysiek apparaat | Niet aangetoond door deze audit.                                                                                                                     |
 
 `localStorage` heeft beperkte, browserafhankelijke capaciteit en kan worden gewist of ontoegankelijk zijn. De app begrenst de hoofdgegevens tot 2.000.000 tekens, concepten tot 256.000 tekens en 100 concepten. Een niet-bewaarde sessie kan verloren gaan als het tabblad ondanks de waarschuwing wordt gesloten. Regelmatige eigen back-ups blijven nodig. Er is geen cross-device-synchronisatie, bulkimport uit de oude app, attachmentopslag of automatische samenvoeging van conflicterende back-ups.
 

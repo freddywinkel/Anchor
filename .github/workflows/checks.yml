@@ -3,18 +3,22 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: anchor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/action-setup@v6.1.0
         with:
           version: 11.9.0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
           cache: pnpm
@@ -23,11 +27,16 @@ jobs:
       - run: pnpm test
       - run: pnpm audit
       - run: pnpm build
+      - run: pnpm verify:pwa
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:browser
       - run: pnpm test:secondary
       - run: pnpm test:update
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-pages-artifact@v4
+        if: github.ref == 'refs/heads/main' && vars.ANCHOR_PAGES_ENABLED == 'true'
+        with:
+          path: dist
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: Anchor-validation
@@ -35,4 +44,21 @@ jobs:
             dist/
             playwright-report/
             tmp/update-check/result.json
+            tmp/secondary-qa/report.json
+            tmp/pwa-validation.json
           retention-days: 14
+  deploy:
+    if: github.ref == 'refs/heads/main' && vars.ANCHOR_PAGES_ENABLED == 'true'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy verified Anchor artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

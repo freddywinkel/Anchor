@@ -139,6 +139,28 @@ function populated(): AppState {
   };
 }
 
+function fullStateAtRevisionNine(): AppState {
+  const state = createEmptyState();
+  state.revision = 9;
+  state.cravings = Array.from({ length: 500 }, (_, index) => ({
+    ...makeCraving(`capacity-${index}`),
+    situation: "",
+    thought: "",
+    bodySensation: "",
+    emotion: "",
+    behavior: "",
+  }));
+  let remaining = 2_000_000 - JSON.stringify(state).length;
+  for (const craving of state.cravings) {
+    const length = Math.min(4000, remaining);
+    craving.thought = "x".repeat(length);
+    remaining -= length;
+    if (remaining === 0) break;
+  }
+  assert.equal(JSON.stringify(state).length, 2_000_000);
+  return state;
+}
+
 describe("Anchor storage isolation and independent records", () => {
   it("starts empty and never reads, clears, or changes the previous app or preview", () => {
     store.values.set("anchor-recovery", "old app canary");
@@ -362,6 +384,18 @@ describe("validation and safe failure", () => {
     assert.equal(saveState(loadState().state).ok, false);
     assert.equal(store.values.get(STORAGE_KEY), raw);
   });
+
+  it("checks the final payload size after revision growth before saving", () => {
+    const state = fullStateAtRevisionNine();
+    const raw = JSON.stringify(validateState(state));
+    store.values.set(STORAGE_KEY, raw);
+    const result = saveState(state);
+    assert.equal(result.ok, false);
+    assert.match(result.message!, /te groot/);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(loadState().blocked, false);
+    assert.equal(loadState().state.revision, 9);
+  });
 });
 
 describe("validated backups and explicit restore", () => {
@@ -417,6 +451,50 @@ describe("validated backups and explicit restore", () => {
     assert.equal(store.values.get(STORAGE_KEY), "different corrupt original");
   });
 
+  it("keeps the approved corrupt snapshot fixed when a background load sees newer bytes", () => {
+    const approved = "corrupt bytes offered as the recovery copy";
+    store.values.set(STORAGE_KEY, approved);
+    loadState();
+    store.values.set(STORAGE_KEY, "new corrupt bytes from another context");
+    loadState();
+    const result = replaceFromBackup(populated(), 0, approved);
+    assert.equal(result.ok, false);
+    assert.match(result.message!, /veiligheidskopie/);
+    assert.equal(
+      store.values.get(STORAGE_KEY),
+      "new corrupt bytes from another context",
+    );
+  });
+
+  it("rejects same-revision content changes after the safety copy was downloaded", () => {
+    const original = populated();
+    const approved = JSON.stringify(original);
+    store.values.set(STORAGE_KEY, approved);
+    const newer = JSON.stringify({ ...original, theme: "dark" });
+    store.values.set(STORAGE_KEY, newer);
+    assert.equal(
+      replaceFromBackup(createEmptyState(), original.revision, approved).ok,
+      false,
+    );
+    assert.equal(store.values.get(STORAGE_KEY), newer);
+  });
+
+  it("distinguishes an approved empty store from newly created records", () => {
+    assert.equal(replaceFromBackup(populated(), 0, null).ok, true);
+    const raw = store.values.get(STORAGE_KEY);
+    assert.equal(replaceFromBackup(createEmptyState(), 1, null).ok, false);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+  });
+
+  it("restores the unchanged corrupt snapshot supplied with explicit approval", () => {
+    const raw = "the original corrupt snapshot";
+    store.values.set(STORAGE_KEY, raw);
+    loadState();
+    assert.equal(replaceFromBackup(populated(), 0, raw).ok, true);
+    assert.equal(loadState().blocked, false);
+    assert.deepEqual(loadState().state.cravings, populated().cravings);
+  });
+
   it("preserves current data if a restore write fails", () => {
     const original = saveState(populated()).state!;
     const raw = store.values.get(STORAGE_KEY);
@@ -426,6 +504,15 @@ describe("validated backups and explicit restore", () => {
       false,
     );
     assert.equal(store.values.get(STORAGE_KEY), raw);
+  });
+
+  it("keeps existing data when a restore revision would exceed the payload limit", () => {
+    const current = { ...populated(), revision: 9 };
+    const raw = JSON.stringify(current);
+    store.values.set(STORAGE_KEY, raw);
+    assert.equal(replaceFromBackup(fullStateAtRevisionNine(), 9).ok, false);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(loadState().blocked, false);
   });
 
   it("rejects prototype-polluting backup fields without affecting objects", () => {
@@ -560,6 +647,42 @@ describe("isolated reload-safe drafts", () => {
     assert.equal(saveDraft("day:2026-10-12", day).ok, true);
     assert.deepEqual(loadDrafts()["day:2026-10-12"], day);
     assert.equal(saveState({ ...createEmptyState(), days: [day] }).ok, false);
+  });
+
+  it("preserves growth text when its editable date is temporarily empty", () => {
+    const entry = {
+      ...populated().growth[0],
+      date: "",
+      text: "Tekst terwijl ik de datum aanpas",
+    };
+    assert.equal(saveDraft("growth", entry).ok, true);
+    assert.deepEqual(loadDrafts().growth, entry);
+    assert.equal(
+      saveState({ ...createEmptyState(), growth: [entry] }).ok,
+      false,
+    );
+    store.failWrite = true;
+    const changed = {
+      ...entry,
+      text: "Ook deze nieuwe tekst blijft bewaard in dit tabblad",
+    };
+    assert.equal(saveDraft("growth", changed).ok, false);
+    assert.deepEqual(loadDrafts().growth, changed);
+    assert.equal(hasUnpersistedDrafts(), true);
+  });
+
+  it("retains the whole draft while a native date year is being edited", () => {
+    const entry = {
+      ...makeCraving(),
+      date: "0026-10-12",
+      thought: "Nieuw geschreven tijdens het aanpassen van de datum",
+    };
+    assert.equal(saveDraft("craving:new", entry).ok, true);
+    assert.deepEqual(loadDrafts()["craving:new"], entry);
+    assert.equal(
+      saveState({ ...createEmptyState(), cravings: [entry] }).ok,
+      false,
+    );
   });
 
   it("keeps a failed draft removal visible until it succeeds", () => {

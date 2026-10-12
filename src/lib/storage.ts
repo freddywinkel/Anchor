@@ -192,11 +192,13 @@ function ratings(value: unknown, draft = false): Ratings {
 }
 
 function draftDate(value: unknown, draft: boolean): string {
-  return draft && value === "" ? "" : date(value);
+  // A native date field can temporarily contain an empty or partial year while
+  // being edited. Rejecting that draft would also lose its other form text.
+  return draft ? string(value, "Conceptdatum", 32) : date(value);
 }
 
 function draftTime(value: unknown, draft: boolean): string {
-  return draft && value === "" ? "" : time(value);
+  return draft ? string(value, "Concepttijd", 16) : time(value);
 }
 
 function list<T>(
@@ -367,7 +369,7 @@ function goal(value: unknown): Goal {
   };
 }
 
-function growth(value: unknown): Growth {
+function growth(value: unknown, draft = false): Growth {
   const item = fields(
     value,
     ["id", "date", "text", "favorite"],
@@ -375,7 +377,7 @@ function growth(value: unknown): Growth {
   );
   return {
     id: identifier(item.id),
-    date: date(item.date),
+    date: draftDate(item.date, draft),
     text: string(item.text, "Groeinotitie"),
     favorite: bool(item.favorite, "Favoriet"),
   };
@@ -471,7 +473,7 @@ export function validateState(value: unknown): AppState {
       "Doelen",
     ),
     growth: unique(
-      list(item.growth, "Groeinotities", growth),
+      list(item.growth, "Groeinotities", (entry) => growth(entry)),
       (entry) => entry.id,
       "Groeinotities",
     ),
@@ -541,7 +543,16 @@ export function loadState(): {
 
 function writeState(state: AppState): SaveResult {
   try {
-    storage().setItem(STORAGE_KEY, JSON.stringify(state));
+    const serialized = JSON.stringify(state);
+    // Incrementing the revision can add a digit. Check the final serialized
+    // value, so a successful save remains readable by decodeState next launch.
+    if (serialized.length > MAX_STATE_LENGTH)
+      return {
+        ok: false,
+        message:
+          "Je gegevens zijn te groot voor de lokale opslag. Er is niets overschreven. Maak een back-up voordat je verder gaat.",
+      };
+    storage().setItem(STORAGE_KEY, serialized);
     return { ok: true, state, message: null };
   } catch {
     return {
@@ -629,6 +640,7 @@ export function parseBackup(text: string): AppState {
 export function replaceFromBackup(
   state: AppState,
   expectedRevision: number,
+  expectedRaw?: string | null,
 ): SaveResult {
   let candidate: AppState;
   try {
@@ -652,6 +664,15 @@ export function replaceFromBackup(
         "De lokale opslag is niet beschikbaar. De back-up is niet teruggezet.",
     };
   }
+  // The UI supplies the exact snapshot offered as its pre-restore safety copy.
+  // Background storage events may refresh lastLoadedRaw; they must not widen
+  // the user's earlier approval to replacing different, newly observed bytes.
+  if (expectedRaw !== undefined && raw !== expectedRaw)
+    return {
+      ok: false,
+      message:
+        "Je gegevens zijn gewijzigd sinds het downloaden van de veiligheidskopie. Download de huidige opslag opnieuw voordat je de back-up terugzet.",
+    };
   let current: AppState | null = null;
   try {
     current = raw === null ? createEmptyState() : decodeState(raw);
@@ -678,7 +699,7 @@ export function replaceFromBackup(
 function draftValue(key: string, value: unknown): unknown {
   if (key === "plan") return plan(value);
   if (key === "goal") return goal(value);
-  if (key === "growth") return growth(value);
+  if (key === "growth") return growth(value, true);
   const match = /^(moment|day|craving):(.+)$/.exec(key);
   if (!match) return invalid("Dit concept heeft een onbekende naam.");
   const [, type, id] = match;

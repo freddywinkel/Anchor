@@ -34,6 +34,7 @@ import {
   draftStorageWarning,
   exportDraftRecovery,
   clearDraftStorage,
+  validateState,
   DRAFT_STORAGE_KEY,
   STORAGE_KEY,
   type AppState,
@@ -62,13 +63,28 @@ const MOUTHS = [
 const KINDS: Record<Moment["kind"], string> = { checkin: "Check-in" };
 const blankRatings = (): Ratings => ({ mood: null, eis: null });
 const uid = () => crypto.randomUUID();
+const hasAnchorWorker = () =>
+  navigator.serviceWorker?.controller?.scriptURL ===
+  new URL(`${import.meta.env.BASE_URL}sw.js`, location.origin).href;
+const validCalendarDate = (value: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    year >= 1900 &&
+    year <= 2199 &&
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+};
 const dateText = (date: string, long = false) =>
-  !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-  Number.isNaN(new Date(date + "T12:00:00").getTime())
+  !validCalendarDate(date)
     ? "Kies een datum"
     : new Intl.DateTimeFormat("nl-NL", {
         day: "numeric",
         month: long ? "long" : "short",
+        year: "numeric",
         ...(long ? { weekday: "long" as const } : {}),
       }).format(new Date(`${date}T12:00:00`));
 const hasRating = (ratings: Ratings) =>
@@ -305,7 +321,9 @@ export function App() {
   const [recoveryBackup, setRecoveryBackup] = useState(false);
   const [generation, setGeneration] = useState(0);
   const [online, setOnline] = useState(navigator.onLine);
+  const [workerControlled, setWorkerControlled] = useState(hasAnchorWorker);
   const importSequence = useRef(0);
+  const recoverySnapshot = useRef<string | null | undefined>(undefined);
   const [discardKey, setDiscardKey] = useState<string | null>(null);
   const {
     needRefresh: [needRefresh],
@@ -327,6 +345,7 @@ export function App() {
   });
   const path = route.split("?")[0];
   const navigate = (to: string) => {
+    importSequence.current++;
     setModal(null);
     setRoute(to);
     location.hash = to;
@@ -369,6 +388,58 @@ export function App() {
     return () => window.removeEventListener("hashchange", change);
   }, []);
   useEffect(() => {
+    const navigation = document.querySelector<HTMLElement>(".dp-bottom-nav");
+    if (!navigation) return;
+    const measure = () =>
+      document.documentElement.style.setProperty(
+        "--anchor-nav-clearance",
+        `${navigation.getBoundingClientRect().height + 16}px`,
+      );
+    const observer = new ResizeObserver(measure);
+    observer.observe(navigation);
+    measure();
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    let frame = 0;
+    const revealFocus = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const target = document.activeElement;
+        if (
+          !(target instanceof HTMLElement) ||
+          !target.closest("main") ||
+          !target.matches("a, button, input, select, textarea, summary")
+        )
+          return;
+        const viewport = window.visualViewport;
+        const top = (viewport?.offsetTop ?? 0) + 16;
+        const viewportBottom =
+          (viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight);
+        const nav = document
+          .querySelector(".dp-bottom-nav")
+          ?.getBoundingClientRect();
+        const bottom =
+          Math.min(viewportBottom, nav?.height ? nav.top : viewportBottom) - 16;
+        const rect = target.getBoundingClientRect();
+        const movement =
+          rect.height > bottom - top || rect.top < top
+            ? rect.top - top
+            : rect.bottom > bottom
+              ? rect.bottom - bottom
+              : 0;
+        if (movement) window.scrollBy({ top: movement, behavior: "instant" });
+      });
+    };
+    document.addEventListener("focusin", revealFocus);
+    window.visualViewport?.addEventListener("resize", revealFocus);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("focusin", revealFocus);
+      window.visualViewport?.removeEventListener("resize", revealFocus);
+    };
+  }, []);
+  useEffect(() => {
     window.scrollTo({ top: 0 });
     document
       .querySelector<HTMLElement>("main h1")
@@ -395,6 +466,10 @@ export function App() {
     };
     const storage = (event: StorageEvent) => {
       if (event.key === STORAGE_KEY) refresh();
+      if (event.key === DRAFT_STORAGE_KEY) {
+        setDrafts(loadDrafts());
+        setDraftWarning(draftStorageWarning());
+      }
     };
     window.addEventListener("storage", storage);
     return () => window.removeEventListener("storage", storage);
@@ -407,6 +482,13 @@ export function App() {
       window.removeEventListener("online", change);
       window.removeEventListener("offline", change);
     };
+  }, []);
+  useEffect(() => {
+    const change = () => setWorkerControlled(hasAnchorWorker());
+    navigator.serviceWorker?.addEventListener("controllerchange", change);
+    change();
+    return () =>
+      navigator.serviceWorker?.removeEventListener("controllerchange", change);
   }, []);
   useEffect(() => {
     const prevent = (event: BeforeUnloadEvent) => {
@@ -730,7 +812,18 @@ export function App() {
               </Button>
             </div>
           )}
-          <fieldset className="anchor-content" disabled={!writer || blocked}>
+          <fieldset
+            className="anchor-content"
+            disabled={
+              (!writer || blocked) &&
+              Boolean(
+                momentId ||
+                cravingId ||
+                dayDate ||
+                ["/plan", "/growth"].includes(path),
+              )
+            }
+          >
             {path === "/today" && <Today state={state} navigate={navigate} />}
             {path === "/history" && (
               <>
@@ -772,6 +865,8 @@ export function App() {
                 <PageTitle kicker="Maak het van jou" title="Instellingen" />
                 <SettingsView
                   state={state}
+                  readOnly={!writer}
+                  blocked={blocked}
                   onSave={save}
                   onExport={backup}
                   onImport={() => {
@@ -783,7 +878,7 @@ export function App() {
                   onPrivacy={() => setModal("privacy")}
                 />
                 <p className="dp-muted">
-                  {offlineReady
+                  {offlineReady || workerControlled
                     ? "Anchor is beschikbaar voor offline gebruik."
                     : "Offlinebestanden worden voorbereid na het openen van de app."}{" "}
                   Versie {__APP_VERSION__}.
@@ -1066,7 +1161,10 @@ export function App() {
       {modal === "import" && (
         <Dialog
           title="Anchor-back-up herstellen"
-          onClose={() => setModal(null)}
+          onClose={() => {
+            importSequence.current++;
+            setModal(null);
+          }}
         >
           <p>
             Kies een back-up die met Anchor is gemaakt. Na bevestiging vervangt
@@ -1121,13 +1219,18 @@ export function App() {
               <Button
                 onClick={() => {
                   try {
-                    const raw = blocked
-                      ? localStorage.getItem(STORAGE_KEY)
-                      : null;
+                    const raw = localStorage.getItem(STORAGE_KEY);
                     download(
-                      raw || exportBackup(state),
+                      blocked && raw !== null
+                        ? raw
+                        : exportBackup(
+                            raw === null
+                              ? state
+                              : validateState(JSON.parse(raw)),
+                          ),
                       `Anchor-opslag-voor-herstel-${today()}.json`,
                     );
+                    recoverySnapshot.current = raw;
                     setRecoveryBackup(true);
                   } catch {
                     setImportError(
@@ -1155,7 +1258,11 @@ export function App() {
                       );
                       return;
                     }
-                    const result = replaceFromBackup(imported, state.revision);
+                    const result = replaceFromBackup(
+                      imported,
+                      state.revision,
+                      recoverySnapshot.current,
+                    );
                     if (result.ok && result.state) {
                       setState(result.state);
                       setBlocked(false);
@@ -1243,7 +1350,7 @@ function Today({
           {current.length ? (
             <ol className="dp-timeline">
               {current.map(({ type, item }) => (
-                <li key={item.id}>
+                <li key={`${type}:${item.id}`}>
                   <time>{item.time}</time>
                   <button
                     className="dp-moment-row"
@@ -1495,7 +1602,12 @@ function MomentView({
         value.activity,
       ),
   );
-  const [afterOpen, setAfterOpen] = useState(afterInitially || !!record?.after);
+  const [afterOpen, setAfterOpen] = useState(
+    afterInitially ||
+      !!record?.after ||
+      !!draft?.after ||
+      draft?.attempted != null,
+  );
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
   function update(patch: Partial<Moment>) {
@@ -1548,8 +1660,8 @@ function MomentView({
       ...(followup
         ? {
             after: value.after ?? blankRatings(),
-            afterTime: clockTime(),
-            afterDate: today(),
+            afterTime: record?.afterTime ?? clockTime(),
+            afterDate: record?.afterDate ?? today(),
           }
         : {}),
     };
@@ -1755,8 +1867,14 @@ function MomentView({
           className="dp-after-form"
           onSubmit={(event) => submit(event, true)}
         >
-          <p className="dp-kicker">Na {record.activity.toLowerCase()}</p>
-          <h2>Hoe is het nu?</h2>
+          <p className="dp-kicker">Nameting · {record.activity}</p>
+          <h2>{record.after ? "Je nameting" : "Hoe is het nu?"}</h2>
+          {record.afterDate && record.afterTime && (
+            <p className="dp-hint">
+              Vastgelegd op {dateText(record.afterDate, true)} om{" "}
+              {record.afterTime}. Aanpassen behoudt dit tijdstip.
+            </p>
+          )}
           <fieldset>
             <legend>Heb je de activiteit geprobeerd?</legend>
             <div className="dp-chip-list">
@@ -1865,11 +1983,7 @@ function DayView({
     setValue(next);
     onDraft(next);
   };
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-    Number.isNaN(new Date(`${date}T12:00:00`).getTime())
-  )
-    return <Missing navigate={navigate} />;
+  if (!validCalendarDate(date)) return <Missing navigate={navigate} />;
   return (
     <div className="dp-form-page">
       <button

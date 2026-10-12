@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { createEmptyState } from "../src/lib/storage";
 
 const DATA_KEY = "anchor.app.data.v1";
 const DRAFT_KEY = "anchor.app.drafts.v1";
@@ -173,6 +174,234 @@ test("een gedeeltelijke craving en een herladen concept behouden de eigen tekst"
   ).toEqual({});
   await page.reload();
   await expect(page.getByLabel(/^Gedachte/)).toHaveValue(saved.thought);
+});
+
+test("cravingdatum en tijd mogen als concept leeg zijn; ongeldige invoer wordt niet opgeslagen", async ({
+  page,
+}) => {
+  await open(page, "/craving/new");
+  await page
+    .getByLabel("Gedachte", { exact: true })
+    .fill("Deze gedachte blijft staan terwijl ik de datum corrigeer.");
+  await page.getByLabel("Datum", { exact: true }).fill("");
+  await page.getByLabel("Tijd", { exact: true }).fill("");
+  await page.reload();
+  await expect(page.getByLabel("Datum", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Tijd", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Gedachte", { exact: true })).toHaveValue(
+    "Deze gedachte blijft staan terwijl ik de datum corrigeer.",
+  );
+  await page
+    .getByRole("button", { name: "Craving opslaan", exact: true })
+    .click();
+  await expect(page.getByLabel("Datum", { exact: true })).toBeFocused();
+  expect(await state(page)).toBeNull();
+  await page.getByLabel("Datum", { exact: true }).fill("1899-12-31");
+  await page.getByLabel("Tijd", { exact: true }).fill("12:30");
+  await page
+    .getByRole("button", { name: "Craving opslaan", exact: true })
+    .click();
+  expect(
+    await page
+      .getByLabel("Datum", { exact: true })
+      .evaluate((element: HTMLInputElement) => element.validity.rangeUnderflow),
+  ).toBe(true);
+  expect(await state(page)).toBeNull();
+  await page.getByLabel("Datum", { exact: true }).fill("2024-02-29");
+  await page
+    .getByRole("button", { name: "Craving opslaan", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  expect((await state(page)).cravings[0]).toMatchObject({
+    date: "2024-02-29",
+    time: "12:30",
+  });
+});
+
+test("cravingvelden hebben een korte toegankelijke naam en afzonderlijke uitleg", async ({
+  page,
+}) => {
+  await open(page, "/craving/new");
+  for (const [name, explanation] of [
+    [
+      "Situatie (wie, wat, waar)",
+      "Wie waren erbij, wat gebeurde er en waar was je?",
+    ],
+    ["Gedachte", "Wat ging er door je hoofd?"],
+    ["Lichamelijke sensatie", "Wat voelde je in je lichaam?"],
+    ["Emotie", "Welke emotie of emoties merkte je?"],
+    ["Gedrag (wat deed je?)", "Beschrijf in je eigen woorden wat je deed."],
+  ]) {
+    const field = page.getByRole("textbox", { name, exact: true });
+    await expect(field).toHaveAccessibleName(name);
+    await expect(field).toHaveAccessibleDescription(explanation);
+  }
+});
+
+test("toetsenbordfocus blijft boven de mobiele navigatie bij beide thema's en 200 procent tekst", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await open(page, "/craving/new");
+  for (const theme of ["dark", "light"]) {
+    if (theme === "light")
+      await page
+        .getByRole("button", { name: "Licht thema", exact: true })
+        .click();
+    for (const textSize of ["100%", "200%"]) {
+      await page.evaluate((size) => {
+        document.documentElement.style.fontSize = size;
+      }, textSize);
+      await page.locator("main h1").focus();
+      const seen = new Set<string>();
+      for (let step = 0; step < 24 && seen.size < 9; step++) {
+        await page.keyboard.press("Tab");
+        await page.evaluate(
+          () =>
+            new Promise<void>((resolve) =>
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve()),
+              ),
+            ),
+        );
+        const focus = await page.evaluate(() => {
+          const element = document.activeElement as HTMLElement;
+          if (
+            !element.closest(".anchor-craving-form") ||
+            !element.matches("input, textarea, button, a")
+          )
+            return null;
+          const rect = element.getBoundingClientRect();
+          const navigation = document
+            .querySelector(".dp-bottom-nav")!
+            .getBoundingClientRect();
+          return {
+            key: element.id || element.textContent!.trim(),
+            top: rect.top,
+            bottom: rect.bottom,
+            navigationTop: navigation.top,
+          };
+        });
+        if (focus) {
+          seen.add(focus.key);
+          expect(
+            focus.top,
+            `${theme}/${textSize}: ${focus.key} starts above viewport`,
+          ).toBeGreaterThanOrEqual(-1);
+          expect(
+            focus.bottom,
+            `${theme}/${textSize}: ${focus.key} hidden by mobile navigation`,
+          ).toBeLessThanOrEqual(focus.navigationTop + 1);
+        }
+      }
+      expect(
+        seen.size,
+        `${theme}/${textSize}: all 7 fields and 2 form actions reachable`,
+      ).toBe(9);
+    }
+  }
+});
+
+test("ongeldige dagroutes maken geen misleidend dagformulier aan", async ({
+  page,
+}) => {
+  for (const date of ["2026-02-31", "2026-13-01", "1899-12-31", "2200-01-01"]) {
+    await open(page, `/day/${date}`);
+    await expect(
+      page.getByRole("heading", { name: "Dit moment is er niet." }),
+    ).toBeVisible();
+    await expect(page.locator("main form")).toHaveCount(0);
+  }
+  expect(await state(page)).toBeNull();
+  await open(page, "/day/2024-02-29");
+  await expect(
+    page.getByRole("heading", { name: "Mijn hele dag", exact: true }),
+  ).toBeVisible();
+});
+
+test("een gecorrigeerde nameting behoudt de oorspronkelijke datum en tijd", async ({
+  page,
+}) => {
+  const initial = createEmptyState();
+  initial.moments = [
+    {
+      id: "historical-after",
+      date: "2026-10-10",
+      time: "12:00",
+      kind: "checkin",
+      before: { mood: -1, eis: 60 },
+      after: { mood: 1, eis: 20 },
+      afterDate: "2026-10-10",
+      afterTime: "12:30",
+      activity: "Schilderen",
+      attempted: true,
+      emotions: [],
+      note: "Historisch moment",
+    },
+  ];
+  await page.addInitScript(
+    ({ key, value }) => {
+      if (!localStorage.getItem(key))
+        localStorage.setItem(key, JSON.stringify(value));
+    },
+    { key: DATA_KEY, value: initial },
+  );
+  await open(page, "/moment/historical-after");
+  await page
+    .locator(".dp-after-form")
+    .getByLabel(/^Na: Emotionele intensiteit/)
+    .fill("25");
+  await page
+    .getByRole("button", { name: "Nameting opslaan", exact: true })
+    .click();
+  expect((await state(page)).moments[0]).toMatchObject({
+    after: { mood: 1, eis: 25 },
+    afterDate: "2026-10-10",
+    afterTime: "12:30",
+  });
+});
+
+test("een onafgemaakte nameting blijft na herladen zichtbaar en invulbaar", async ({
+  page,
+}) => {
+  await open(page, "/moment/new");
+  await page
+    .getByLabel(/^In je eigen woorden/)
+    .fill("Even stilstaan voor het schilderen.");
+  await page
+    .getByRole("combobox", { name: "Activiteit", exact: true })
+    .selectOption("Schilderen");
+  await page
+    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Nameting invullen", exact: true })
+    .click();
+  await page
+    .locator(".dp-after-form")
+    .getByRole("button", { name: "Ja", exact: true })
+    .click();
+  await page
+    .locator(".dp-after-form")
+    .getByLabel(/^Na: Emotionele intensiteit/)
+    .fill("55");
+  await page.reload();
+  const after = page.locator(".dp-after-form");
+  await expect(after).toBeVisible();
+  await expect(after.getByLabel(/^Na: Emotionele intensiteit/)).toHaveValue(
+    "55",
+  );
+  await expect(
+    after.getByRole("button", { name: "Ja", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect((await state(page)).moments[0].after).toBeNull();
+  await after
+    .getByRole("button", { name: "Nameting opslaan", exact: true })
+    .click();
+  expect((await state(page)).moments[0]).toMatchObject({
+    after: { mood: null, eis: 55 },
+    attempted: true,
+  });
 });
 
 test("een opslagfout laat de cravingtekst staan en een nieuwe poging slaagt", async ({
@@ -413,6 +642,7 @@ test("een tweede tabblad kan gegevens niet overschrijven en kan na herladen bewe
 }) => {
   await createCraving(page);
   const second = await context.newPage();
+  second.on("pageerror", (error) => errors.get(page)!.push(error.message));
   second.on("dialog", (dialog) => void dialog.accept());
   await second.goto("./#/craving/new");
   await expect(second.getByText(/^Alleen lezen\./)).toBeVisible();
@@ -421,6 +651,28 @@ test("een tweede tabblad kan gegevens niet overschrijven en kan na herladen bewe
     second.getByRole("button", { name: "Craving opslaan", exact: true }),
   ).toBeDisabled();
   const original = await state(second);
+  await second.goto("./#/history");
+  await expect(
+    second.getByRole("combobox", { name: "Soort registratie", exact: true }),
+  ).toBeEnabled();
+  await second
+    .getByRole("combobox", { name: "Soort registratie", exact: true })
+    .selectOption("craving");
+  await second.getByRole("button", { name: /^Bekijk craving/ }).click();
+  await expect(second.getByLabel("Gedachte", { exact: true })).toBeDisabled();
+  await second.goto("./#/settings");
+  await expect(
+    second.getByRole("radio", { name: "Licht Warm papier" }),
+  ).toBeDisabled();
+  await expect(
+    second.getByRole("button", { name: "Back-up importeren" }),
+  ).toBeDisabled();
+  const downloadPromise = second.waitForEvent("download");
+  await second.getByRole("button", { name: "Back-up exporteren" }).click();
+  const download = await downloadPromise;
+  const snapshot = JSON.parse(await readFile((await download.path())!, "utf8"));
+  expect(snapshot.state.cravings).toEqual(original.cravings);
+  await second.goto("./#/craving/new");
   await page.close();
   await second.reload();
   await expect(second.getByLabel(/^Gedachte/)).toBeEnabled();
@@ -541,6 +793,89 @@ test("beschadigde concepten krijgen herstelbestand met ruwe opslag en nieuwe tek
     ),
   ).toEqual({});
   await expect(page.getByLabel(/^Gedachte/)).toHaveValue("");
+});
+
+test("herstellen overschrijft geen extern gewijzigde opslag na de veiligheidskopie", async ({
+  page,
+  context,
+}) => {
+  await createCraving(page, "De geldige back-upregistratie.");
+  const original = await state(page);
+  const backup = {
+    format: "anchor.app.backup",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    state: original,
+  };
+  const rawA = '{"version":1,"broken":"snapshot-A"';
+  const rawB = '{"version":1,"broken":"external-B"';
+  await page.evaluate(({ key, value }) => localStorage.setItem(key, value), {
+    key: DATA_KEY,
+    value: rawA,
+  });
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Back-up herstellen", exact: true })
+    .click();
+  await page.getByLabel("Back-upbestand").setInputFiles({
+    name: "Anchor-backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(backup)),
+  });
+  const firstCopyPromise = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Huidige opslag downloaden", exact: true })
+    .click();
+  const firstCopy = await firstCopyPromise;
+  expect(await readFile((await firstCopy.path())!, "utf8")).toBe(rawA);
+
+  const other = await context.newPage();
+  other.on("pageerror", (error) => errors.get(page)!.push(error.message));
+  await other.goto("./#/today");
+  await expect(other.getByText(/^Alleen lezen\./)).toBeVisible();
+  await page.evaluate((key) => {
+    (window as any).__auditStorageEvent = null;
+    window.addEventListener("storage", (event) => {
+      if (event.key === key)
+        (window as any).__auditStorageEvent = event.newValue;
+    });
+  }, DATA_KEY);
+  // Simulate another same-origin program changing synthetic corrupt bytes.
+  await other.evaluate(({ key, value }) => localStorage.setItem(key, value), {
+    key: DATA_KEY,
+    value: rawB,
+  });
+  await expect
+    .poll(() => page.evaluate(() => (window as any).__auditStorageEvent))
+    .toBe(rawB);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await page
+    .getByRole("button", { name: "Gegevens vervangen", exact: true })
+    .click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
+    "gewijzigd sinds het downloaden van de veiligheidskopie",
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), DATA_KEY),
+  ).toBe(rawB);
+
+  const nextCopyPromise = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Huidige opslag downloaden", exact: true })
+    .click();
+  const nextCopy = await nextCopyPromise;
+  expect(await readFile((await nextCopy.path())!, "utf8")).toBe(rawB);
+  await page
+    .getByRole("button", { name: "Gegevens vervangen", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect((await state(page)).cravings).toEqual(original.cravings);
+  await other.close();
 });
 
 test("Anchor laat synthetische oude appopslag en database ongewijzigd", async ({
@@ -669,6 +1004,18 @@ test("geïnstalleerde serviceworker opent offline en bewaart nieuwe registraties
   await expect(page.getByLabel(/^Gedrag \(wat deed je\?\)/)).toHaveValue(
     "Ook offline aangevuld.",
   );
+  await page.goto("./#/settings");
+  await expect(
+    page.getByText(/Anchor is beschikbaar voor offline gebruik\./),
+  ).toBeVisible();
+  const settingsDocument = await page.reload();
+  expect(settingsDocument?.fromServiceWorker()).toBe(true);
+  await expect(
+    page.getByText(/Anchor is beschikbaar voor offline gebruik\./),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Offlinebestanden worden voorbereid/),
+  ).toHaveCount(0);
   await context.setOffline(false);
 });
 
