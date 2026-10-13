@@ -17,6 +17,8 @@ type CravingViewProps = {
   onDraft: (value: CravingRecord) => void;
   draft?: CravingRecord;
   onClear: () => boolean;
+  onCompleted: () => void;
+  onSupport: () => void;
 };
 
 const narrativeFields = [
@@ -59,6 +61,8 @@ export function CravingView({
   onDraft,
   draft,
   onClear,
+  onCompleted,
+  onSupport,
 }: CravingViewProps) {
   const [value, setValue] = useState<CravingRecord>(
     () =>
@@ -111,7 +115,8 @@ export function CravingView({
 
   function complete(action: "saved" | "deleted") {
     if (onClear()) {
-      navigate("/today");
+      if (action === "saved") onCompleted();
+      else navigate("/today");
       return;
     }
     setPendingCompletion(action);
@@ -315,6 +320,19 @@ export function CravingView({
           onderdeel is genoeg. Je kunt later aanvullen.
         </p>
       </header>
+
+      <section
+        className="dp-card dp-form-section"
+        aria-label="Direct ondersteuning"
+      >
+        <p>
+          Heb je nu steun nodig? Je hoeft deze registratie niet eerst af te
+          maken.
+        </p>
+        <button type="button" className="dp-button" onClick={onSupport}>
+          Open mijn houvast
+        </button>
+      </section>
 
       <form onSubmit={submit} className="anchor-craving-form">
         <section

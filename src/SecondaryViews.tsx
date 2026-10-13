@@ -21,6 +21,7 @@ import type {
 import { today, loadDrafts, saveDraft } from "./lib/storage";
 import type { Palette } from "./lib/palettes";
 import { SUBSTANCE_OPTIONS } from "./lib/substances";
+import { WeekOverview } from "./WeekOverview";
 import "./secondary.css";
 
 const palettes: { id: Palette; name: string; description: string }[] = [
@@ -576,6 +577,7 @@ export function HistoryView({
           />
         </label>
       </div>
+      {period === "week" && <WeekOverview state={state} />}
       {(kind === "all" || kind === "checkin") && (
         <section
           className="dp-mood-plot dp-card"

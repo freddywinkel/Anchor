@@ -745,13 +745,15 @@ try {
     hp.getByRole("img", { name: /1 stemmingsmetingen/ }),
   ).toBeVisible();
   await hp.getByText("Scores bekijken als tekst (1)", { exact: true }).click();
-  await expect(hp.locator(".dp-observation-details")).toContainText(
-    "Stemming +1",
-  );
-  await expect(hp.locator(".dp-observation-details")).toContainText("Nameting");
-  await expect(hp.locator(".dp-observation-details")).not.toContainText(
-    "Na activiteit",
-  );
+  await expect(
+    hp.locator(".dp-mood-plot .dp-observation-details"),
+  ).toContainText("Stemming +1");
+  await expect(
+    hp.locator(".dp-mood-plot .dp-observation-details"),
+  ).toContainText("Nameting");
+  await expect(
+    hp.locator(".dp-mood-plot .dp-observation-details"),
+  ).not.toContainText("Na activiteit");
   await expect(
     oldMoment.getByRole("button", { name: /^Bewerken: check-in/ }),
   ).toBeEnabled();
@@ -1014,9 +1016,9 @@ try {
       historyGroup(historyPage, kind).locator(".dp-history-list > li"),
     ).toHaveCount(50);
   await expect(historyPage.locator(".dp-history-body")).toHaveCount(0);
-  await expect(historyPage.locator(".dp-observation-details li")).toHaveCount(
-    40,
-  );
+  await expect(
+    historyPage.locator(".dp-mood-plot .dp-observation-details li"),
+  ).toHaveCount(40);
   await expect(
     historyPage.getByText("3120 gevonden", { exact: true }),
   ).toBeVisible();

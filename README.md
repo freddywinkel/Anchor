@@ -19,6 +19,12 @@ Een rustig, Nederlandstalig dagboek om meerdere keren per dag in te checken, een
 
 De app start leeg. Er zijn geen accounts, Fitbit-koppelingen, externe analytics, automatische synchronisatie of medische conclusies.
 
+Versie 1.9.0 verbindt cravingregistratie met **Houvast**: direct zonder eerst op te slaan, of vrijblijvend na het opslaan op Vandaag. Een onafgemaakt cravingconcept blijft bereikbaar via de terugknop, ook na de oefening. Houvast biedt bruikbare voorbeelden wanneer Mijn plan nog leeg is en een uitklapbaar onderdeel **Verder na gebruik**, zonder automatisch gebruik, een actie of contact vast te leggen.
+
+Kies in **Terugkijken → Periode → Afgelopen 7 dagen** het rustige weekoverzicht. Het toont de exacte periode, dagen met notities, aantallen per soort en welke scores zijn ingevuld. Check-ins, nametingen en dagoverzichten blijven afzonderlijk; onvolledige slaap blijft onvolledig. Ontbrekende dagen krijgen geen nulscore of herstelconclusie. De zoek- en soortfilters blijven beschikbaar voor de grafiek en registraties eronder.
+
+Een bewaard dagoverzicht kun je via **Dagoverzicht verwijderen** gericht verwijderen. De bevestiging benoemt de gekozen datum en de eventuele niet-opgeslagen wijzigingen van die dag. Losse check-ins, cravings, kleine momenten en andere concepten blijven bestaan. De opslagstructuur, back-ups en updateactivering zijn in deze versie ongewijzigd.
+
 Versie 1.5.0 vernieuwt de vormgeving zonder het gegevensformaat te wijzigen. DM Sans en Fraunces worden lokaal meegeleverd, inclusief hun SIL Open Font License in `public/fonts/`. Alle gebruikte lettertypen en illustraties zijn offline beschikbaar; de app haalt geen lettertypen bij een externe dienst op.
 
 ## Lokaal starten

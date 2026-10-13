@@ -825,6 +825,56 @@ try {
     await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
     draftBeforeTools,
   );
+  // The support/week routes also work offline and only an explicit day delete writes.
+  await page.goto(new URL("#/help", base).href);
+  await page.getByText("Verder na gebruik", { exact: true }).click();
+  await expect(
+    page.getByText(/Je eerdere registraties blijven bewaard/),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "5-4-3-2-1 openen" }).click();
+  await page.getByRole("button", { name: "Stoppen en terug" }).click();
+  await expect(page).toHaveURL(new RegExp("#/help$"));
+  assert.equal((await stored()).raw, themed.raw);
+  await page.goto(new URL("#/history", base).href);
+  await page
+    .getByRole("combobox", { name: "Periode", exact: true })
+    .selectOption("week");
+  const week = page.getByRole("region", {
+    name: "Rustig terugkijken op je week",
+  });
+  await expect(week).toContainText("Notities op");
+  await expect(week.locator(".dp-week-days > li")).toHaveCount(7);
+  assert.equal((await stored()).raw, themed.raw);
+  const dayDate = await page.evaluate(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  await page.goto(new URL(`#/day/${dayDate}`, base).href);
+  await page
+    .getByLabel("Wat wil je onthouden van vandaag?")
+    .fill("Synthetische releasecontrole: rust genomen");
+  await page
+    .getByRole("button", { name: "Dagoverzicht opslaan", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#\/today$/);
+  await page.goto(new URL(`#/day/${dayDate}`, base).href);
+  await page
+    .getByRole("button", { name: "Dagoverzicht verwijderen", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Ja, verwijderen", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#\/today$/);
+  const removedDay = (await stored()).state;
+  assert.deepEqual(removedDay.days, themed.state.days);
+  assert.deepEqual(
+    { ...removedDay, revision: themed.state.revision },
+    themed.state,
+  );
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
+    draftBeforeTools,
+  );
   const caches = await page.evaluate(() => window.caches.keys());
   assert.ok(caches.length > 0);
   assert.ok(
@@ -879,6 +929,9 @@ try {
       "downloaded backup validates and matches saved data",
       "offline tools open the intended activity choice and grounding preselection without replacing data or drafts",
       "finishing a standalone exercise opens an unanswered current check-in without invented before ratings or automatic use",
+      "offline support and after-use guidance stay read-only and the exercise returns to support",
+      "offline seven-day overview shows all calendar days without changing stored data",
+      "explicit offline day deletion preserves all unrelated records, settings and drafts",
       "no external or data-bearing requests",
       "no page errors",
     ],

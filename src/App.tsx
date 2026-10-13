@@ -231,6 +231,7 @@ export function App() {
   const [draftRecoveryDownloaded, setDraftRecoveryDownloaded] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
+  const [offerSupport, setOfferSupport] = useState(false);
   const [modal, setModal] = useState<
     "menu" | "import" | "privacy" | "drafts" | "draft-recovery" | null
   >(null);
@@ -262,7 +263,16 @@ export function App() {
     },
   });
   const path = route.split("?")[0];
+  const helpCraving = new URLSearchParams(route.split("?")[1]).get("craving");
+  const helpQuery =
+    helpCraving &&
+    (helpCraving === "new" ||
+      state.cravings.some((item) => item.id === helpCraving) ||
+      !!drafts[`craving:${helpCraving}`])
+      ? `?craving=${encodeURIComponent(helpCraving)}`
+      : "";
   const navigate = (to: string) => {
+    setOfferSupport(false);
     importSequence.current++;
     setPendingDraftCompletion(null);
     setModal(null);
@@ -345,6 +355,7 @@ export function App() {
   }, []);
   useEffect(() => {
     setPendingDraftCompletion(null);
+    if (path !== "/today") setOfferSupport(false);
   }, [path]);
   useEffect(() => {
     const navigation = document.querySelector<HTMLElement>(".dp-bottom-nav");
@@ -640,7 +651,13 @@ export function App() {
           <div className="dp-top-actions">
             <button
               className="dp-text-button"
-              onClick={() => navigate("/help")}
+              onClick={() =>
+                navigate(
+                  cravingId
+                    ? `/help?craving=${encodeURIComponent(cravingId)}`
+                    : "/help",
+                )
+              }
             >
               <Heart size={17} />
               Houvast
@@ -781,7 +798,14 @@ export function App() {
               )
             }
           >
-            {path === "/today" && <Today state={state} navigate={navigate} />}
+            {path === "/today" && (
+              <Today
+                state={state}
+                navigate={navigate}
+                offerSupport={offerSupport}
+                onDismissSupport={() => setOfferSupport(false)}
+              />
+            )}
             {path === "/history" && (
               <>
                 <PageTitle
@@ -847,7 +871,14 @@ export function App() {
               </>
             )}
             {path === "/tools" && <Tools navigate={navigate} />}
-            {path === "/help" && <Support state={state} navigate={navigate} />}
+            {path === "/help" && (
+              <Support
+                state={state}
+                navigate={navigate}
+                cravingId={helpQuery ? helpCraving : null}
+                helpQuery={helpQuery}
+              />
+            )}
             {path === "/exercise" && (
               <ExerciseView
                 key={route}
@@ -858,8 +889,17 @@ export function App() {
                     new URLSearchParams(route.split("?")[1]).get("moment"),
                 )}
                 onBack={(id) =>
-                  navigate(id ? `/moment/${id}?after=1` : "/tools")
+                  navigate(
+                    id
+                      ? `/moment/${id}?after=1`
+                      : new URLSearchParams(route.split("?")[1]).has("support")
+                        ? `/help${helpQuery}`
+                        : "/tools",
+                  )
                 }
+                fromSupport={new URLSearchParams(route.split("?")[1]).has(
+                  "support",
+                )}
               />
             )}
             {momentId &&
@@ -900,6 +940,13 @@ export function App() {
                   }
                   onDraft={(value) => cacheDraft(`craving:${cravingId}`, value)}
                   onClear={() => cacheDraft(`craving:${cravingId}`, null)}
+                  onCompleted={() => {
+                    navigate("/today");
+                    setOfferSupport(true);
+                  }}
+                  onSupport={() =>
+                    navigate(`/help?craving=${encodeURIComponent(cravingId)}`)
+                  }
                 />
               ) : (
                 <Missing navigate={navigate} />
@@ -1270,9 +1317,13 @@ export function App() {
 function Today({
   state,
   navigate,
+  offerSupport,
+  onDismissSupport,
 }: {
   state: AppState;
   navigate: (path: string) => void;
+  offerSupport: boolean;
+  onDismissSupport: () => void;
 }) {
   const current = [
     ...state.moments
@@ -1290,6 +1341,34 @@ function Today({
         kicker={dateText(today(), true)}
         title="Vandaag, op jouw tempo."
       />
+      {offerSupport && (
+        <section
+          className="dp-card dp-form-section"
+          aria-labelledby="craving-next-step"
+        >
+          <p className="dp-kicker">Je craving is opgeslagen</p>
+          <h2 id="craving-next-step">Wat helpt je nu?</h2>
+          <p>
+            Een kleine stap of iemand om op terug te vallen. Je mag het ook
+            hierbij laten.
+          </p>
+          <div className="dp-actions">
+            <Button primary onClick={() => navigate("/help")}>
+              Open mijn houvast
+            </Button>
+            <Button
+              onClick={() => {
+                onDismissSupport();
+                requestAnimationFrame(() =>
+                  document.querySelector<HTMLElement>("main h1")?.focus(),
+                );
+              }}
+            >
+              Klaar voor nu
+            </Button>
+          </div>
+        </section>
+      )}
       <section className="dp-now-panel">
         <div>
           <p className="dp-kicker">Een moment voor jezelf</p>
@@ -1509,20 +1588,33 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
 function Support({
   state,
   navigate,
+  cravingId,
+  helpQuery,
 }: {
   state: AppState;
   navigate: (path: string) => void;
+  cravingId: string | null;
+  helpQuery: string;
 }) {
   return (
     <div className="dp-help-page">
-      <PageTitle kicker="Ondersteuning dichtbij" title="Mijn houvast" />
+      {cravingId && (
+        <Button onClick={() => navigate(`/craving/${cravingId}`)}>
+          Terug naar mijn craving
+        </Button>
+      )}
+      <PageTitle
+        kicker="Ondersteuning dichtbij"
+        title="Mijn houvast"
+        description="Kies één haalbare stap. Je hoeft niets in te vullen of eerst alles te begrijpen."
+      />
       <section className="dp-help-choices">
         <div className="dp-card">
           <p className="dp-kicker">Een kleine stap</p>
           <h2>Wat ik kan doen</h2>
           <p className="anchor-prose">
             {state.plan.action ||
-              "Je eigen actie verschijnt hier zodra je die invult in Mijn plan."}
+              "Je kunt even rust nemen, een belastende situatie verlaten of teruggaan naar één eenvoudige stap uit je dagroutine. Kies wat nu haalbaar is."}
           </p>
           <Button onClick={() => navigate("/plan")}>Mijn plan openen</Button>
         </div>
@@ -1531,17 +1623,54 @@ function Support({
           <h2>Waar ik steun vind</h2>
           <p className="anchor-prose">
             {state.plan.support ||
-              "Schrijf in Mijn plan op wie of wat jou kan steunen."}
+              "Denk aan iemand die je vertrouwt of je eigen hulpverlener. Je kunt diegene zelf bellen of een bericht sturen; je hoeft niet eerst alles uit te leggen."}
           </p>
           <Button onClick={() => navigate("/plan")}>Mijn plan openen</Button>
         </div>
       </section>
       <section className="dp-card dp-plain-section">
         <h2>Aandacht voor je omgeving</h2>
-        <Button onClick={() => navigate("/exercise")}>5-4-3-2-1 openen</Button>
+        <p>
+          Een korte oefening om stil te staan bij wat je om je heen opmerkt.
+          Elke stap mag je overslaan.
+        </p>
+        <Button
+          onClick={() =>
+            navigate(
+              `/exercise${helpQuery || "?"}${helpQuery ? "&" : ""}support=1`,
+            )
+          }
+        >
+          5-4-3-2-1 openen
+        </Button>
       </section>
+      <details className="dp-card dp-form-section">
+        <summary>Verder na gebruik</summary>
+        <p>
+          Je hoeft dit nu niet uitgebreid te verklaren. Kijk eerst wat je nodig
+          hebt voor je veiligheid en wie je kan steunen. Je eigen plan en steun
+          staan hierboven.
+        </p>
+        <p>
+          Kies daarna één haalbare volgende stap, bijvoorbeeld iemand benaderen
+          of rust nemen op een plek waar je je veilig voelt. Een terugblik kan
+          later.
+        </p>
+        <div className="dp-actions">
+          <Button onClick={() => navigate("/plan")}>Mijn plan openen</Button>
+          <Button onClick={() => navigate("/moment/new")}>
+            Eventueel een check-in schrijven
+          </Button>
+        </div>
+        <p className="dp-hint">
+          Je eerdere registraties blijven bewaard. Deze pagina openen
+          registreert geen gebruik.
+        </p>
+      </details>
       <p className="dp-muted">
-        Anchor is een persoonlijk dagboek. Bij direct gevaar kun je{" "}
+        Anchor is een persoonlijk dagboek, geen hulpdienst. Niemand kijkt
+        automatisch mee en er wordt niemand gewaarschuwd. Bij direct gevaar kun
+        je{" "}
         <a className="dp-text-button" href="tel:112">
           112 bellen
         </a>
@@ -2252,10 +2381,11 @@ function DayView({
   onDraft: (day: Day) => void;
   onClear: () => boolean;
 }) {
+  const record = state.days.find((item) => item.date === date);
   const [value, setValue] = useState<Day>(
     () =>
       draft ??
-      state.days.find((item) => item.date === date) ?? {
+      record ?? {
         date,
         ratings: blankRatings(),
         sleepHours: "",
@@ -2265,7 +2395,16 @@ function DayView({
   );
   const [error, setError] = useState("");
   const errorRef = useRef<HTMLParagraphElement>(null);
-  const [pendingCompletion, setPendingCompletion] = useState(false);
+  const [pendingCompletion, setPendingCompletion] = useState<
+    "saved" | "deleted" | null
+  >(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const cancelDeleteRef = useRef<HTMLButtonElement>(null);
+  const deleteButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmationId = useId();
+  useEffect(() => {
+    if (confirmDelete) cancelDeleteRef.current?.focus();
+  }, [confirmDelete]);
   const showError = (message: string) => {
     setError(message);
     requestAnimationFrame(() => {
@@ -2279,12 +2418,22 @@ function DayView({
     onDraft(next);
     setError("");
   };
-  function finish() {
+  function finish(action: "saved" | "deleted") {
     if (onClear()) navigate("/today");
-    else setPendingCompletion(true);
+    else setPendingCompletion(action);
+  }
+  function cancelDelete() {
+    setConfirmDelete(false);
+    requestAnimationFrame(() => deleteButtonRef.current?.focus());
   }
   if (!validCalendarDate(date)) return <Missing navigate={navigate} />;
-  if (pendingCompletion) return <FinishSaved onRetry={finish} />;
+  if (pendingCompletion)
+    return (
+      <FinishSaved
+        removed={pendingCompletion === "deleted"}
+        onRetry={() => finish(pendingCompletion)}
+      />
+    );
   return (
     <div className="dp-form-page">
       <button
@@ -2330,7 +2479,7 @@ function DayView({
             )
           ) {
             setError("");
-            finish();
+            finish("saved");
           } else
             showError(
               "Opslaan is niet gelukt. Je dagoverzicht staat hier nog. Probeer het opnieuw.",
@@ -2402,6 +2551,77 @@ function DayView({
           <Check size={18} />
         </Button>
       </form>
+      {record && (
+        <section
+          className="dp-delete-area"
+          aria-label="Dagoverzicht verwijderen"
+        >
+          {confirmDelete ? (
+            <div
+              className="dp-inline-confirm"
+              role="alertdialog"
+              aria-labelledby={`${confirmationId}-title`}
+              aria-describedby={`${confirmationId}-description`}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  cancelDelete();
+                }
+              }}
+            >
+              <h2 id={`${confirmationId}-title`}>
+                Dit dagoverzicht verwijderen?
+              </h2>
+              <p id={`${confirmationId}-description`}>
+                Je verwijdert het dagoverzicht van {dateText(date, true)} en
+                eventuele niet-opgeslagen wijzigingen van dit dagoverzicht. Je
+                losse check-ins, cravings en kleine momenten blijven bewaard. Je
+                kunt dit niet ongedaan maken.
+              </p>
+              <div className="dp-actions">
+                <button
+                  type="button"
+                  className="dp-button"
+                  ref={cancelDeleteRef}
+                  onClick={cancelDelete}
+                >
+                  Behouden
+                </button>
+                <Button
+                  onClick={() => {
+                    setError("");
+                    if (
+                      onSave(
+                        {
+                          ...state,
+                          days: state.days.filter((item) => item.date !== date),
+                        },
+                        "Dagoverzicht verwijderd.",
+                      )
+                    ) {
+                      finish("deleted");
+                    } else
+                      showError(
+                        "Verwijderen is niet gelukt. Je dagoverzicht en wijzigingen blijven bewaard.",
+                      );
+                  }}
+                >
+                  Ja, verwijderen
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="dp-text-button"
+              ref={deleteButtonRef}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Dagoverzicht verwijderen
+            </button>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -2410,10 +2630,12 @@ function ExerciseView({
   moment,
   onBack,
   navigate,
+  fromSupport = false,
 }: {
   moment?: Moment;
   onBack: (id?: string) => void;
   navigate: (path: string) => void;
+  fromSupport?: boolean;
 }) {
   const [step, setStep] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -2541,7 +2763,9 @@ function ExerciseView({
                   <ArrowRight size={17} />
                 </Button>
                 <Button onClick={() => onBack()}>
-                  Terug naar hulpmiddelen
+                  {fromSupport
+                    ? "Terug naar mijn houvast"
+                    : "Terug naar hulpmiddelen"}
                 </Button>
               </>
             )}
