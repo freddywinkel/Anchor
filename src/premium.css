@@ -394,6 +394,9 @@
 .dp .dp-history-list {
   container: history-list / inline-size;
 }
+.dp .dp-history-list > li {
+  padding: 0;
+}
 .dp .dp-history-entry {
   min-width: 0;
   container: history-entry / inline-size;
@@ -404,23 +407,8 @@
   flex-wrap: wrap;
   overflow-wrap: anywhere;
 }
-@container history-list (max-width: 40rem) {
-  .dp .dp-history-list > li {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.65rem;
-  }
-  .dp .dp-history-date {
-    grid-column: 1 / -1;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-  }
-  .dp .dp-history-list > li > button {
-    justify-self: start;
-  }
-}
 @container history-entry (max-width: 22rem) {
-  .dp .dp-craving-summary > div {
+  .dp .dp-history-fields > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 0.1rem;
   }
@@ -530,7 +518,6 @@
   .dp .dp-settings-section {
     padding: 16px;
   }
-  .dp .dp-history-list > li,
   .dp .dp-goal-list > li,
   .dp .dp-growth-list > li {
     padding: 1rem;

@@ -53,8 +53,9 @@ async function reopenSaved(page: Page, type: "craving" | "check-in") {
   await page
     .getByLabel("Soort registratie")
     .selectOption(type === "craving" ? "craving" : "checkin");
+  await page.locator(".dp-history-list summary").click();
   await page
-    .getByRole("button", { name: new RegExp(`^Bekijken: ${type} van`) })
+    .getByRole("button", { name: new RegExp(`^Bewerken: ${type} van`) })
     .click();
   await expect(
     page.getByRole("heading", {
@@ -152,10 +153,11 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   await open(page, "/history");
   await page.getByLabel("Periode").selectOption("all");
   await page.getByLabel("Soort registratie").selectOption("craving");
+  await page.locator(".dp-history-list summary").click();
   await expect(
     page.getByText("Ik belde iemand en ging wandelen."),
   ).toBeVisible();
-  await page.getByRole("button", { name: /^Bekijken: craving/ }).click();
+  await page.getByRole("button", { name: /^Bewerken: craving/ }).click();
   await page
     .getByRole("button", { name: "Craving verwijderen", exact: true })
     .click();
@@ -1128,7 +1130,8 @@ test("een tweede tabblad kan gegevens niet overschrijven en kan na herladen bewe
   await second
     .getByRole("combobox", { name: "Soort registratie", exact: true })
     .selectOption("craving");
-  await second.getByRole("button", { name: /^Bekijken: craving/ }).click();
+  await second.locator(".dp-history-list summary").click();
+  await second.getByRole("button", { name: /^Bewerken: craving/ }).click();
   await expect(second.getByLabel("Gedachte", { exact: true })).toBeDisabled();
   await second.goto("./#/settings");
   await expect(

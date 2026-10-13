@@ -36,6 +36,19 @@ async function openHistory(page: Page, state: AppState) {
     page.getByRole("heading", { name: "Terugkijken", exact: true }),
   ).toBeVisible();
   await page.getByLabel("Periode").selectOption("all");
+  await expandVisible(page);
+}
+
+async function expandVisible(page: Page) {
+  for (const summary of await page
+    .locator(".dp-history-list details > summary")
+    .all())
+    if (
+      !(await summary.evaluate(
+        (element) => (element.parentElement as HTMLDetailsElement).open,
+      ))
+    )
+      await summary.click();
 }
 
 function ratingRow(record: Locator, label: string) {
@@ -92,9 +105,7 @@ test("geschiedenis koppelt alleen dezelfde emotie en houdt nul, leeg, pannetjes 
     }),
   ];
   await openHistory(page, state);
-  const named = page.locator("#anchor-history-records > li").filter({
-    has: page.getByRole("heading", { name: "Wandelen", exact: true }),
-  });
+  const named = page.locator('[data-history-id="named-emotions"]');
   await expect(ratingRow(named, "Onrustig")).toContainText(
     "Vóór: 80/100 · Na: 20/100",
   );
@@ -127,15 +138,18 @@ test("geschiedenis koppelt alleen dezelfde emotie en houdt nul, leeg, pannetjes 
     named.getByText("Intensiteit — emotie niet gekoppeld", { exact: true }),
   ).toHaveCount(0);
 
-  const legacy = page.locator("#anchor-history-records > li").filter({
-    has: page.getByRole("heading", { name: "Rustig zitten", exact: true }),
-  });
+  const legacy = page.locator('[data-history-id="legacy-emotions"]');
   await expect(
     ratingRow(legacy, "Intensiteit — emotie niet gekoppeld"),
   ).toContainText("Vóór: 65/100 · Na: 0/100");
   await expect(
-    legacy.getByText("Emoties zonder gekoppelde score: Moe", { exact: true }),
-  ).toBeVisible();
+    legacy
+      .locator("dl > div")
+      .filter({
+        has: page.getByText("Emoties zonder gekoppelde score", { exact: true }),
+      })
+      .locator("dd"),
+  ).toHaveText("Moe");
   await expect(ratingRow(legacy, "Moe")).toHaveCount(0);
   await expect(ratingRow(legacy, "Pannetjes")).toHaveCount(0);
   await expect(
@@ -202,16 +216,18 @@ test("zoeken vindt emoties uit beide metingen en de dag, zonder intensiteit als 
   const search = page.getByRole("searchbox", { name: "Zoeken" });
   for (const term of ["OVERPRIKKELD", "Opgelucht"]) {
     await search.fill(term);
-    await expect(page.locator("#anchor-history-records > li")).toHaveCount(1);
-    await expect(
-      page.getByRole("heading", { name: "Even buiten", exact: true }),
-    ).toBeVisible();
+    await expandVisible(page);
+    await expect(page.locator(".dp-history-list > li")).toHaveCount(1);
+    await expect(page.locator(".dp-history-list summary")).toContainText(
+      "Even buiten",
+    );
     await expect(
       page.getByRole("img", { name: /^1 stemmingsmetingen/ }),
     ).toBeVisible();
   }
   await search.fill("Blij");
-  await expect(page.locator("#anchor-history-records > li")).toHaveCount(1);
+  await expandVisible(page);
+  await expect(page.locator(".dp-history-list > li")).toHaveCount(1);
   await expect(
     page.getByText("Zonder stemming", { exact: true }),
   ).toBeVisible();
@@ -220,16 +236,16 @@ test("zoeken vindt emoties uit beide metingen en de dag, zonder intensiteit als 
     page.getByText(/Geen stemmingsscores gevonden binnen deze selectie/),
   ).toBeVisible();
   await search.fill("pannetjes 2/5");
-  await expect(page.locator("#anchor-history-records > li")).toHaveCount(1);
+  await expandVisible(page);
+  await expect(page.locator(".dp-history-list > li")).toHaveCount(1);
   await expect(
     page.getByText("Zonder stemming", { exact: true }),
   ).toBeVisible();
   await search.fill("Tevreden");
-  const day = page.locator("#anchor-history-records > li");
+  await expandVisible(page);
+  const day = page.locator(".dp-history-list > li");
   await expect(day).toHaveCount(1);
-  await expect(
-    day.getByRole("heading", { name: "Mijn hele dag", exact: true }),
-  ).toBeVisible();
+  await expect(day.locator("summary")).toContainText("Dagoverzicht");
   await expect(ratingRow(day, "Tevreden")).toContainText("0/100");
   await expect(
     ratingRow(day, "Intensiteit — emotie niet gekoppeld"),
@@ -277,7 +293,7 @@ test("benoemde intensiteiten blijven volledig leesbaar bij 320 pixels en dubbele
   ];
   await openHistory(page, state);
   await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
-  const record = page.locator("#anchor-history-records > li");
+  const record = page.locator(".dp-history-list > li");
   const row = ratingRow(
     record,
     "Verdrietig en teleurgesteld na een moeilijk gesprek",
@@ -332,9 +348,11 @@ test("craving-antwoorden blijven zichtbaar in de geschiedeniskaart bij grotere t
   });
   await page.evaluate(() => document.fonts.ready);
 
-  const record = page.locator("#anchor-history-records > li");
+  const record = page.locator(".dp-history-list > li");
   const values = record.locator(".dp-craving-summary dd");
   await expect(values).toHaveText([
+    "Niet ingevuld",
+    "Een rustig testmoment",
     "Ik zoek rust.",
     "Schouders gespannen.",
     "Onrust.",

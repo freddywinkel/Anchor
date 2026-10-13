@@ -84,7 +84,8 @@ test("nameting bewaart onbekend en nul, sluit na opslaan en wijzigt dezelfde reg
   expect(await drafts(page)).toEqual({});
   await page.reload();
   await page.getByRole("button", { name: "Alle momenten terugkijken" }).click();
-  await page.getByRole("button", { name: /^Bekijken: check-in/ }).click();
+  await page.locator(".dp-history-list summary").click();
+  await page.getByRole("button", { name: /^Bewerken: check-in/ }).click();
   await expect(
     after.getByRole("button", { name: "Niet ingevuld", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");

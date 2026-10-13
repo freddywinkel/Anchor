@@ -787,7 +787,7 @@ export function App() {
                 <PageTitle
                   kicker="Jouw aantekeningen"
                   title="Terugkijken"
-                  description="Momenten naast elkaar. Zonder oordeel."
+                  description="Klap een registratie open om alles terug te lezen."
                 />
                 <HistoryView
                   state={state}

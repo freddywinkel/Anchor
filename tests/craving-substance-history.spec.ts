@@ -84,11 +84,9 @@ test("bekende en eigen middelen zijn zichtbaar en doorzoekbaar zonder oude regis
   const rows = page.locator(".dp-history-list > li");
   await expect(rows).toHaveCount(4);
   const historic = rows.filter({
-    hasText: "Historische situatie in de keuken",
+    has: page.locator("summary", { hasText: /Middel.*niet ingevuld/i }),
   });
-  await expect(
-    historic.locator("dt").filter({ hasText: /^Middel of gedrag$/ }),
-  ).toHaveCount(0);
+  await expect(historic).toHaveCount(1);
   await expect(historic).not.toContainText("Alcohol");
   for (const [query, value] of [
     ["cOcAiNe", "Cocaine"],
@@ -97,15 +95,11 @@ test("bekende en eigen middelen zijn zichtbaar en doorzoekbaar zonder oude regis
   ]) {
     await page.getByRole("searchbox").fill(query);
     await expect(rows).toHaveCount(1);
-    await expect(
-      rows
-        .locator("dl > div")
-        .filter({ has: page.locator("dt", { hasText: /^Middel of gedrag$/ }) })
-        .locator("dd"),
-    ).toHaveText(value);
+    await expect(rows.locator("summary")).toContainText(value);
   }
   await page.getByRole("searchbox").fill("keuken");
   await expect(rows).toHaveCount(1);
+  await rows.locator("summary").click();
   await expect(rows).toContainText("Historische situatie");
   await page.getByRole("searchbox").fill("undefined");
   await expect(rows).toHaveCount(0);
@@ -124,6 +118,7 @@ test("een eigen middel blijft veilige tekst en past in de smalle geschiedenis", 
   await page.getByRole("searchbox").fill("kratom");
   const row = page.locator(".dp-history-list > li");
   await expect(row).toContainText(customSubstance);
+  await row.locator("summary").click();
   await expect(row.locator("img, script")).toHaveCount(0);
   await page.setViewportSize({ width: 320, height: 900 });
   await page.evaluate(async () => {

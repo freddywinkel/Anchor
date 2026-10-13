@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Check,
+  ChevronDown,
   Heart,
   Pencil,
   Plus,
@@ -10,6 +11,8 @@ import {
 } from "lucide-react";
 import type {
   AppState,
+  CravingRecord,
+  Day,
   EmotionRating,
   Goal,
   Moment,
@@ -50,12 +53,14 @@ function hasCustomName(goal: Goal | null) {
     !!goal && (!isStandardTarget(goal.target) || goal.name !== goal.target)
   );
 }
-function dateLabel(value: string) {
+function dateLabel(value: string, includeYear = false) {
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("nl-NL", {
     day: "numeric",
     month: "long",
-    ...(year !== new Date().getFullYear() ? { year: "numeric" as const } : {}),
+    ...(includeYear || year !== new Date().getFullYear()
+      ? { year: "numeric" as const }
+      : {}),
   }).format(new Date(year, month - 1, day, 12));
 }
 function recentStart() {
@@ -156,6 +161,280 @@ function goalLabel(goal: Goal) {
   return goal.name.trim() || targetLabel(goal.target);
 }
 
+type HistoryEntry =
+  | { type: "moment"; item: Moment; date: string; time: string }
+  | { type: "craving"; item: CravingRecord; date: string; time: string }
+  | { type: "day"; item: Day; date: string; time: string };
+const historyGroupNames = {
+  moment: "Check-ins",
+  craving: "Cravings",
+  day: "Dagoverzichten",
+};
+function HistoryFields({
+  fields,
+  craving = false,
+}: {
+  fields: readonly (readonly [string, string | undefined])[];
+  craving?: boolean;
+}) {
+  return (
+    <dl
+      className={
+        craving ? "dp-history-fields dp-craving-summary" : "dp-history-fields"
+      }
+    >
+      {fields.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value?.trim() ? value : "Niet ingevuld"}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+function HistoryRecord({
+  entry,
+  onEdit,
+}: {
+  entry: HistoryEntry;
+  onEdit: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const typeLabel =
+    entry.type === "day"
+      ? "Dagoverzicht"
+      : entry.type === "craving"
+        ? "Craving / drang"
+        : "Check-in";
+  const afterLabel =
+    entry.type === "moment" && entry.item.after
+      ? `${entry.item.afterDate ? dateLabel(entry.item.afterDate, true) : "Datum niet ingevuld"} · ${entry.item.afterTime || "Tijd niet ingevuld"}`
+      : "Niet ingevuld";
+  return (
+    <details
+      className="dp-history-record"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="dp-history-summary">
+        <span className="dp-history-summary-text">
+          <strong className="dp-history-type">{typeLabel}</strong>
+          <span className="dp-history-date">
+            <time dateTime={entry.date}>{dateLabel(entry.date, true)}</time>
+            {entry.type !== "day" && (
+              <time dateTime={`${entry.date}T${entry.time}`}>{entry.time}</time>
+            )}
+          </span>
+          {entry.type === "craving" && (
+            <span className="dp-history-preview">
+              Middel of gedrag:{" "}
+              {entry.item.substance?.trim()
+                ? entry.item.substance
+                : "Niet ingevuld"}
+            </span>
+          )}
+          {entry.type === "moment" && (
+            <>
+              {entry.item.activity && (
+                <span className="dp-history-preview">
+                  Activiteit: {entry.item.activity}
+                </span>
+              )}
+              {(entry.item.activity || entry.item.after) && (
+                <span className="dp-history-preview">
+                  {entry.item.after
+                    ? "Nameting ingevuld"
+                    : "Nameting niet ingevuld"}
+                </span>
+              )}
+            </>
+          )}
+        </span>
+        <ChevronDown
+          size={22}
+          className="dp-history-chevron"
+          aria-hidden="true"
+        />
+      </summary>
+      {open && (
+        <div className="dp-history-body dp-history-entry">
+          {entry.type === "craving" ? (
+            <HistoryFields
+              craving
+              fields={[
+                ["Middel of gedrag", entry.item.substance],
+                ["Externe situatie (wie, wat en waar)", entry.item.situation],
+                ["Gedachte", entry.item.thought],
+                ["Lichamelijke sensatie", entry.item.bodySensation],
+                ["Emotie", entry.item.emotion],
+                ["Gedrag", entry.item.behavior],
+              ]}
+            />
+          ) : entry.type === "moment" ? (
+            <>
+              <HistoryFields
+                fields={[
+                  [
+                    "Datum en tijd",
+                    `${dateLabel(entry.date, true)} · ${entry.time}`,
+                  ],
+                  ["Stemming bij check-in", moodLabel(entry.item.before.mood)],
+                  ["Nameting", afterLabel],
+                  ...(entry.item.after
+                    ? [
+                        [
+                          "Stemming bij nameting",
+                          moodLabel(entry.item.after.mood),
+                        ] as const,
+                      ]
+                    : []),
+                ]}
+              />
+              <HistoryRatings
+                before={entry.item.before}
+                after={entry.item.after}
+              />
+              <HistoryFields
+                fields={[
+                  ["Activiteit", entry.item.activity],
+                  [
+                    "Activiteit geprobeerd",
+                    entry.item.attempted === true
+                      ? "Ja"
+                      : entry.item.attempted === false
+                        ? "Nee"
+                        : "Niet ingevuld",
+                  ],
+                  ...(entry.item.emotions.length
+                    ? [
+                        [
+                          "Emoties zonder gekoppelde score",
+                          entry.item.emotions.join(", "),
+                        ] as const,
+                      ]
+                    : []),
+                  ["Notitie", entry.item.note],
+                ]}
+              />
+            </>
+          ) : (
+            <>
+              <HistoryFields
+                fields={[
+                  ["Datum", dateLabel(entry.date, true)],
+                  ["Stemming", moodLabel(entry.item.ratings.mood)],
+                ]}
+              />
+              <HistoryRatings before={entry.item.ratings} />
+              <HistoryFields
+                fields={[
+                  [
+                    "Slaap: uren",
+                    entry.item.sleepHours === ""
+                      ? "Niet ingevuld"
+                      : `${entry.item.sleepHours} uur`,
+                  ],
+                  [
+                    "Slaap: minuten",
+                    entry.item.sleepMinutes === ""
+                      ? "Niet ingevuld"
+                      : `${entry.item.sleepMinutes} minuten`,
+                  ],
+                  ["Notitie", entry.item.note],
+                ]}
+              />
+            </>
+          )}
+          <button
+            type="button"
+            className="dp-button quiet"
+            onClick={onEdit}
+            aria-label={`Bewerken: ${entry.type === "day" ? "hele dag" : entry.type === "craving" ? "craving" : "check-in"} van ${dateLabel(entry.date, true)}${entry.type !== "day" ? ` om ${entry.time}` : ""}`}
+          >
+            <Pencil size={17} aria-hidden="true" /> Bewerken
+          </button>
+        </div>
+      )}
+    </details>
+  );
+}
+function HistoryGroup({
+  type,
+  entries,
+  resetKey,
+  onEdit,
+}: {
+  type: HistoryEntry["type"];
+  entries: HistoryEntry[];
+  resetKey: string;
+  onEdit: (entry: HistoryEntry) => void;
+}) {
+  const [visibleCount, setVisibleCount] = useState(50);
+  const listRef = useRef<HTMLOListElement>(null);
+  useEffect(() => setVisibleCount(50), [resetKey]);
+  const visibleEntries = entries.slice(0, visibleCount);
+  const headingId = `anchor-history-${type}-heading`;
+  const listId = `anchor-history-${type}-records`;
+  return (
+    <section
+      className="dp-history-group"
+      data-history-kind={type}
+      aria-labelledby={headingId}
+    >
+      <div className="dp-section-head">
+        <h3 id={headingId}>{historyGroupNames[type]}</h3>
+        <span className="dp-count">
+          {entries.length}{" "}
+          {entries.length === 1 ? "registratie" : "registraties"}
+        </span>
+      </div>
+      {entries.length ? (
+        <ol className="dp-history-list" id={listId} ref={listRef}>
+          {visibleEntries.map((entry) => {
+            const id =
+              entry.type === "day" ? `day-${entry.date}` : entry.item.id;
+            return (
+              <li key={id} data-history-id={id}>
+                <HistoryRecord entry={entry} onEdit={() => onEdit(entry)} />
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="dp-muted">
+          Geen {historyGroupNames[type].toLocaleLowerCase("nl-NL")} binnen deze
+          selectie.
+        </p>
+      )}
+      {entries.length > 50 && (
+        <div className="dp-history-pagination">
+          <p className="dp-muted" role="status">
+            Je ziet {visibleEntries.length} van {entries.length}{" "}
+            {historyGroupNames[type].toLocaleLowerCase("nl-NL")}.
+          </p>
+          {visibleCount < entries.length && (
+            <button
+              className="dp-button"
+              type="button"
+              aria-controls={listId}
+              onClick={() => {
+                const firstAdded = visibleEntries.length;
+                setVisibleCount((count) => count + 50);
+                requestAnimationFrame(() =>
+                  listRef.current
+                    ?.querySelectorAll<HTMLElement>("li > details > summary")
+                    [firstAdded]?.focus(),
+                );
+              }}
+            >
+              Meer {historyGroupNames[type].toLocaleLowerCase("nl-NL")} tonen
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function HistoryView({
   state,
   onOpenMoment,
@@ -167,13 +446,10 @@ export function HistoryView({
   onOpenDay: (date: string) => void;
   onOpenCraving: (id: string) => void;
 }) {
-  const [period, setPeriod] = useState("week");
+  const [period, setPeriod] = useState("all");
   const [kind, setKind] = useState("all");
   const [query, setQuery] = useState("");
-  const [visibleCount, setVisibleCount] = useState(50);
-  const listRef = useRef<HTMLOListElement>(null);
-  useEffect(() => setVisibleCount(50), [period, kind, query]);
-  const entries = useMemo(() => {
+  const entries = useMemo<HistoryEntry[]>(() => {
     const start = recentStart();
     const withinPeriod = (date: string) =>
       period === "all" || (date >= start && date <= today());
@@ -207,7 +483,7 @@ export function HistoryView({
         type: "day" as const,
         item,
         date: item.date,
-        time: "23:59",
+        time: "",
       }));
     const cravings = state.cravings
       .filter(
@@ -269,7 +545,6 @@ export function HistoryView({
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   const graphPoints = observations.slice(-40);
-  const visibleEntries = entries.slice(0, visibleCount);
   return (
     <div className="dp-history">
       <div className="dp-history-filters dp-card">
@@ -424,111 +699,7 @@ export function HistoryView({
             {entries.length} gevonden
           </p>
         </div>
-        {entries.length ? (
-          <ol
-            className="dp-history-list"
-            id="anchor-history-records"
-            ref={listRef}
-          >
-            {visibleEntries.map((entry) => (
-              <li
-                key={
-                  entry.type === "day"
-                    ? `day-${entry.date}`
-                    : `${entry.type}-${entry.item.id}`
-                }
-              >
-                <div className="dp-history-date">
-                  <span>{dateLabel(entry.date)}</span>
-                  <span>{entry.type === "day" ? "Hele dag" : entry.time}</span>
-                </div>
-                <div className="dp-history-entry">
-                  <h3>
-                    {entry.type === "day"
-                      ? "Mijn hele dag"
-                      : entry.type === "craving"
-                        ? "Craving / drang"
-                        : entry.item.activity || "Check-in"}
-                  </h3>
-                  <p className="dp-muted">
-                    {entry.type === "day"
-                      ? `Dagsamenvatting · stemming ${moodLabel(entry.item.ratings.mood)}`
-                      : entry.type === "craving"
-                        ? entry.item.situation || "Situatie niet ingevuld"
-                        : `Check-in · stemming ${moodLabel(entry.item.before.mood)}${entry.item.after ? ` → ${moodLabel(entry.item.after.mood)}` : ""}`}
-                  </p>
-                  {entry.type === "moment" && (
-                    <>
-                      <HistoryRatings
-                        before={entry.item.before}
-                        after={entry.item.after}
-                      />
-                      {entry.item.emotions.length > 0 && (
-                        <p className="dp-entry-note">
-                          Emoties zonder gekoppelde score:{" "}
-                          {entry.item.emotions.join(", ")}
-                        </p>
-                      )}
-                    </>
-                  )}
-                  {entry.type === "day" && (
-                    <HistoryRatings before={entry.item.ratings} />
-                  )}
-                  {entry.type === "craving" ? (
-                    <dl className="dp-craving-summary">
-                      {(
-                        [
-                          ["Middel of gedrag", entry.item.substance || ""],
-                          ["Gedachte", entry.item.thought],
-                          ["Lichamelijk", entry.item.bodySensation],
-                          ["Emotie", entry.item.emotion],
-                          ["Gedrag", entry.item.behavior],
-                        ] as const
-                      )
-                        .filter(([, value]) => value.trim())
-                        .map(([label, value]) => (
-                          <div key={label}>
-                            <dt>{label}</dt>
-                            <dd>{value}</dd>
-                          </div>
-                        ))}
-                    </dl>
-                  ) : (
-                    entry.item.note && (
-                      <p className="dp-entry-note">{entry.item.note}</p>
-                    )
-                  )}
-                  {entry.type === "moment" && entry.item.activity && (
-                    <span className="dp-history-state">
-                      {entry.item.attempted === true
-                        ? "Activiteit geprobeerd · "
-                        : entry.item.attempted === false
-                          ? "Activiteit niet geprobeerd · "
-                          : ""}
-                      {entry.item.after
-                        ? `Nameting op ${dateLabel(entry.item.afterDate || entry.date)} om ${entry.item.afterTime}`
-                        : "Nameting nog niet ingevuld"}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="dp-button quiet"
-                  aria-label={`Bekijken: ${entry.type === "day" ? "hele dag" : entry.type === "craving" ? "craving" : "check-in"} van ${dateLabel(entry.date)}${entry.type !== "day" ? ` om ${entry.time}` : ""}`}
-                  onClick={() =>
-                    entry.type === "day"
-                      ? onOpenDay(entry.date)
-                      : entry.type === "craving"
-                        ? onOpenCraving(entry.item.id)
-                        : onOpenMoment(entry.item.id)
-                  }
-                >
-                  Bekijken <ArrowUpRight size={17} aria-hidden="true" />
-                </button>
-              </li>
-            ))}
-          </ol>
-        ) : (
+        {!entries.length && (
           <div className="dp-empty-inline">
             <h3>Geen registraties gevonden</h3>
             <p>Probeer een andere periode of verwijder je zoekterm.</p>
@@ -544,31 +715,26 @@ export function HistoryView({
             </button>
           </div>
         )}
-        {entries.length > 50 && (
-          <div className="dp-history-pagination">
-            <p className="dp-muted" role="status">
-              Je ziet {visibleEntries.length} van {entries.length} registraties.
-            </p>
-            {visibleCount < entries.length && (
-              <button
-                className="dp-button"
-                type="button"
-                aria-controls="anchor-history-records"
-                onClick={() => {
-                  const firstAdded = visibleEntries.length;
-                  setVisibleCount((count) => count + 50);
-                  requestAnimationFrame(() =>
-                    listRef.current
-                      ?.querySelectorAll<HTMLButtonElement>("li > button")
-                      [firstAdded]?.focus(),
-                  );
-                }}
-              >
-                Meer registraties tonen
-              </button>
-            )}
-          </div>
-        )}
+        {(["moment", "craving", "day"] as const)
+          .filter(
+            (type) =>
+              kind === "all" || kind === (type === "moment" ? "checkin" : type),
+          )
+          .map((type) => (
+            <HistoryGroup
+              key={type}
+              type={type}
+              entries={entries.filter((entry) => entry.type === type)}
+              resetKey={JSON.stringify([period, kind, query])}
+              onEdit={(entry) =>
+                entry.type === "day"
+                  ? onOpenDay(entry.date)
+                  : entry.type === "craving"
+                    ? onOpenCraving(entry.item.id)
+                    : onOpenMoment(entry.item.id)
+              }
+            />
+          ))}
       </section>
     </div>
   );

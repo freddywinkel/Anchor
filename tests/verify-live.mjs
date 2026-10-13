@@ -622,6 +622,57 @@ try {
     path: path.join(directory, "phone-emotions-after-offline.png"),
   });
 
+  const draftsBeforeReading = await page.evaluate(() =>
+    localStorage.getItem("anchor.app.drafts.v1"),
+  );
+  await page.goto(new URL("#/history", base).href);
+  await expect(page.getByLabel("Periode")).toHaveValue("all");
+  const cravingGroup = page.locator(".dp-history-group").filter({
+    has: page.getByRole("heading", { name: "Cravings", exact: true }),
+  });
+  const checkinGroup = page.locator(".dp-history-group").filter({
+    has: page.getByRole("heading", { name: "Check-ins", exact: true }),
+  });
+  await expect(cravingGroup.locator("details")).not.toHaveAttribute("open", "");
+  await expect(cravingGroup.locator("summary")).toContainText("3-MMC");
+  await expect(cravingGroup.locator("summary")).toContainText(
+    after.state.cravings[0].time,
+  );
+  await cravingGroup.locator("summary").click();
+  const historyCraving = cravingGroup.locator(".dp-history-body");
+  for (const value of [
+    synthetic,
+    offlineBehavior,
+    ...Object.values(internalValues),
+  ])
+    await expect(historyCraving).toContainText(value);
+  assert.ok(
+    await historyCraving.locator("dd").evaluateAll((values) =>
+      values.every((value) => {
+        const style = getComputedStyle(value);
+        return (
+          style.webkitLineClamp === "none" &&
+          value.scrollHeight <= value.clientHeight + 1
+        );
+      }),
+    ),
+  );
+  await checkinGroup.locator("summary").click();
+  await expect(checkinGroup.locator(".dp-history-body")).toContainText(
+    "Vóór: 70/100 · Na: 0/100",
+  );
+  await expect(page).toHaveURL(/#\/history$/);
+  await expect(page.locator("main form")).toHaveCount(0);
+  assert.equal((await stored()).raw, withMoment.raw);
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
+    draftsBeforeReading,
+  );
+  await cravingGroup.locator("summary").scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: path.join(directory, "phone-expanded-history-offline.png"),
+  });
+
   await page.getByRole("button", { name: "Meer opties", exact: true }).click();
   await page
     .getByRole("dialog")
@@ -764,6 +815,7 @@ try {
       "real craving UI save/reload",
       "successful craving and follow-up saves close their forms; unanswered activity choice stays null",
       "optional craving substance survives save, reload, offline editing and backup export",
+      "separate check-in and craving disclosures show complete information offline without edits or new drafts",
       "manifest/icons and scoped worker",
       "local display and body fonts load and remain cached offline, including accented characters",
       "five decorative pan and mood illustrations retain their accessible controls offline",

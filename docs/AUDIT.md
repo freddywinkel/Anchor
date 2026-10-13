@@ -2,6 +2,16 @@
 
 Auditdatum: 12 oktober 2026, aangevuld op 13 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
 
+## Volledig teruglezen in uitklapbare groepen — versie 1.8.0
+
+Terugkijken groepeert check-ins, cravings en dagoverzichten afzonderlijk. De standaardperiode is Alle dagen; zoeken en de bestaande filters blijven beschikbaar. Iedere registratie is een eigen uitklapbare kaart. De samenvatting toont de datum inclusief jaar, het tijdstip voor losse registraties en bij een craving het middel of ‘niet ingevuld’. Dagoverzichten krijgen geen verzonnen tijdstip. Meerdere kaarten kunnen tegelijk openstaan.
+
+Uitgeklapt staan alle bewaarde antwoorden volledig in beeld, met behoud van alinea’s en zonder regels af te kappen. Een craving toont externe situatie, gedachte, lichamelijke sensatie, emotie en gedrag. Een check-in toont ook voormeting, nameting, tijdstippen, activiteit, het afzonderlijke geprobeerd-antwoord en oude emotiewoorden; een dagoverzicht toont bovendien de afzonderlijk ingevulde slaapuren en -minuten. Nul blijft nul; ontbrekende waarden blijven onbekend. De actie Bewerken staat binnen de open kaart en opent alleen voor wijzigingen het formulier. Open- en dichtklappen schrijft geen registraties, concepten of voorkeuren.
+
+Per groep worden eerst 50 registraties getoond, met een eigen knop om oudere items te laden. Zo verdringen veel check-ins de cravings niet. De uitgeklapte inhoud wordt pas opgebouwd bij openen. Toetsenbordbediening gebruikt native details/summary, met zichtbare focus; lange teksten en eigen middelnamen passen ook op smalle schermen. De opslagstructuur en updateactivering veranderen niet.
+
+Verificatie: 65 opslagtests, 47 gerichte browsergevallen en 25 aanvullende controles geslaagd. Zeven nieuwe uitklapscenario’s slagen ook in Windows-WebKit. Na aanpassing van een testhelper zijn twee bestaande emotiegevallen gericht opnieuw gecontroleerd. De mobiele weergave is bekeken in licht en donker op 320 px/200% tekst. Volledige antwoorden van 4.000 tekens, meerdere open kaarten, toetsenbordbediening en bytegelijk behoud van registraties en concepten zijn getest. Een geschiedenis met 3.120 registraties toont eerst 50 per groep met 1.936 DOM-elementen; zoeken en laden blijven onafhankelijk werken. TypeScript, productiebuild/PWA-controle en dependency-audit slagen. Workerupdates slagen met 11 controles en vanaf `a42fc3b` met 7. Beide oude apps behouden hun bronbestanden, HEAD en Git-status (457/457 en 494/494 hashes gelijk). Bewijs: `tmp/history-audit/` en `tmp/secondary-qa/`; de publieke verifier controleert ook offline uitklappen zonder gegevenswijzigingen.
+
 ## Opslaan, afronden en middel bij een craving — versie 1.7.2
 
 De nameting blokkeerde opslag wanneer ‘Heb je de activiteit geprobeerd?’ niet was beantwoord. Het opslagcontract ondersteunde onbekend al; de onnodige formulierverplichting is verwijderd. De vraag is nu expliciet optioneel met Ja, Nee en Niet ingevuld. Een niet-ingevuld antwoord blijft `null`; nul bij een emotie blijft nul. Een opgeslagen nameting sluit en keert terug naar Vandaag, met dezelfde registratie en de oorspronkelijke voormeting en tijdstippen.

@@ -87,6 +87,23 @@ const screenshot = async (name) => {
   });
   report.screenshots.push(`${name}.png`);
 };
+const historyGroup = (target, kind) =>
+  target.locator(`.dp-history-group[data-history-kind="${kind}"]`);
+async function expandHistoryRecord(record) {
+  if ((await record.getAttribute("open")) === null)
+    await record.locator(":scope > summary").click();
+  await expect(record).toHaveAttribute("open", "");
+}
+const historyField = (record, label) =>
+  record
+    .locator(".dp-history-fields > div")
+    .filter({
+      has: record
+        .page()
+        .locator("dt")
+        .filter({ hasText: new RegExp(`^${label}$`) }),
+    })
+    .locator("dd");
 try {
   await ensurePreview();
   browser = await chromium.launch({ headless: true });
@@ -647,6 +664,7 @@ try {
       id: "qa-craving",
       date: today(),
       time: "10:10",
+      substance: "Cannabis",
       situation: "Alleen thuis in de keuken",
       thought: "Ik wil iets nemen",
       bodySensation: "Knoop in mijn buik",
@@ -673,6 +691,15 @@ try {
       note: "Een nameting op een latere dag.",
     },
   ];
+  historyState.days = [
+    {
+      date: today(),
+      ratings: { mood: null, eis: 0 },
+      sleepHours: "7",
+      sleepMinutes: "",
+      note: "Een dag met onbekende slaapminuten.",
+    },
+  ];
   const hc = await browser.newContext({
     viewport: { width: 390, height: 844 },
     locale: "nl-NL",
@@ -689,9 +716,31 @@ try {
   const hp = await hc.newPage();
   hp.on("pageerror", (error) => report.errors.push(error.message));
   await hp.goto(base + "#/history");
+  const initialHistoryRaw = await hp.evaluate(
+    (key) => localStorage.getItem(key),
+    STORAGE_KEY,
+  );
+  await expect(hp.getByLabel("Periode")).toHaveValue("all");
+  for (const [kind, label] of [
+    ["moment", "Check-ins"],
+    ["craving", "Cravings"],
+    ["day", "Dagoverzichten"],
+  ]) {
+    await expect(
+      historyGroup(hp, kind).getByRole("heading", { name: label, exact: true }),
+    ).toBeVisible();
+    await expect(
+      historyGroup(hp, kind).locator(".dp-history-record"),
+    ).toHaveCount(1);
+  }
+  await expect(hp.locator(".dp-history-body")).toHaveCount(0);
   await expect(
-    hp.getByRole("heading", { name: "Craving / drang", exact: true }),
+    hp.getByRole("img", { name: /2 stemmingsmetingen/ }),
   ).toBeVisible();
+  await hp.getByLabel("Periode").selectOption("week");
+  const oldMoment = historyGroup(hp, "moment").locator(".dp-history-record");
+  await expect(oldMoment).toHaveCount(1);
+  await expandHistoryRecord(oldMoment);
   await expect(
     hp.getByRole("img", { name: /1 stemmingsmetingen/ }),
   ).toBeVisible();
@@ -704,15 +753,16 @@ try {
     "Na activiteit",
   );
   await expect(
-    hp.getByRole("button", { name: /^Bekijken: check-in/ }),
+    oldMoment.getByRole("button", { name: /^Bewerken: check-in/ }),
   ).toBeEnabled();
-  await expect(hp.locator(".dp-history-list")).toContainText(
-    "Activiteit niet geprobeerd",
+  await expect(historyField(oldMoment, "Activiteit geprobeerd")).toHaveText(
+    "Nee",
   );
   saveCheck(
     "An in-week follow-up retains its older check-in in the list and never implies an untried activity happened",
   );
   for (const needle of [
+    "Cannabis",
     "keuken",
     "iets nemen",
     "Knoop",
@@ -721,25 +771,54 @@ try {
   ]) {
     await hp.getByRole("searchbox").fill(needle);
     await expect(
-      hp.getByRole("heading", { name: "Craving / drang", exact: true }),
-    ).toBeVisible();
+      historyGroup(hp, "craving").locator(".dp-history-record"),
+    ).toHaveCount(1);
   }
   await hp.getByRole("searchbox").fill("");
+  const dayRecord = historyGroup(hp, "day").locator(".dp-history-record");
+  await expandHistoryRecord(dayRecord);
+  await expect(dayRecord).toContainText("Een dag met onbekende slaapminuten.");
+  await expect(historyField(dayRecord, "Slaap: uren")).toHaveText("7 uur");
+  await expect(historyField(dayRecord, "Slaap: minuten")).toHaveText(
+    "Niet ingevuld",
+  );
+  await expect(historyField(dayRecord, "Stemming")).toHaveText("niet ingevuld");
+  await expect(dayRecord).toContainText("0/100");
   await hp.getByLabel("Soort registratie").selectOption("craving");
+  const cravingRecord = historyGroup(hp, "craving").locator(
+    ".dp-history-record",
+  );
+  await expandHistoryRecord(cravingRecord);
+  await expect(cravingRecord).toContainText("Cannabis");
+  for (const value of [
+    historyState.cravings[0].situation,
+    historyState.cravings[0].thought,
+    historyState.cravings[0].bodySensation,
+    historyState.cravings[0].emotion,
+    historyState.cravings[0].behavior,
+  ])
+    await expect(cravingRecord.locator(".dp-history-body")).toContainText(
+      value,
+    );
   await expect(hp.getByRole("img")).toHaveCount(0);
   await expect(
     hp.getByRole("heading", { name: "Stemming per moment", exact: true }),
   ).toHaveCount(0);
   saveCheck(
-    "Craving search covers situation/thought/body/emotion/behavior and filter excludes mood graph",
+    "Grouped history expands complete records; craving search includes substance and narratives, partial sleep stays unknown, and craving filter excludes mood graph",
   );
+  expect(
+    await hp.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
+  ).toBe(initialHistoryRaw);
   await hp.evaluate(() => window.scrollTo(0, 0));
   await hp.screenshot({
     path: join(artifacts, "phone-history-craving-light.png"),
     fullPage: true,
   });
   report.screenshots.push("phone-history-craving-light.png");
-  await hp.getByRole("button", { name: /Bekijken: craving/ }).click();
+  await cravingRecord
+    .getByRole("button", { name: /^Bewerken: craving/ })
+    .click();
   await expect(hp.getByRole("textbox", { name: /^Gedachte/ })).toHaveValue(
     "Ik wil iets nemen",
   );
@@ -751,8 +830,11 @@ try {
   ).toBeVisible();
   await readOnlyPage.getByLabel("Soort registratie").selectOption("craving");
   await readOnlyPage.getByRole("searchbox").fill("keuken");
+  await expandHistoryRecord(
+    historyGroup(readOnlyPage, "craving").locator(".dp-history-record"),
+  );
   await readOnlyPage
-    .getByRole("button", { name: /^Bekijken: craving/ })
+    .getByRole("button", { name: /^Bewerken: craving/ })
     .click();
   await expect(
     readOnlyPage.getByRole("textbox", { name: /^Gedachte/ }),
@@ -833,9 +915,14 @@ try {
   for (const hash of ["#/plan", "#/growth", "#/history"]) {
     await longPage.goto(base + hash);
     await expect(longPage.getByRole("heading", { level: 1 })).toBeVisible();
+    if (hash === "#/history")
+      await expandHistoryRecord(
+        historyGroup(longPage, "craving").locator(".dp-history-record"),
+      );
     await longPage.evaluate(
       () => (document.documentElement.style.fontSize = "200%"),
     );
+    await longPage.evaluate(() => document.fonts.ready);
     expect(
       await longPage.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -866,6 +953,29 @@ try {
       note: `Korte persoonlijke aantekening ${index}.`,
     });
   }
+  for (let index = 0; index < 60; index++) {
+    const day = new Date(`${today()}T12:00:00`);
+    day.setDate(day.getDate() - index);
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    historyOfYears.cravings.push({
+      id: `history-craving-${index}`,
+      date,
+      time: "12:30",
+      substance: "Alcohol",
+      situation: `Situatie ${index}`,
+      thought: "",
+      bodySensation: "",
+      emotion: "",
+      behavior: "Buiten gewandeld",
+    });
+    historyOfYears.days.push({
+      date,
+      ratings: { mood: null, eis: null },
+      sleepHours: "",
+      sleepMinutes: "",
+      note: `Dagnotitie ${index}`,
+    });
+  }
   const historyContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
     locale: "nl-NL",
@@ -873,45 +983,100 @@ try {
     reducedMotion: "reduce",
   });
   await historyContext.addInitScript(
-    ({ key, state }) => {
+    ({ key, draftKey, state }) => {
       if (!localStorage.getItem(key))
         localStorage.setItem(key, JSON.stringify(state));
+      if (!localStorage.getItem(draftKey))
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            version: 1,
+            records: {
+              plan: { warning: "Concept behouden", action: "", support: "" },
+            },
+          }),
+        );
     },
-    { key: STORAGE_KEY, state: historyOfYears },
+    { key: STORAGE_KEY, draftKey: DRAFT_STORAGE_KEY, state: historyOfYears },
   );
   const historyPage = await historyContext.newPage();
+  historyPage.on("pageerror", (error) => report.errors.push(error.message));
   await historyPage.goto(base + "#/history");
-  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(28);
-  await historyPage.getByLabel("Periode").selectOption("all");
-  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(50);
+  const historyStorage = () =>
+    historyPage.evaluate(
+      (keys) => keys.map((key) => localStorage.getItem(key)),
+      [STORAGE_KEY, DRAFT_STORAGE_KEY],
+    );
+  const beforeHistoryReads = await historyStorage();
+  await expect(historyPage.getByLabel("Periode")).toHaveValue("all");
+  for (const kind of ["moment", "craving", "day"])
+    await expect(
+      historyGroup(historyPage, kind).locator(".dp-history-list > li"),
+    ).toHaveCount(50);
+  await expect(historyPage.locator(".dp-history-body")).toHaveCount(0);
   await expect(historyPage.locator(".dp-observation-details li")).toHaveCount(
     40,
   );
   await expect(
-    historyPage.getByText("3000 gevonden", { exact: true }),
+    historyPage.getByText("3120 gevonden", { exact: true }),
   ).toBeVisible();
-  expect(
-    await historyPage.evaluate(() => document.querySelectorAll("*").length),
-  ).toBeLessThan(2000);
-  await historyPage
-    .getByRole("button", { name: "Meer registraties tonen" })
-    .click();
-  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(100);
-  await expect(
-    historyPage.locator(".dp-history-list > li > button").nth(50),
-  ).toBeFocused();
+  report.historyInitialNodeCount = await historyPage.evaluate(
+    () => document.querySelectorAll("*").length,
+  );
+  expect(report.historyInitialNodeCount).toBeLessThan(2000);
+  for (const [kind, button, count] of [
+    ["moment", "Meer check-ins tonen", 100],
+    ["craving", "Meer cravings tonen", 60],
+    ["day", "Meer dagoverzichten tonen", 60],
+  ]) {
+    const group = historyGroup(historyPage, kind);
+    const previousCounts = await historyPage
+      .locator(".dp-history-group")
+      .evaluateAll((groups) =>
+        Object.fromEntries(
+          groups.map((element) => [
+            element.getAttribute("data-history-kind"),
+            element.querySelectorAll(".dp-history-list > li").length,
+          ]),
+        ),
+      );
+    await group.getByRole("button", { name: button, exact: true }).click();
+    await expect(group.locator(".dp-history-list > li")).toHaveCount(count);
+    await expect(group.locator(".dp-history-summary").nth(50)).toBeFocused();
+    for (const other of ["moment", "craving", "day"].filter(
+      (value) => value !== kind,
+    ))
+      await expect(
+        historyGroup(historyPage, other).locator(".dp-history-list > li"),
+      ).toHaveCount(previousCounts[other]);
+  }
   await historyPage.getByRole("searchbox").fill("aantekening 2999.");
   await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(1);
+  await expandHistoryRecord(
+    historyGroup(historyPage, "moment").locator(".dp-history-record"),
+  );
   await expect(historyPage.locator(".dp-history-list")).toContainText(
     "aantekening 2999.",
   );
+  await expect(historyPage.locator(".dp-history-body")).toHaveCount(1);
   await historyPage.getByRole("searchbox").fill("");
-  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(50);
+  for (const kind of ["moment", "craving", "day"])
+    await expect(
+      historyGroup(historyPage, kind).locator(".dp-history-list > li"),
+    ).toHaveCount(50);
   await historyPage.getByLabel("Periode").selectOption("week");
-  await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(28);
+  for (const [kind, count] of [
+    ["moment", 28],
+    ["craving", 7],
+    ["day", 7],
+  ])
+    await expect(
+      historyGroup(historyPage, kind).locator(".dp-history-list > li"),
+    ).toHaveCount(count);
+  expect(await historyStorage()).toEqual(beforeHistoryReads);
   await historyContext.close();
   saveCheck(
-    "A 3000-record history renders 50 entries and 40 text observations while pagination, focus, full-history search and filters remain correct",
+    "A 3120-record history initially renders 50 closed entries per group and 40 text observations; independent pagination/focus, full-history search and filters preserve saved data and drafts byte-for-byte",
   );
   expect(report.errors).toEqual([]);
   saveCheck("No browser runtime errors");
