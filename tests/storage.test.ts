@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
+import { PALETTE_IDS, isPalette } from "../src/lib/palettes.ts";
 import {
   STORAGE_KEY,
   DRAFT_STORAGE_KEY,
@@ -139,6 +140,11 @@ function populated(): AppState {
   };
 }
 
+function withoutPalette(state: AppState): Omit<AppState, "palette"> {
+  const { palette: _palette, ...legacy } = state;
+  return legacy;
+}
+
 function fullStateAtRevisionNine(): AppState {
   const state = createEmptyState();
   state.revision = 9;
@@ -150,14 +156,14 @@ function fullStateAtRevisionNine(): AppState {
     emotion: "",
     behavior: "",
   }));
-  let remaining = 2_000_000 - JSON.stringify(state).length;
+  let remaining = 2_000_000 - JSON.stringify(withoutPalette(state)).length;
   for (const craving of state.cravings) {
     const length = Math.min(4000, remaining);
     craving.thought = "x".repeat(length);
     remaining -= length;
     if (remaining === 0) break;
   }
-  assert.equal(JSON.stringify(state).length, 2_000_000);
+  assert.equal(JSON.stringify(withoutPalette(state)).length, 2_000_000);
   return state;
 }
 
@@ -229,6 +235,123 @@ describe("Anchor storage isolation and independent records", () => {
   it("uses real local calendar/time strings", () => {
     assert.match(today(), /^\d{4}-\d{2}-\d{2}$/);
     assert.match(clockTime(), /^([01]\d|2[0-3]):[0-5]\d$/);
+  });
+});
+
+describe("backward-compatible palette preferences", () => {
+  it("loads old v1 data as amber without changing stored bytes, records, or drafts", () => {
+    const expected = populated();
+    const raw = JSON.stringify(withoutPalette(expected));
+    store.values.set(STORAGE_KEY, raw);
+    store.values.set("anchor-recovery", "unrelated data");
+    assert.equal(saveDraft("craving:new", makeCraving()).ok, true);
+    const draftBytes = store.values.get(DRAFT_STORAGE_KEY);
+    store.writes = [];
+
+    const loaded = loadState();
+    assert.equal(loaded.blocked, false);
+    assert.equal(loaded.warning, null);
+    assert.deepEqual(loaded.state, expected);
+    assert.equal(loaded.state.palette, "amber");
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(store.writes.length, 0);
+
+    const saved = saveState({ ...loaded.state, palette: "sage" });
+    assert.equal(saved.ok, true);
+    assert.deepEqual(loadState().state, {
+      ...expected,
+      palette: "sage",
+      revision: 1,
+    });
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftBytes);
+    assert.equal(store.values.get("anchor-recovery"), "unrelated data");
+    assert.deepEqual(loadDrafts()["craving:new"], makeCraving());
+  });
+
+  it("imports an old v1 backup with the default palette and preserves draft storage", () => {
+    const expected = populated();
+    const backup = JSON.parse(exportBackup(expected));
+    backup.state = withoutPalette(expected);
+    assert.equal(saveDraft("plan", expected.plan).ok, true);
+    const draftBytes = store.values.get(DRAFT_STORAGE_KEY);
+
+    const parsed = parseBackup(JSON.stringify(backup));
+    assert.deepEqual(parsed, expected);
+    assert.equal(replaceFromBackup(parsed, 0, null).ok, true);
+    assert.deepEqual(loadState().state, { ...expected, revision: 1 });
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftBytes);
+  });
+
+  it("round-trips every palette independently of light and dark themes", () => {
+    assert.deepEqual(PALETTE_IDS, [
+      "amber",
+      "sage",
+      "ocean",
+      "rose",
+      "lavender",
+    ]);
+    for (const palette of PALETTE_IDS) {
+      assert.equal(isPalette(palette), true);
+      for (const theme of ["light", "dark"] as const) {
+        const expected = {
+          ...populated(),
+          revision: loadState().state.revision,
+          palette,
+          theme,
+        };
+        const saved = saveState(expected);
+        assert.equal(saved.ok, true);
+        assert.deepEqual(loadState().state, {
+          ...expected,
+          revision: expected.revision + 1,
+        });
+        const parsed = parseBackup(exportBackup(saved.state!));
+        assert.deepEqual(parsed, saved.state);
+        assert.equal(replaceFromBackup(parsed, saved.state!.revision).ok, true);
+        assert.deepEqual(loadState().state, {
+          ...parsed,
+          revision: parsed.revision + 1,
+        });
+      }
+    }
+  });
+
+  it("rejects present invalid palettes without overwriting data or silently defaulting", () => {
+    const saved = saveState(populated()).state!;
+    const raw = store.values.get(STORAGE_KEY);
+    for (const palette of ["blue", "AMBER", "", null, undefined, 0, {}, []]) {
+      assert.equal(isPalette(palette), false);
+      const candidate = { ...saved, palette };
+      assert.throws(() => validateState(candidate), /kleurenpalet/);
+      assert.equal(saveState(candidate as AppState).ok, false);
+      assert.equal(store.values.get(STORAGE_KEY), raw);
+      if (palette !== undefined) {
+        const backup = JSON.parse(exportBackup(saved));
+        backup.state.palette = palette;
+        assert.throws(
+          () => parseBackup(JSON.stringify(backup)),
+          /kleurenpalet/,
+        );
+      }
+    }
+    const invalidRaw = JSON.stringify({ ...saved, palette: "future-palette" });
+    store.values.set(STORAGE_KEY, invalidRaw);
+    assert.equal(loadState().blocked, true);
+    assert.equal(store.values.get(STORAGE_KEY), invalidRaw);
+  });
+
+  it("keeps old data at the payload limit readable without relaxing the revision bound", () => {
+    const expected = fullStateAtRevisionNine();
+    const raw = JSON.stringify(withoutPalette(expected));
+    store.values.set(STORAGE_KEY, raw);
+    assert.equal(raw.length, 2_000_000);
+    assert.equal(loadState().blocked, false);
+    assert.deepEqual(loadState().state, expected);
+    for (const palette of PALETTE_IDS)
+      assert.equal(validateState({ ...expected, palette }).palette, palette);
+    assert.equal(saveState(loadState().state).ok, false);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(loadState().blocked, false);
   });
 });
 

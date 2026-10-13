@@ -1,6 +1,18 @@
 # Anchor — product- en technische audit
 
-Auditdatum: 12 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Een publieke deployment en installatie op een fysiek apparaat zijn hiermee niet aangetoond.
+Auditdatum: 12 oktober 2026, aangevuld op 13 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
+
+## Cravingformulier en kleurpaletten — versie 1.1.0
+
+Bij 430 px schermbreedte en 200% tekstgrootte werd het jaartal in de datumkiezer afgekapt: beide kolommen bleven 193 px breed. Het cravingformulier gebruikt nu een grid dat reageert op beschikbare ruimte en tekstgrootte. Datum en tijd hebben dezelfde marges en hoogte, vullen hun kolom en worden gestapeld als er onvoldoende ruimte is. In dezelfde proef krijgt elk veld 398 px en is de volledige datum leesbaar. Native datum- en tijdtypes blijven behouden. De kop heet nu **Externe situatie** en het tekstveld **Wie, wat en waar**.
+
+Instellingen biedt vijf paletten — Amber, Salie, Oceaan, Roos en Lavendel — met elk een lichte en donkere stand en een kleurvoorbeeld. De knop bovenin wisselt alleen licht/donker en bewaart de paletkeuze. Ook de browserbalk en pagina-achtergrond volgen het gekozen palet. De gemeten tekstcombinaties halen minimaal 4,5:1 contrast; invoerranden en focus halen minimaal 3:1. De instellingen en formulieren passen op 320 px met 200% tekst.
+
+De voorkeur `palette` is een toevoeging aan het bestaande v1-contract. Oude gegevens en back-ups zonder dit veld krijgen in het geheugen het oorspronkelijke Amber-palet, zonder opslag of registraties te herschrijven. Een expliciet ongeldige waarde wordt geweigerd. De bestaande opslagkeys, schrijflock, revisies en concepten blijven behouden. Het oorspronkelijke payloadmaximum blijft gelden voor de bestaande velden, met uitsluitend de vaste metadata-overhead voor het palet erbij.
+
+De gerichte datum/tijdcontrole dekt 40 combinaties van Chromium en Windows-WebKit, vijf schermbreedtes, beide weergavestanden en twee tekstgroottes. Windows-WebKit gebruikt hier een tekstfallback voor datum/tijd; dit is geen fysieke iOS-pickercontrole. De echte workerupdate vanaf release `2072cf1` behoudt opgeslagen bytes, blokkeert activering met een open concept en bewaart daarna ook een nieuw palet en concept bij offline herladen. Dit is herhaalbaar via `ANCHOR_BASELINE_REF=2072cf1 pnpm test:update` (shell-afhankelijke notatie voor de omgevingsvariabele).
+
+TypeScript, productiebuild, PWA-artifactcontrole, 52 opslagtests, 29 primaire browsertests en 22 aanvullende browsercontroles zijn geslaagd. De dependency-audit meldt nul bekende kwetsbaarheden. Bewijs staat onder `tmp/craving-fields-audit/`, `tmp/appearance-test-results/`, `tmp/update-check/result.json` en de reguliere testuitvoer. De live verifier controleert bij deze release ook de veldbreedte en het offline bewaren van de vijf paletten zonder gewijzigde registraties. Substance Recovery is opnieuw vergeleken: alle 514 bronbestanden, Git-status en HEAD zijn gelijk aan de oorspronkelijke snapshot.
 
 ## Aanvullende ground-up audit — versie 1.0.1
 

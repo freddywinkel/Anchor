@@ -1,7 +1,7 @@
 /* Anchor's shared theme and layout. Fonts are supplied by the device. */
 html:has(#anchor-root) {
   margin: 0;
-  background: #171614;
+  background: var(--anchor-page-bg, #171614);
   color-scheme: dark;
   scroll-padding-block: 1rem var(--anchor-nav-clearance, 8rem);
 }
@@ -9,25 +9,13 @@ html:has(#anchor-root) {
   scroll-margin-block: 1rem var(--anchor-nav-clearance, 8rem);
 }
 html[data-anchor-theme="light"]:has(#anchor-root) {
-  background: #f6f3ec;
+  background: var(--anchor-page-bg, #f6f3ec);
   color-scheme: light;
 }
 body:has(#anchor-root) {
   margin: 0;
 }
 .dp {
-  --dp-bg: #171614;
-  --dp-surface: #211f1b;
-  --dp-raised: #2a2722;
-  --dp-ink: #f4efe6;
-  --dp-muted: #bab4a9;
-  --dp-border: #454138;
-  --dp-accent: #f1ba66;
-  --dp-accent-ink: #211709;
-  --dp-accent-soft: #32291d;
-  --dp-sage: #b6c7b9;
-  --dp-sage-soft: #232d27;
-  --dp-danger: #ffb3a7;
   color: var(--dp-ink);
   background: var(--dp-bg);
   min-height: 100dvh;
@@ -38,20 +26,6 @@ body:has(#anchor-root) {
     sans-serif;
   accent-color: var(--dp-accent);
   overflow-wrap: break-word;
-}
-.dp[data-theme="light"] {
-  --dp-bg: #f6f3ec;
-  --dp-surface: #fffdf8;
-  --dp-raised: #eee9de;
-  --dp-ink: #302b23;
-  --dp-muted: #686156;
-  --dp-border: #d6d0c4;
-  --dp-accent: #805017;
-  --dp-accent-ink: #fffaf1;
-  --dp-accent-soft: #f1e5d0;
-  --dp-sage: #466452;
-  --dp-sage-soft: #e5ece3;
-  --dp-danger: #ab2c22;
 }
 .dp *,
 .dp *::before,
@@ -1624,13 +1598,7 @@ body:has(#anchor-root) {
     margin-left: auto;
   }
 }
-/* Form boundaries remain identifiable in both existing themes. */
-.dp {
-  --dp-control-border: #827b6d;
-}
-.dp[data-theme="light"] {
-  --dp-control-border: #8c8374;
-}
+/* Form boundaries use the palette's stronger control outline. */
 .dp input:not([type="checkbox"]):not([type="radio"]),
 .dp select,
 .dp textarea,

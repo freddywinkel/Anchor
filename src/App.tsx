@@ -448,10 +448,15 @@ export function App() {
   }, [route]);
   useEffect(() => {
     document.documentElement.dataset.anchorTheme = state.theme;
+    const app = document.querySelector<HTMLElement>(".dp");
+    const background = app
+      ? getComputedStyle(app).getPropertyValue("--dp-bg").trim()
+      : "#171614";
+    document.documentElement.style.setProperty("--anchor-page-bg", background);
     document
       .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", state.theme === "dark" ? "#171614" : "#f6f3ec");
-  }, [state.theme]);
+      ?.setAttribute("content", background);
+  }, [state.theme, state.palette]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(""), 4500);
@@ -608,7 +613,7 @@ export function App() {
   const craving = state.cravings.find((item) => item.id === cravingId);
   const dayDate = path.startsWith("/day/") ? path.split("/")[2] : null;
   return (
-    <div className="dp" data-theme={state.theme}>
+    <div className="dp" data-theme={state.theme} data-palette={state.palette}>
       <a
         className="dp-skip"
         href="#anchor-main"

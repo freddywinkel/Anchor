@@ -1,3 +1,5 @@
+import { PALETTE_IDS, isPalette, type Palette } from "./palettes.ts";
+
 export const STORAGE_KEY = "anchor.app.data.v1";
 export const DRAFT_STORAGE_KEY = "anchor.app.drafts.v1";
 
@@ -56,6 +58,7 @@ export type AppState = {
   growth: Growth[];
   plan: { warning: string; action: string; support: string };
   theme: "dark" | "light";
+  palette: Palette;
   homeShowGrowth: boolean;
 };
 export type SaveResult = {
@@ -67,6 +70,10 @@ export type SaveResult = {
 // Stay below the usual localStorage quota. A failed write still leaves the
 // browser's existing value untouched; callers must retain their form values.
 const MAX_STATE_LENGTH = 2_000_000;
+// Palette is additive v1 metadata. Leave the full existing payload allowance
+// available so an older state at the limit remains readable after normalization.
+const MAX_SERIALIZED_STATE_LENGTH =
+  MAX_STATE_LENGTH + Math.max(...PALETTE_IDS.map(paletteStorageLength));
 const MAX_DRAFT_LENGTH = 256_000;
 const MAX_RECORDS = 20_000;
 const BACKUP_FORMAT = "anchor.app.backup";
@@ -79,6 +86,11 @@ export type WriteResult = { ok: boolean; message: string | null };
 
 function invalid(message: string): never {
   throw new Error(message);
+}
+
+function paletteStorageLength(palette: Palette): number {
+  // The serialized property and its comma, without the enclosing braces.
+  return JSON.stringify({ palette }).length - 1;
 }
 
 function object(value: unknown, label: string): JsonObject {
@@ -417,14 +429,21 @@ export function createEmptyState(): AppState {
     growth: [],
     plan: { warning: "", action: "", support: "" },
     theme: "dark",
+    palette: "amber",
     homeShowGrowth: true,
   };
 }
 
-/** Reject unknown schema fields rather than silently dropping future-version data. */
+/**
+ * Reject unknown fields rather than silently dropping future-version data.
+ * Palette is optional only in v1 input from older releases; output is normalized
+ * to amber without writing storage or altering records, revisions, or drafts.
+ */
 export function validateState(value: unknown): AppState {
+  const input = object(value, "Anchor-gegevens");
+  const hasPalette = Object.hasOwn(input, "palette");
   const item = fields(
-    value,
+    input,
     [
       "version",
       "revision",
@@ -436,6 +455,7 @@ export function validateState(value: unknown): AppState {
       "plan",
       "theme",
       "homeShowGrowth",
+      ...(hasPalette ? ["palette"] : []),
     ],
     "Anchor-gegevens",
   );
@@ -449,6 +469,9 @@ export function validateState(value: unknown): AppState {
     return invalid("De gegevensrevisie is ongeldig.");
   if (item.theme !== "dark" && item.theme !== "light")
     return invalid("Het gekozen thema is ongeldig.");
+  const palette = hasPalette ? item.palette : "amber";
+  if (!isPalette(palette))
+    return invalid("Het gekozen kleurenpalet is ongeldig.");
   const state: AppState = {
     version: 1,
     revision: item.revision,
@@ -479,9 +502,13 @@ export function validateState(value: unknown): AppState {
     ),
     plan: plan(item.plan),
     theme: item.theme,
+    palette,
     homeShowGrowth: bool(item.homeShowGrowth, "Groei op Vandaag"),
   };
-  if (JSON.stringify(state).length > MAX_STATE_LENGTH)
+  if (
+    JSON.stringify(state).length - paletteStorageLength(palette) >
+    MAX_STATE_LENGTH
+  )
     return invalid(
       "Je gegevens zijn te groot voor de lokale opslag. Maak een back-up.",
     );
@@ -489,7 +516,7 @@ export function validateState(value: unknown): AppState {
 }
 
 function decodeState(raw: string): AppState {
-  if (raw.length > MAX_STATE_LENGTH)
+  if (raw.length > MAX_SERIALIZED_STATE_LENGTH)
     return invalid("De opgeslagen gegevens zijn te groot.");
   let parsed: unknown;
   try {
@@ -546,7 +573,10 @@ function writeState(state: AppState): SaveResult {
     const serialized = JSON.stringify(state);
     // Incrementing the revision can add a digit. Check the final serialized
     // value, so a successful save remains readable by decodeState next launch.
-    if (serialized.length > MAX_STATE_LENGTH)
+    if (
+      serialized.length - paletteStorageLength(state.palette) >
+      MAX_STATE_LENGTH
+    )
       return {
         ok: false,
         message:
@@ -611,7 +641,7 @@ export function exportBackup(state: AppState): string {
 }
 
 export function parseBackup(text: string): AppState {
-  if (typeof text !== "string" || text.length > MAX_STATE_LENGTH * 2)
+  if (typeof text !== "string" || text.length > MAX_SERIALIZED_STATE_LENGTH * 2)
     return invalid("Dit back-upbestand is te groot.");
   let parsed: unknown;
   try {

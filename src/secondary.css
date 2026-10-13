@@ -361,6 +361,49 @@
   font-size: 0.85rem;
   margin-top: 0.25rem;
 }
+.dp .dp-palette-hint {
+  grid-column: 1 / -1;
+  margin: 0 0 0.4rem;
+}
+.dp .dp-theme-options > label > span {
+  min-width: 0;
+}
+.dp .dp-palette-card {
+  flex: 1;
+}
+.dp .dp-palette-card .dp-palette-name {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+.dp .dp-palette-card .dp-palette-swatches {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  height: 1.65rem;
+  margin-top: 0.8rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--dp-control-border);
+  overflow: hidden;
+}
+.dp .dp-palette-swatches > i:nth-child(1) {
+  background: var(--dp-bg);
+}
+.dp .dp-palette-swatches > i:nth-child(2) {
+  background: var(--dp-raised);
+}
+.dp .dp-palette-swatches > i:nth-child(3) {
+  background: var(--dp-accent);
+}
+.dp .dp-palette-swatches > i:nth-child(4) {
+  background: var(--dp-sage);
+}
+.dp .dp-theme-options > label:has(input:focus-visible) {
+  outline: 3px solid var(--dp-accent);
+  outline-offset: 3px;
+}
+.dp .dp-theme-options > label:has(input:disabled) {
+  cursor: default;
+}
 .dp .dp-setting-toggle {
   display: flex;
   align-items: center;

@@ -191,7 +191,7 @@ export function CravingView({
       <form onSubmit={submit} className="anchor-craving-form">
         <section className="dp-form-section" aria-labelledby={`${prefix}-when`}>
           <h2 id={`${prefix}-when`}>Wanneer was het?</h2>
-          <div className="dp-form-grid">
+          <div className="dp-form-grid anchor-craving-datetime">
             <label className="dp-field" htmlFor={`${prefix}-date`}>
               Datum
               <input
@@ -225,11 +225,9 @@ export function CravingView({
           className="dp-form-section"
           aria-labelledby={`${prefix}-situation-title`}
         >
-          <h2 id={`${prefix}-situation-title`}>De situatie</h2>
+          <h2 id={`${prefix}-situation-title`}>Externe situatie</h2>
           <label className="dp-field" htmlFor={`${prefix}-situation`}>
-            <span id={`${prefix}-situation-label`}>
-              Situatie (wie, wat, waar)
-            </span>
+            <span id={`${prefix}-situation-label`}>Wie, wat en waar</span>
             <span className="dp-hint" id={`${prefix}-situation-hint`}>
               Wie waren erbij, wat gebeurde er en waar was je?
             </span>

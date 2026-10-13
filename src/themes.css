@@ -1,0 +1,161 @@
+/* Each palette supports both modes. Preview swatches use these same tokens. */
+.dp,
+.dp [data-palette-preview="amber"] {
+  --dp-bg: #171614;
+  --dp-surface: #211f1b;
+  --dp-raised: #2a2722;
+  --dp-ink: #f4efe6;
+  --dp-muted: #bab4a9;
+  --dp-border: #454138;
+  --dp-accent: #f1ba66;
+  --dp-accent-ink: #211709;
+  --dp-accent-soft: #32291d;
+  --dp-sage: #b6c7b9;
+  --dp-sage-soft: #232d27;
+  --dp-danger: #ffb3a7;
+  --dp-control-border: #827b6d;
+}
+.dp[data-theme="light"],
+.dp[data-theme="light"] [data-palette-preview="amber"] {
+  --dp-bg: #f6f3ec;
+  --dp-surface: #fffdf8;
+  --dp-raised: #eee9de;
+  --dp-ink: #302b23;
+  --dp-muted: #686156;
+  --dp-border: #d6d0c4;
+  --dp-accent: #805017;
+  --dp-accent-ink: #fffaf1;
+  --dp-accent-soft: #f1e5d0;
+  --dp-sage: #466452;
+  --dp-sage-soft: #e5ece3;
+  --dp-danger: #ab2c22;
+  --dp-control-border: #8c8374;
+}
+.dp[data-palette="sage"],
+.dp [data-palette-preview="sage"] {
+  --dp-bg: #141c18;
+  --dp-surface: #1c2820;
+  --dp-raised: #26352b;
+  --dp-ink: #eef4ec;
+  --dp-muted: #acbbae;
+  --dp-border: #3c4d43;
+  --dp-accent: #aad5b3;
+  --dp-accent-ink: #172b1d;
+  --dp-accent-soft: #263b2c;
+  --dp-sage: #b2d2b5;
+  --dp-sage-soft: #263b2c;
+  --dp-danger: #ffb3a7;
+  --dp-control-border: #809786;
+}
+.dp[data-palette="sage"][data-theme="light"],
+.dp[data-theme="light"] [data-palette-preview="sage"] {
+  --dp-bg: #f0f5ed;
+  --dp-surface: #fbfdf7;
+  --dp-raised: #e2eadc;
+  --dp-ink: #24372a;
+  --dp-muted: #516452;
+  --dp-border: #c6d2bf;
+  --dp-accent: #365d3d;
+  --dp-accent-ink: #fffdf7;
+  --dp-accent-soft: #dfeadc;
+  --dp-sage: #386046;
+  --dp-sage-soft: #dfebdf;
+  --dp-danger: #ab2c22;
+  --dp-control-border: #778970;
+}
+.dp[data-palette="ocean"],
+.dp [data-palette-preview="ocean"] {
+  --dp-bg: #101b24;
+  --dp-surface: #182934;
+  --dp-raised: #213744;
+  --dp-ink: #eaf3f7;
+  --dp-muted: #afc1cb;
+  --dp-border: #3a5261;
+  --dp-accent: #8bcde5;
+  --dp-accent-ink: #0b2c38;
+  --dp-accent-soft: #203c4a;
+  --dp-sage: #add0c3;
+  --dp-sage-soft: #213b35;
+  --dp-danger: #ffb3a7;
+  --dp-control-border: #819caa;
+}
+.dp[data-palette="ocean"][data-theme="light"],
+.dp[data-theme="light"] [data-palette-preview="ocean"] {
+  --dp-bg: #edf5f8;
+  --dp-surface: #f9fdff;
+  --dp-raised: #dfeaf0;
+  --dp-ink: #203645;
+  --dp-muted: #4d6675;
+  --dp-border: #bed1db;
+  --dp-accent: #165d7a;
+  --dp-accent-ink: #ffffff;
+  --dp-accent-soft: #dcecf3;
+  --dp-sage: #376456;
+  --dp-sage-soft: #dfede5;
+  --dp-danger: #ab2c22;
+  --dp-control-border: #708d9d;
+}
+.dp[data-palette="rose"],
+.dp [data-palette-preview="rose"] {
+  --dp-bg: #21161c;
+  --dp-surface: #2e2028;
+  --dp-raised: #3c2a34;
+  --dp-ink: #fbecf1;
+  --dp-muted: #ceb4c0;
+  --dp-border: #59414e;
+  --dp-accent: #eeaac5;
+  --dp-accent-ink: #351725;
+  --dp-accent-soft: #472b3a;
+  --dp-sage: #bbcec0;
+  --dp-sage-soft: #29382f;
+  --dp-danger: #ffb3a7;
+  --dp-control-border: #a58999;
+}
+.dp[data-palette="rose"][data-theme="light"],
+.dp[data-theme="light"] [data-palette-preview="rose"] {
+  --dp-bg: #fcf0f3;
+  --dp-surface: #fffafd;
+  --dp-raised: #f1e0e6;
+  --dp-ink: #402833;
+  --dp-muted: #785361;
+  --dp-border: #dfc4cf;
+  --dp-accent: #8d3659;
+  --dp-accent-ink: #fff9fc;
+  --dp-accent-soft: #f2dfe7;
+  --dp-sage: #466452;
+  --dp-sage-soft: #e5ece3;
+  --dp-danger: #a52b32;
+  --dp-control-border: #a0788a;
+}
+.dp[data-palette="lavender"],
+.dp [data-palette-preview="lavender"] {
+  --dp-bg: #191724;
+  --dp-surface: #242133;
+  --dp-raised: #312b43;
+  --dp-ink: #f2eefb;
+  --dp-muted: #beb6d2;
+  --dp-border: #4d435e;
+  --dp-accent: #c5b5f1;
+  --dp-accent-ink: #2b1c47;
+  --dp-accent-soft: #3a3150;
+  --dp-sage: #b9cfc9;
+  --dp-sage-soft: #283933;
+  --dp-danger: #ffb3a7;
+  --dp-control-border: #988bae;
+}
+.dp[data-palette="lavender"][data-theme="light"],
+.dp[data-theme="light"] [data-palette-preview="lavender"] {
+  --dp-bg: #f4f0fa;
+  --dp-surface: #fdfbff;
+  --dp-raised: #e9e1f3;
+  --dp-ink: #332a44;
+  --dp-muted: #665875;
+  --dp-border: #d1c5e0;
+  --dp-accent: #694494;
+  --dp-accent-ink: #ffffff;
+  --dp-accent-soft: #e9dff5;
+  --dp-sage: #466452;
+  --dp-sage-soft: #e5ece3;
+  --dp-danger: #ab2c22;
+  --dp-control-border: #907da6;
+}

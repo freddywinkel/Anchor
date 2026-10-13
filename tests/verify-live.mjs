@@ -194,9 +194,34 @@ try {
   await expect(
     page.getByRole("heading", { name: "Craving vastleggen", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Externe situatie", exact: true }),
+  ).toBeVisible();
+  const fieldWidths = await page
+    .locator(
+      '.anchor-craving input[type="date"], .anchor-craving input[type="time"]',
+    )
+    .evaluateAll((inputs) =>
+      inputs.map((input) => {
+        const box = input.getBoundingClientRect();
+        const label = input.parentElement.getBoundingClientRect();
+        return {
+          width: box.width,
+          labelWidth: label.width,
+          left: box.left,
+          right: box.right,
+          viewport: innerWidth,
+        };
+      }),
+    );
+  assert.equal(fieldWidths.length, 2);
+  for (const field of fieldWidths) {
+    assert.ok(Math.abs(field.width - field.labelWidth) < 1);
+    assert.ok(field.left >= 0 && field.right <= field.viewport);
+  }
   const synthetic =
     "Synthetische releasecontrole: fictief moment, geen persoonlijke gegevens.";
-  await page.getByLabel(/^Situatie \(wie, wat, waar\)/).fill(synthetic);
+  await page.getByLabel("Wie, wat en waar", { exact: true }).fill(synthetic);
   await page
     .getByLabel("Gedachte", { exact: true })
     .fill("Fictieve gedachte voor de browsertest.");
@@ -217,9 +242,9 @@ try {
   assert.equal(before.state.cravings.length, 1);
   assert.equal(before.state.cravings[0].situation, synthetic);
   await page.reload();
-  await expect(page.getByLabel(/^Situatie \(wie, wat, waar\)/)).toHaveValue(
-    synthetic,
-  );
+  await expect(
+    page.getByLabel("Wie, wat en waar", { exact: true }),
+  ).toHaveValue(synthetic);
   assert.equal((await stored()).raw, before.raw);
 
   await context.setOffline(true);
@@ -239,9 +264,9 @@ try {
   );
   assert.deepEqual(offlineProbe, { failed: true, online: false });
   await page.reload();
-  await expect(page.getByLabel(/^Situatie \(wie, wat, waar\)/)).toHaveValue(
-    synthetic,
-  );
+  await expect(
+    page.getByLabel("Wie, wat en waar", { exact: true }),
+  ).toHaveValue(synthetic);
   assert.equal((await stored()).raw, before.raw);
   const offlineBehavior = "Fictief gedrag: offline gewijzigd en opgeslagen.";
   await page.getByLabel(/^Gedrag \(wat deed je\?\)/).fill(offlineBehavior);
@@ -278,6 +303,26 @@ try {
       ),
     ),
   ).toBeVisible();
+  for (const [id, name] of [
+    ["amber", "Amber"],
+    ["sage", "Salie"],
+    ["ocean", "Oceaan"],
+    ["rose", "Roos"],
+    ["lavender", "Lavendel"],
+  ]) {
+    await page.getByRole("radio", { name, exact: true }).check();
+    assert.equal((await stored()).state.palette, id);
+  }
+  await page.getByRole("radio", { name: "Licht", exact: true }).check();
+  await page.reload();
+  await expect(
+    page.getByRole("radio", { name: "Lavendel", exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole("radio", { name: "Licht", exact: true }),
+  ).toBeChecked();
+  const themed = await stored();
+  assert.deepEqual(themed.state.cravings, after.state.cravings);
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page
@@ -288,7 +333,7 @@ try {
   await download.saveAs(backupPath);
   assert.deepEqual(
     parseBackup(await readFile(backupPath, "utf8")),
-    after.state,
+    themed.state,
   );
   await page.screenshot({
     path: path.join(directory, "phone-settings-offline.png"),
@@ -324,6 +369,8 @@ try {
       "manifest/icons and scoped worker",
       "uncached request fails offline",
       "offline edit/save/reload retains record",
+      "date/time controls fill their available width",
+      "five palettes and mode persist offline without changing records",
       "downloaded backup validates and matches saved data",
       "no external or data-bearing requests",
       "no page errors",

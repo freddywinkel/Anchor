@@ -1,24 +1,88 @@
 import { chromium, expect } from "@playwright/test";
 import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
 import path from "node:path";
-const directory = "tmp/update-check";
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
+const directory = path.join(repositoryRoot, "tmp/update-check");
+const approvedBaseline = "2072cf1af8ddedd1d49c2e40e8286d0874842ff3";
+const baselineRef = process.env.ANCHOR_BASELINE_REF;
+let baselineCommit = null;
 await mkdir(directory, { recursive: true });
-const build = (name) => {
+const command = (executable, args, cwd = repositoryRoot) => {
+  const result = spawnSync(executable, args, { cwd, encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw new Error(`${executable} failed: ${result.stdout}${result.stderr}`);
+  return result.stdout.trim();
+};
+let baselineRoot = repositoryRoot;
+if (baselineRef) {
+  // Historical source is extracted only under ignored tmp. Never check out or
+  // reset the user's working tree, and never build the baseline into normal dist.
+  if (baselineRef !== "2072cf1" && baselineRef !== approvedBaseline)
+    throw new Error(
+      "ANCHOR_BASELINE_REF must identify the approved 2072cf1 release.",
+    );
+  baselineCommit = command("git", [
+    "rev-parse",
+    "--verify",
+    `${baselineRef}^{commit}`,
+  ]);
+  if (baselineCommit !== approvedBaseline)
+    throw new Error(
+      "The baseline reference does not resolve to the approved release.",
+    );
+  baselineRoot = await mkdtemp(path.join(directory, "baseline-source-"));
+  const archive = path.join(baselineRoot, "source.tar");
+  command("git", [
+    "archive",
+    "--format=tar",
+    "--output",
+    archive,
+    baselineCommit,
+  ]);
+  command("tar", ["-xf", archive, "-C", baselineRoot]);
+  // Ancestor resolution shares the existing node_modules without an install or
+  // symlink. Confirm the pinned dependencies are the same for this release.
+  const oldPackage = JSON.parse(
+    await readFile(path.join(baselineRoot, "package.json"), "utf8"),
+  );
+  const currentPackage = JSON.parse(
+    await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
+  );
+  for (const kind of ["dependencies", "devDependencies"])
+    expect(oldPackage[kind]).toEqual(currentPackage[kind]);
+}
+const build = (
+  name,
+  sourceRoot = repositoryRoot,
+  commit = process.env.GITHUB_SHA,
+) => {
   const r = spawnSync(
     process.execPath,
     [
-      "node_modules/vite/bin/vite.js",
+      path.join(repositoryRoot, "node_modules/vite/bin/vite.js"),
       "build",
+      sourceRoot,
       "--outDir",
-      `${directory}/${name}`,
+      path.join(directory, name),
+      "--emptyOutDir",
     ],
-    { env: { ...process.env, APP_BUILD: name }, encoding: "utf8" },
+    {
+      cwd: sourceRoot,
+      env: {
+        ...process.env,
+        APP_BUILD: name,
+        ...(commit ? { GITHUB_SHA: commit } : {}),
+      },
+      encoding: "utf8",
+    },
   );
+  if (r.error) throw r.error;
   if (r.status !== 0) throw new Error(r.stdout + r.stderr);
 };
-build("update-a");
+build("update-a", baselineRoot, baselineCommit || undefined);
 build("update-b");
 let root = path.resolve(`${directory}/update-a`);
 const types = {
@@ -28,6 +92,7 @@ const types = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".webmanifest": "application/manifest+json",
+  ".json": "application/json",
 };
 const server = createServer(async (req, res) => {
   try {
@@ -83,9 +148,10 @@ try {
   await page
     .getByRole("button", { name: "Craving vastleggen", exact: true })
     .click();
-  await page
-    .getByLabel(/^Situatie \(wie, wat, waar\)/)
-    .fill("Updatecontrole: een fictief moment");
+  const situation = baselineCommit
+    ? page.getByLabel(/^Situatie \(wie, wat, waar\)/)
+    : page.getByLabel("Wie, wat en waar", { exact: true });
+  await situation.fill("Updatecontrole: een fictief moment");
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
@@ -96,6 +162,11 @@ try {
   const saved = await page.evaluate(() =>
     localStorage.getItem("anchor.app.data.v1"),
   );
+  expect(JSON.parse(saved).cravings[0].situation).toBe(
+    "Updatecontrole: een fictief moment",
+  );
+  if (baselineCommit)
+    expect(Object.hasOwn(JSON.parse(saved), "palette")).toBe(false);
   await page.goto("http://127.0.0.1:8801/Anchor/#/craving/new");
   await expect(
     page.getByRole("heading", { name: "Craving vastleggen", exact: true }),
@@ -150,6 +221,9 @@ try {
   );
   expect(JSON.parse(beforeUpdate).cravings).toHaveLength(2);
   expect(
+    JSON.parse(beforeUpdate).cravings.map((entry) => entry.thought),
+  ).toContain("Concept blijft tijdens de update behouden.");
+  expect(
     JSON.parse(
       await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
     ).records,
@@ -184,27 +258,71 @@ try {
   expect(
     await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
   ).toBe(beforeUpdate);
+  await expect(
+    page.getByRole("radio", { name: "Amber", exact: true }),
+  ).toBeChecked();
+
+  // The update itself must leave the historical serialized state untouched.
+  // A later palette save is the first write that may add normalized metadata.
+  await page.goto("http://127.0.0.1:8801/Anchor/#/craving/new");
+  await expect(
+    page.getByRole("heading", { name: "Craving vastleggen", exact: true }),
+  ).toBeVisible();
+  const paletteDraftText = "Nieuw concept blijft behouden na mijn kleurkeuze.";
+  await page.getByLabel(/^Gedachte/).fill(paletteDraftText);
+  const paletteDraft = await page.evaluate(() =>
+    localStorage.getItem("anchor.app.drafts.v1"),
+  );
+  await page.goto("http://127.0.0.1:8801/Anchor/#/settings");
+  await page.getByRole("radio", { name: "Oceaan", exact: true }).check();
+  await expect(
+    page.getByRole("radio", { name: "Oceaan", exact: true }),
+  ).toBeChecked();
+  const afterPalette = await page.evaluate(() =>
+    localStorage.getItem("anchor.app.data.v1"),
+  );
+  expect(JSON.parse(afterPalette)).toEqual({
+    ...JSON.parse(beforeUpdate),
+    palette: "ocean",
+    revision: JSON.parse(beforeUpdate).revision + 1,
+  });
+  expect(
+    await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
+  ).toBe(paletteDraft);
   await context.setOffline(true);
   await page.reload();
   await expect(page.locator("main h1")).toContainText("Instellingen");
   await expect(page.getByText(/Versie update-b/)).toBeVisible();
+  await expect(
+    page.getByRole("radio", { name: "Oceaan", exact: true }),
+  ).toBeChecked();
+  expect(documents.at(-1).fromServiceWorker).toBe(true);
   expect(
     await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
-  ).toBe(beforeUpdate);
+  ).toBe(afterPalette);
   expect(
     await page.evaluate(
       () =>
         JSON.parse(localStorage.getItem("anchor.app.data.v1")).cravings.length,
     ),
   ).toBe(2);
+  expect(
+    await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
+  ).toBe(paletteDraft);
+  await page.goto("http://127.0.0.1:8801/Anchor/#/craving/new");
+  await expect(page.getByLabel(/^Gedachte/)).toHaveValue(paletteDraftText);
   expect(errors).toEqual([]);
   const result = {
     passed: true,
+    baselineCommit,
     checks: [
-      "real worker A to B update",
+      baselineCommit
+        ? "historical release to current real worker update"
+        : "real worker A to B update",
       "open draft blocks activation and remains intact",
       "save draft then explicit update",
-      "all stored record bytes unchanged",
+      "all stored bytes unchanged by update; all records preserved after palette save",
+      "new palette persists without changing records or drafts",
       "updated app reloads fully offline",
     ],
     savedRecords: JSON.parse(beforeUpdate).cravings.length,

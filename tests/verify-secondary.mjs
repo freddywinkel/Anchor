@@ -247,7 +247,7 @@ try {
   saveCheck("Explicit draft discard protects saved growth entries");
   await screenshot("desktop-growth-dark");
   await navigate("#/settings");
-  await page.getByRole("radio", { name: "Licht Warm papier" }).check();
+  await page.getByRole("radio", { name: "Licht", exact: true }).check();
   await page.reload();
   expect((await data()).theme).toBe("light");
   await page.getByLabel("Fijne momenten op Vandaag").uncheck();
@@ -263,7 +263,7 @@ try {
     "Settings theme/home preference persist, backup download and privacy open",
   );
   await screenshot("desktop-settings-light");
-  await page.getByRole("radio", { name: "Donker Rustig espresso" }).check();
+  await page.getByRole("radio", { name: "Donker", exact: true }).check();
   await navigate("#/plan");
   await page.getByRole("button", { name: "Verwijder doel Ketamine" }).click();
   await page.getByRole("button", { name: "Behouden", exact: true }).click();
@@ -487,7 +487,7 @@ try {
   ).toBeDisabled();
   await readOnlyPage.goto(base + "#/settings");
   await expect(
-    readOnlyPage.getByRole("radio", { name: "Licht Warm papier" }),
+    readOnlyPage.getByRole("radio", { name: "Licht", exact: true }),
   ).toBeDisabled();
   await expect(
     readOnlyPage.getByLabel("Fijne momenten op Vandaag"),

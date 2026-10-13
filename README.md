@@ -4,12 +4,13 @@ Een rustig, Nederlandstalig dagboek om meerdere keren per dag in te checken, een
 
 ## Wat kun je vastleggen?
 
-- **Craving:** datum en tijd, situatie (wie/wat/waar), gedachte, lichamelijke sensatie, emotie en gedrag. De weekdag volgt uit de datum. Je kunt kort beginnen en later aanvullen; er zijn geen extra scores of vragen in dit formulier.
+- **Craving:** datum en tijd, externe situatie (wie, wat en waar), gedachte, lichamelijke sensatie, emotie en gedrag. De weekdag volgt uit de datum. Je kunt kort beginnen en later aanvullen; er zijn geen extra scores of vragen in dit formulier.
 - **Check-in:** stemming, persoonlijke emotionele intensiteit (EIS 0–100), woorden/emoties en eventueel een activiteit met een afzonderlijke nameting. Meerdere momenten per dag zijn mogelijk.
 - **Mijn hele dag:** een eigen dagoverzicht met stemming, intensiteit, slaap en notitie. Dit is geen berekend gemiddelde van losse registraties.
 - **Terugkijken:** geschiedenis, filters, zoeken en een weergave van de ingevulde stemmingsmetingen.
 - **Mijn plan en Mijn groei:** eigen doelen, aanpasbare namen, een persoonlijk plan en fijne momenten.
 - **Hulpmiddelen:** een eenvoudige grondoefening en ruimte voor eigen activiteiten, zonder automatisch een effect of gebruik te registreren.
+- **Eigen kleuren:** kies in Instellingen uit Amber, Salie, Oceaan, Roos en Lavendel. Elk palet heeft een lichte en donkere stand; de knop bovenin wisselt de stand met behoud van je palet.
 
 De app start leeg. Er zijn geen accounts, Fitbit-koppelingen, externe analytics, automatische synchronisatie of medische conclusies.
 

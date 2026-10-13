@@ -19,6 +19,32 @@
 .dp .anchor-craving-form .dp-field:last-child {
   margin-bottom: 0;
 }
+.dp .anchor-craving-form .anchor-craving-datetime {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1.2rem;
+  align-items: start;
+}
+.dp .anchor-craving-datetime > .dp-field {
+  margin: 0;
+  min-inline-size: 0;
+}
+.dp .anchor-craving-datetime input {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  text-align: start;
+}
+/* Safari's native date/time value has its own intrinsic size and alignment. */
+.dp .anchor-craving-datetime input::-webkit-date-and-time-value {
+  min-inline-size: 0;
+  text-align: start;
+}
+.dp .anchor-craving-datetime input::-webkit-datetime-edit {
+  min-inline-size: 0;
+  padding: 0;
+}
 .dp .anchor-craving-form textarea {
   width: 100%;
   min-height: 7.5rem;
@@ -29,7 +55,7 @@
   line-height: 1.55;
 }
 .dp .anchor-craving-day {
-  margin: 0.25rem 0 0;
+  margin: 1rem 0 0;
   font-size: 0.9rem;
   text-transform: capitalize;
 }
@@ -77,16 +103,6 @@
   color: var(--dp-danger);
 }
 @media (max-width: 420px) {
-  .dp .anchor-craving-form .dp-form-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 1.3rem;
-  }
-  .dp .anchor-craving-form .dp-form-grid .dp-field {
-    margin: 0;
-  }
-  .dp .anchor-craving-day {
-    margin-top: 1rem;
-  }
   .dp .anchor-craving-save .dp-actions > * {
     flex: 1 1 100%;
   }

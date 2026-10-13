@@ -42,7 +42,7 @@ async function state(page: Page) {
 
 async function createCraving(page: Page, situation = "Testmoment in de tuin") {
   await open(page, "/craving/new");
-  await page.getByLabel(/^Situatie \(wie, wat, waar\)/).fill(situation);
+  await page.getByLabel("Wie, wat en waar", { exact: true }).fill(situation);
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
@@ -75,7 +75,7 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
     "maandag 12 oktober 2026",
   );
   await page
-    .getByLabel(/^Situatie \(wie, wat, waar\)/)
+    .getByLabel("Wie, wat en waar", { exact: true })
     .fill("Alleen thuis, na het eten.");
   await page.getByLabel(/^Gedachte/).fill("Ik wil even ontsnappen.");
   await page.getByLabel(/^Lichamelijke sensatie/).fill("Gespannen schouders.");
@@ -222,11 +222,11 @@ test("cravingvelden hebben een korte toegankelijke naam en afzonderlijke uitleg"
   page,
 }) => {
   await open(page, "/craving/new");
+  await expect(
+    page.getByRole("heading", { name: "Externe situatie", exact: true }),
+  ).toBeVisible();
   for (const [name, explanation] of [
-    [
-      "Situatie (wie, wat, waar)",
-      "Wie waren erbij, wat gebeurde er en waar was je?",
-    ],
+    ["Wie, wat en waar", "Wie waren erbij, wat gebeurde er en waar was je?"],
     ["Gedachte", "Wat ging er door je hoofd?"],
     ["Lichamelijke sensatie", "Wat voelde je in je lichaam?"],
     ["Emotie", "Welke emotie of emoties merkte je?"],
@@ -236,6 +236,86 @@ test("cravingvelden hebben een korte toegankelijke naam en afzonderlijke uitleg"
     await expect(field).toHaveAccessibleName(name);
     await expect(field).toHaveAccessibleDescription(explanation);
   }
+});
+
+test("datum en tijd vullen hun kolom en stapelen bij een smal scherm of grote tekst", async ({
+  page,
+}) => {
+  await open(page, "/craving/new");
+  const date = page.getByLabel("Datum", { exact: true });
+  const time = page.getByLabel("Tijd", { exact: true });
+  await expect(date).toHaveAttribute("type", "date");
+  await expect(time).toHaveAttribute("type", "time");
+  await date.fill("2024-02-29");
+  await time.fill("23:59");
+
+  for (const theme of ["dark", "light"]) {
+    if (theme === "light")
+      await page
+        .getByRole("button", { name: "Licht thema", exact: true })
+        .click();
+    for (const width of [320, 390, 430, 768, 1440]) {
+      await page.setViewportSize({ width, height: 980 });
+      for (const size of ["100%", "200%"]) {
+        await page.evaluate((fontSize) => {
+          document.documentElement.style.fontSize = fontSize;
+        }, size);
+        const geometry = await page
+          .locator(".anchor-craving-datetime")
+          .evaluate((grid) => {
+            const gridRect = grid.getBoundingClientRect();
+            return {
+              width: gridRect.width,
+              overflow: document.documentElement.scrollWidth > innerWidth,
+              fields: Array.from(grid.querySelectorAll("input")).map(
+                (input) => {
+                  const rect = input.getBoundingClientRect();
+                  const label = input.parentElement!.getBoundingClientRect();
+                  return {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                    labelX: label.x,
+                    labelWidth: label.width,
+                    labelHeight: label.height,
+                  };
+                },
+              ),
+            };
+          });
+        const [dateField, timeField] = geometry.fields;
+        expect(geometry.overflow, `${theme} ${width}px ${size}`).toBe(false);
+        for (const field of geometry.fields) {
+          expect(Math.abs(field.width - field.labelWidth)).toBeLessThan(1);
+          expect(Math.abs(field.x - field.labelX)).toBeLessThan(1);
+          expect(field.height).toBeGreaterThanOrEqual(48);
+        }
+        expect(Math.abs(dateField.height - timeField.height)).toBeLessThan(1);
+        expect(
+          Math.abs(dateField.labelHeight - timeField.labelHeight),
+        ).toBeLessThan(1);
+        if (width <= 430 || size === "200%") {
+          expect(dateField.width).toBeCloseTo(geometry.width, 0);
+          expect(timeField.width).toBeCloseTo(geometry.width, 0);
+          expect(timeField.y).toBeGreaterThan(dateField.y + dateField.height);
+        } else {
+          expect(dateField.y).toBeCloseTo(timeField.y, 0);
+          expect(timeField.x).toBeGreaterThan(dateField.x + dateField.width);
+        }
+        await expect(date).toHaveValue("2024-02-29");
+        await expect(time).toHaveValue("23:59");
+      }
+    }
+  }
+  await page.getByLabel("Wie, wat en waar", { exact: true }).fill("Thuis.");
+  await page
+    .getByRole("button", { name: "Craving opslaan", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await page.reload();
+  await expect(date).toHaveValue("2024-02-29");
+  await expect(time).toHaveValue("23:59");
 });
 
 test("toetsenbordfocus blijft boven de mobiele navigatie bij beide thema's en 200 procent tekst", async ({
@@ -662,7 +742,7 @@ test("een tweede tabblad kan gegevens niet overschrijven en kan na herladen bewe
   await expect(second.getByLabel("Gedachte", { exact: true })).toBeDisabled();
   await second.goto("./#/settings");
   await expect(
-    second.getByRole("radio", { name: "Licht Warm papier" }),
+    second.getByRole("radio", { name: "Licht", exact: true }),
   ).toBeDisabled();
   await expect(
     second.getByRole("button", { name: "Back-up importeren" }),

@@ -10,7 +10,16 @@ import {
 } from "lucide-react";
 import type { AppState, Goal } from "./lib/storage";
 import { today, loadDrafts, saveDraft } from "./lib/storage";
+import type { Palette } from "./lib/palettes";
 import "./secondary.css";
+
+const palettes: { id: Palette; name: string; description: string }[] = [
+  { id: "amber", name: "Amber", description: "Warm zand en goud" },
+  { id: "sage", name: "Salie", description: "Zacht groen en mos" },
+  { id: "ocean", name: "Oceaan", description: "Diep blauw en zeegroen" },
+  { id: "rose", name: "Roos", description: "Roze klei en bessen" },
+  { id: "lavender", name: "Lavendel", description: "Lila en nachtviolet" },
+];
 
 type Save = (next: AppState, message: string) => boolean;
 const targetNames: Record<string, string> = {
@@ -1246,8 +1255,8 @@ export function SettingsView({
           <legend>Kleurthema</legend>
           {(
             [
-              ["light", "Licht", "Warm papier"],
-              ["dark", "Donker", "Rustig espresso"],
+              ["light", "Licht", "Lichte achtergrond"],
+              ["dark", "Donker", "Donkere achtergrond"],
             ] as const
           ).map(([value, label, hint]) => (
             <label
@@ -1256,6 +1265,7 @@ export function SettingsView({
             >
               <input
                 type="radio"
+                aria-label={label}
                 disabled={readOnly || blocked}
                 name="anchor-theme"
                 value={value}
@@ -1270,6 +1280,54 @@ export function SettingsView({
               <span>
                 {label}
                 <span className="dp-muted">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <fieldset
+          className="dp-theme-options dp-palette-options"
+          aria-describedby="anchor-palette-hint"
+        >
+          <legend>Kleurpalet</legend>
+          <p id="anchor-palette-hint" className="dp-muted dp-palette-hint">
+            Kies de kleuren die bij je passen. Elk palet werkt in licht en
+            donker.
+          </p>
+          {palettes.map(({ id, name, description }) => (
+            <label
+              key={id}
+              className={state.palette === id ? "dp-theme-selected" : ""}
+            >
+              <input
+                type="radio"
+                name="anchor-palette"
+                aria-label={name}
+                aria-describedby={`anchor-palette-${id}`}
+                disabled={readOnly || blocked}
+                checked={state.palette === id}
+                value={id}
+                onChange={() =>
+                  save(
+                    { ...state, palette: id },
+                    `Kleurpalet ${name} ingesteld.`,
+                  )
+                }
+              />
+              <span className="dp-palette-card">
+                <span className="dp-palette-name">{name}</span>
+                <span className="dp-muted" id={`anchor-palette-${id}`}>
+                  {description}
+                </span>
+                <span
+                  className="dp-palette-swatches"
+                  data-palette-preview={id}
+                  aria-hidden="true"
+                >
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </span>
               </span>
             </label>
           ))}
