@@ -5,6 +5,7 @@ Een rustig, Nederlandstalig dagboek om meerdere keren per dag in te checken, een
 ## Wat kun je vastleggen?
 
 - **Craving:** datum en tijd, externe situatie (wie, wat en waar), gedachte, lichamelijke sensatie, emotie en gedrag. De weekdag volgt uit de datum. Je kunt kort beginnen en later aanvullen; er zijn geen extra scores of vragen in dit formulier.
+- **Voorbeelden bij interne situatie:** optionele keuzelijsten voor gedachten, lichamelijke sensaties en emoties voegen tekst toe aan het bestaande tekstvak. Je kunt meerdere voorbeelden kiezen, ze aanpassen of helemaal zelf schrijven.
 - **Check-in:** stemming, persoonlijke emotionele intensiteit (EIS 0–100), woorden/emoties en eventueel een activiteit met een afzonderlijke nameting. Meerdere momenten per dag zijn mogelijk.
 - **Mijn hele dag:** een eigen dagoverzicht met stemming, intensiteit, slaap en notitie. Dit is geen berekend gemiddelde van losse registraties.
 - **Terugkijken:** geschiedenis, filters, zoeken en een weergave van de ingevulde stemmingsmetingen.

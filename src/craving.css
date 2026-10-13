@@ -59,22 +59,17 @@
   font-size: 0.9rem;
   text-transform: capitalize;
 }
-.dp .anchor-craving-internal {
-  min-inline-size: 0;
-  margin: 0;
-  padding-inline: 0;
-  border-inline: 0;
-  border-bottom: 0;
-}
-.dp .anchor-craving-internal > legend {
-  color: var(--dp-ink);
-  padding: 0 0.7rem 0 0;
-  font-size: 1.2rem;
-  font-weight: 600;
-}
 .dp .anchor-craving-internal > p {
   margin-top: 0;
   margin-bottom: 1.3rem;
+}
+.dp .anchor-craving-internal .anchor-craving-suggestions {
+  width: min(100%, 19rem);
+  max-width: 100%;
+  min-height: 44px;
+  padding-block: 0.45rem;
+  margin-bottom: 0.3rem;
+  font-weight: 400;
 }
 .dp .anchor-craving-save {
   border-top: 1px solid var(--dp-border);

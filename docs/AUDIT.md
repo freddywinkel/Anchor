@@ -2,6 +2,12 @@
 
 Auditdatum: 12 oktober 2026, aangevuld op 13 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
 
+## Scheidingslijnen en invulvoorbeelden — versie 1.2.0
+
+De foto van de gebruiker liet zien dat de bovenrand van ‘Interne situatie’ naast de titel liep. De native `fieldset`/`legend`-weergave veroorzaakte dit. Deze sectie gebruikt nu, net als ‘Externe situatie’ en ‘Je gedrag’, een benoemde `section` met een gewone `h2`. De lijn loopt volledig boven de kop, met gelijke marges. Veldnamen, uitleg en de buitenste alleen-lezenbeveiliging blijven behouden.
+
+Bij de drie interne tekstvelden staan compacte optionele keuzelijsten: 20 gedachten, 24 lichamelijke sensaties en 32 emoties, gegroepeerd op onderwerp. Dit zijn voorbeelden om woorden te vinden, geen uitputtende of klinische lijst. Een keuze vult een leeg vak of voegt een nieuwe regel toe aan bestaande tekst; vrije invoer blijft beschikbaar. Herhaalde regels worden niet dubbel toegevoegd. Als toevoeging de grens van 4000 tekens zou overschrijden, blijft bestaande tekst intact en verschijnt uitleg. Er zijn geen nieuwe registratievelden of opslagmigraties: de gekozen voorbeelden worden gewone, bewerkbare tekst in het bestaande concept en record.
+
 ## Cravingformulier en kleurpaletten — versie 1.1.0
 
 Bij 430 px schermbreedte en 200% tekstgrootte werd het jaartal in de datumkiezer afgekapt: beide kolommen bleven 193 px breed. Het cravingformulier gebruikt nu een grid dat reageert op beschikbare ruimte en tekstgrootte. Datum en tijd hebben dezelfde marges en hoogte, vullen hun kolom en worden gestapeld als er onvoldoende ruimte is. In dezelfde proef krijgt elk veld 398 px en is de volledige datum leesbaar. Native datum- en tijdtypes blijven behouden. De kop heet nu **Externe situatie** en het tekstveld **Wie, wat en waar**.

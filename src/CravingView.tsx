@@ -5,6 +5,7 @@ import {
   type AppState,
   type CravingRecord,
 } from "./lib/storage";
+import { CRAVING_SUGGESTIONS } from "./lib/cravingSuggestions";
 import "./craving.css";
 
 type CravingViewProps = {
@@ -101,6 +102,61 @@ export function CravingView({
     onDraft(next);
     setError("");
     setSaved(false);
+  }
+
+  function addSuggestion(
+    field: "thought" | "bodySensation" | "emotion",
+    suggestion: string,
+  ) {
+    if (!suggestion) return;
+    const current = value[field];
+    if (
+      current
+        .split(/\r?\n/)
+        .some(
+          (line) =>
+            line.trim().toLocaleLowerCase("nl-NL") ===
+            suggestion.toLocaleLowerCase("nl-NL"),
+        )
+    )
+      return;
+    const next =
+      current + (current && !current.endsWith("\n") ? "\n" : "") + suggestion;
+    if (next.length > 4000) {
+      setError(
+        "Dit voorbeeld past niet meer in het tekstvak. Je bestaande tekst is behouden.",
+      );
+      return;
+    }
+    update(field, next);
+  }
+
+  function suggestionPicker(
+    field: "thought" | "bodySensation" | "emotion",
+    label: string,
+  ) {
+    return (
+      <select
+        className="anchor-craving-suggestions"
+        aria-label={`Voorbeeld voor ${label}`}
+        aria-describedby={`${prefix}-suggestions-hint`}
+        value=""
+        onChange={(event) => addSuggestion(field, event.target.value)}
+      >
+        <option value="" disabled>
+          Kies voorbeeld…
+        </option>
+        {CRAVING_SUGGESTIONS[field].map((group) => (
+          <optgroup key={group.label} label={group.label}>
+            {group.options.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    );
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -243,16 +299,23 @@ export function CravingView({
           </label>
         </section>
 
-        <fieldset className="dp-form-section anchor-craving-internal">
-          <legend>Interne situatie</legend>
-          <p className="dp-muted">
-            Deze drie onderdelen kun je los van elkaar invullen.
+        <section
+          className="dp-form-section anchor-craving-internal"
+          aria-labelledby={`${prefix}-internal-title`}
+        >
+          <h2 id={`${prefix}-internal-title`}>Interne situatie</h2>
+          <p className="dp-muted" id={`${prefix}-suggestions-hint`}>
+            Schrijf zelf of kies een voorbeeld. Een keuze voegt tekst toe; je
+            kunt alles aanpassen en meerdere voorbeelden kiezen.
           </p>
-          <label className="dp-field" htmlFor={`${prefix}-thought`}>
-            <span id={`${prefix}-thought-label`}>Gedachte</span>
+          <div className="dp-field">
+            <label id={`${prefix}-thought-label`} htmlFor={`${prefix}-thought`}>
+              Gedachte
+            </label>
             <span className="dp-hint" id={`${prefix}-thought-hint`}>
               Wat ging er door je hoofd?
             </span>
+            {suggestionPicker("thought", "gedachte")}
             <textarea
               id={`${prefix}-thought`}
               rows={3}
@@ -262,12 +325,15 @@ export function CravingView({
               aria-describedby={`${prefix}-thought-hint`}
               onChange={(event) => update("thought", event.target.value)}
             />
-          </label>
-          <label className="dp-field" htmlFor={`${prefix}-body`}>
-            <span id={`${prefix}-body-label`}>Lichamelijke sensatie</span>
+          </div>
+          <div className="dp-field">
+            <label id={`${prefix}-body-label`} htmlFor={`${prefix}-body`}>
+              Lichamelijke sensatie
+            </label>
             <span className="dp-hint" id={`${prefix}-body-hint`}>
               Wat voelde je in je lichaam?
             </span>
+            {suggestionPicker("bodySensation", "lichamelijke sensatie")}
             <textarea
               id={`${prefix}-body`}
               rows={3}
@@ -277,12 +343,15 @@ export function CravingView({
               aria-describedby={`${prefix}-body-hint`}
               onChange={(event) => update("bodySensation", event.target.value)}
             />
-          </label>
-          <label className="dp-field" htmlFor={`${prefix}-emotion`}>
-            <span id={`${prefix}-emotion-label`}>Emotie</span>
+          </div>
+          <div className="dp-field">
+            <label id={`${prefix}-emotion-label`} htmlFor={`${prefix}-emotion`}>
+              Emotie
+            </label>
             <span className="dp-hint" id={`${prefix}-emotion-hint`}>
               Welke emotie of emoties merkte je?
             </span>
+            {suggestionPicker("emotion", "emotie")}
             <textarea
               id={`${prefix}-emotion`}
               rows={3}
@@ -292,8 +361,8 @@ export function CravingView({
               aria-describedby={`${prefix}-emotion-hint`}
               onChange={(event) => update("emotion", event.target.value)}
             />
-          </label>
-        </fieldset>
+          </div>
+        </section>
 
         <section
           className="dp-form-section"

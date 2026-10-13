@@ -229,6 +229,51 @@ try {
     .getByLabel("Lichamelijke sensatie", { exact: true })
     .fill("Fictieve lichamelijke sensatie.");
   await page.getByLabel("Emotie", { exact: true }).fill("Fictieve emotie.");
+  const internalValues = {};
+  for (const [field, label, picker] of [
+    ["thought", "Gedachte", "gedachte"],
+    ["bodySensation", "Lichamelijke sensatie", "lichamelijke sensatie"],
+    ["emotion", "Emotie", "emotie"],
+  ]) {
+    const input = page.getByLabel(label, { exact: true });
+    const original = await input.inputValue();
+    const select = page.getByRole("combobox", {
+      name: `Voorbeeld voor ${picker}`,
+      exact: true,
+    });
+    const suggestion = await select
+      .locator("optgroup option")
+      .first()
+      .getAttribute("value");
+    await select.selectOption(suggestion);
+    internalValues[field] = `${original}\n${suggestion}`;
+    await expect(input).toHaveValue(internalValues[field]);
+    await expect(select).toHaveValue("");
+  }
+  const sectionGeometry = await page
+    .locator(".anchor-craving-form > section[aria-labelledby]")
+    .evaluateAll((sections) =>
+      sections.slice(1).map((section) => {
+        const rect = section.getBoundingClientRect();
+        const heading = section.querySelector("h2").getBoundingClientRect();
+        const style = getComputedStyle(section);
+        return {
+          title: section.querySelector("h2").textContent,
+          x: rect.x,
+          width: rect.width,
+          gap: heading.top - rect.top,
+          border: style.borderTopWidth,
+        };
+      }),
+    );
+  assert.equal(sectionGeometry.length, 3);
+  for (const section of sectionGeometry) {
+    assert.equal(section.border, "1px");
+    assert.ok(section.gap >= 20);
+    assert.ok(Math.abs(section.gap - sectionGeometry[0].gap) < 1);
+    assert.ok(Math.abs(section.width - sectionGeometry[0].width) < 1);
+    assert.equal(section.x, sectionGeometry[0].x);
+  }
   await page
     .getByLabel(/^Gedrag \(wat deed je\?\)/)
     .fill("Fictief gedrag voor de browsertest.");
@@ -241,6 +286,8 @@ try {
   const before = await stored();
   assert.equal(before.state.cravings.length, 1);
   assert.equal(before.state.cravings[0].situation, synthetic);
+  for (const [field, value] of Object.entries(internalValues))
+    assert.equal(before.state.cravings[0][field], value);
   await page.reload();
   await expect(
     page.getByLabel("Wie, wat en waar", { exact: true }),
@@ -370,6 +417,8 @@ try {
       "uncached request fails offline",
       "offline edit/save/reload retains record",
       "date/time controls fill their available width",
+      "section dividers align above all headings",
+      "three suggestion pickers append text and saved records retain it",
       "five palettes and mode persist offline without changing records",
       "downloaded backup validates and matches saved data",
       "no external or data-bearing requests",

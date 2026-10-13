@@ -58,7 +58,8 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   const form = page.locator("form");
   await expect(form.locator("input")).toHaveCount(2);
   await expect(form.locator("textarea")).toHaveCount(5);
-  await expect(form.locator("input[type=number],select")).toHaveCount(0);
+  await expect(form.locator("input[type=number]")).toHaveCount(0);
+  await expect(form.locator("select")).toHaveCount(3);
   await expect(
     form.getByText(/EIS|Stemming|intensiteit|Middel|Activiteit/),
   ).toHaveCount(0);
@@ -238,6 +239,98 @@ test("cravingvelden hebben een korte toegankelijke naam en afzonderlijke uitleg"
   }
 });
 
+test("interne voorbeelden vullen vrije tekst aan zonder verlies, duplicaten of overschrijding", async ({
+  page,
+}) => {
+  await open(page, "/craving/new");
+  const fields = [
+    {
+      name: "Gedachte",
+      picker: "Voorbeeld voor gedachte",
+      key: "thought",
+      initial: "Mijn eigen gedachte blijft ongewijzigd.",
+    },
+    {
+      name: "Lichamelijke sensatie",
+      picker: "Voorbeeld voor lichamelijke sensatie",
+      key: "bodySensation",
+      initial: "",
+    },
+    {
+      name: "Emotie",
+      picker: "Voorbeeld voor emotie",
+      key: "emotion",
+      initial: "Dit beschrijf ik zelf.",
+    },
+  ];
+  const expected: Record<string, string> = {};
+  const examples: Record<string, string> = {};
+  for (const field of fields) {
+    const text = page.getByRole("textbox", { name: field.name, exact: true });
+    const picker = page.getByRole("combobox", {
+      name: field.picker,
+      exact: true,
+    });
+    const choices = await picker.evaluate((element: HTMLSelectElement) =>
+      Array.from(element.options)
+        .filter((option) => option.value && !option.disabled)
+        .map((option) => option.value),
+    );
+    expect(choices.length).toBeGreaterThan(0);
+    examples[field.key] = choices[0];
+    await text.fill(field.initial);
+    await picker.selectOption(choices[0]);
+    expected[field.key] = field.initial
+      ? `${field.initial}\n${choices[0]}`
+      : choices[0];
+    await expect(text).toHaveValue(expected[field.key]);
+    await expect(picker).toHaveValue("");
+    await picker.selectOption(choices[0]);
+    await expect(text).toHaveValue(expected[field.key]);
+    expected[field.key] += "\nMijn eigen aanvulling.";
+    await text.fill(expected[field.key]);
+  }
+
+  await page.reload();
+  for (const field of fields) {
+    await expect(
+      page.getByRole("textbox", { name: field.name, exact: true }),
+    ).toHaveValue(expected[field.key]);
+    await expect(
+      page.getByRole("combobox", { name: field.picker, exact: true }),
+    ).toHaveValue("");
+  }
+  const thought = page.getByRole("textbox", { name: "Gedachte", exact: true });
+  const thoughtPicker = page.getByRole("combobox", {
+    name: "Voorbeeld voor gedachte",
+    exact: true,
+  });
+  const sameLine = `Eigen woorden.\n  ${examples.thought.toLocaleUpperCase("nl-NL")}  `;
+  await thought.fill(sameLine);
+  await thoughtPicker.selectOption(examples.thought);
+  await expect(thought).toHaveValue(sameLine);
+  const fullText = "x".repeat(4000);
+  await thought.fill(fullText);
+  await thoughtPicker.selectOption(examples.thought);
+  await expect(thought).toHaveValue(fullText);
+  await expect(page.getByRole("alert")).toContainText(
+    "Dit voorbeeld past niet meer in het tekstvak. Je bestaande tekst is behouden.",
+  );
+  await expect(thoughtPicker).toHaveValue("");
+  await thought.fill(expected.thought);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Craving opslaan", exact: true })
+    .click();
+  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  expect((await state(page)).cravings[0]).toMatchObject(expected);
+  await page.reload();
+  for (const field of fields)
+    await expect(
+      page.getByRole("textbox", { name: field.name, exact: true }),
+    ).toHaveValue(expected[field.key]);
+});
+
 test("datum en tijd vullen hun kolom en stapelen bij een smal scherm of grote tekst", async ({
   page,
 }) => {
@@ -334,7 +427,7 @@ test("toetsenbordfocus blijft boven de mobiele navigatie bij beide thema's en 20
       }, textSize);
       await page.locator("main h1").focus();
       const seen = new Set<string>();
-      for (let step = 0; step < 24 && seen.size < 9; step++) {
+      for (let step = 0; step < 30 && seen.size < 12; step++) {
         await page.keyboard.press("Tab");
         await page.evaluate(
           () =>
@@ -348,7 +441,7 @@ test("toetsenbordfocus blijft boven de mobiele navigatie bij beide thema's en 20
           const element = document.activeElement as HTMLElement;
           if (
             !element.closest(".anchor-craving-form") ||
-            !element.matches("input, textarea, button, a")
+            !element.matches("input, select, textarea, button, a")
           )
             return null;
           const rect = element.getBoundingClientRect();
@@ -356,7 +449,10 @@ test("toetsenbordfocus blijft boven de mobiele navigatie bij beide thema's en 20
             .querySelector(".dp-bottom-nav")!
             .getBoundingClientRect();
           return {
-            key: element.id || element.textContent!.trim(),
+            key:
+              element.id ||
+              element.getAttribute("aria-label") ||
+              element.textContent!.trim(),
             top: rect.top,
             bottom: rect.bottom,
             navigationTop: navigation.top,
@@ -376,8 +472,8 @@ test("toetsenbordfocus blijft boven de mobiele navigatie bij beide thema's en 20
       }
       expect(
         seen.size,
-        `${theme}/${textSize}: all 7 fields and 2 form actions reachable`,
-      ).toBe(9);
+        `${theme}/${textSize}: all 7 fields, 3 examples and 2 form actions reachable`,
+      ).toBe(12);
     }
   }
 });
