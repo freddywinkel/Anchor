@@ -22,6 +22,7 @@ import {
   type AppState,
   type Moment,
   type CravingRecord,
+  type EmotionRating,
 } from "../src/lib/storage.ts";
 
 class MemoryStorage implements Storage {
@@ -352,6 +353,317 @@ describe("backward-compatible palette preferences", () => {
     assert.equal(saveState(loadState().state).ok, false);
     assert.equal(store.values.get(STORAGE_KEY), raw);
     assert.equal(loadState().blocked, false);
+  });
+});
+
+describe("emotion-linked intensity and legacy preservation", () => {
+  it("preserves old before, after, day, and draft shapes without guessing emotion links", () => {
+    const original = populated();
+    original.moments[0].before.eis = 65;
+    original.moments[0].after = { mood: 1, eis: 20 };
+    original.moments[0].afterDate = "2026-10-12";
+    original.moments[0].afterTime = "17:00";
+    original.moments[0].emotions = ["Boos"];
+    const raw = JSON.stringify(original);
+    store.values.set(STORAGE_KEY, raw);
+    assert.equal(saveDraft("moment:new", original.moments[0]).ok, true);
+    assert.equal(saveDraft("day:2026-10-12", original.days[0]).ok, true);
+    const draftBytes = store.values.get(DRAFT_STORAGE_KEY);
+    store.writes = [];
+
+    assert.deepEqual(loadState().state, original);
+    assert.deepEqual(parseBackup(exportBackup(original)), original);
+    assert.deepEqual(loadDrafts()["moment:new"], original.moments[0]);
+    assert.deepEqual(loadDrafts()["day:2026-10-12"], original.days[0]);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftBytes);
+    assert.equal(store.writes.length, 0);
+
+    const saved = saveState({ ...original, theme: "dark" });
+    assert.equal(saved.ok, true);
+    assert.deepEqual(saved.state!.moments, original.moments);
+    assert.deepEqual(saved.state!.days, original.days);
+    for (const ratings of [
+      saved.state!.moments[0].before,
+      saved.state!.moments[0].after!,
+      saved.state!.days[0].ratings,
+    ]) {
+      assert.equal(Object.hasOwn(ratings, "emotionRatings"), false);
+      assert.equal(Object.hasOwn(ratings, "pans"), false);
+    }
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftBytes);
+  });
+
+  it("round-trips independent linked emotions for before, after, and day without changing legacy values", () => {
+    const original = populated();
+    original.moments[0].emotions = ["Oude context"];
+    original.moments[0].before = {
+      mood: 0,
+      eis: 70,
+      emotionRatings: [
+        { id: "emotion-anger", label: "Boos", intensity: 80 },
+        { id: "emotion-hope", label: " Hoopvol ", intensity: null },
+      ],
+    };
+    original.moments[0].after = {
+      mood: null,
+      eis: 30,
+      emotionRatings: [
+        { id: "emotion-anger", label: "Boos", intensity: 0 },
+        { id: "emotion-calm", label: "Rustig", intensity: 100 },
+      ],
+    };
+    original.moments[0].afterDate = "2026-10-12";
+    original.moments[0].afterTime = "17:00";
+    original.days[0].ratings.emotionRatings = [
+      { id: "day-tired", label: "Moe", intensity: 35 },
+    ];
+
+    const saved = saveState(original);
+    assert.equal(saved.ok, true);
+    assert.deepEqual(loadState().state, { ...original, revision: 1 });
+    const restored = parseBackup(exportBackup(saved.state!));
+    assert.deepEqual(restored, saved.state);
+    assert.equal(replaceFromBackup(restored, 1).ok, true);
+    assert.deepEqual(loadState().state, { ...original, revision: 2 });
+    assert.equal(saveDraft("moment:moment-1", original.moments[0]).ok, true);
+    assert.equal(saveDraft("day:2026-10-12", original.days[0]).ok, true);
+    assert.deepEqual(loadDrafts()["moment:moment-1"], original.moments[0]);
+    assert.deepEqual(loadDrafts()["day:2026-10-12"], original.days[0]);
+    const validated = validateState(original);
+    validated.moments[0].before.emotionRatings![0].label = "Changed copy";
+    assert.equal(original.moments[0].before.emotionRatings![0].label, "Boos");
+  });
+
+  it("distinguishes an omitted emotion list from an explicit empty list", () => {
+    const original = populated();
+    original.moments[0].before.emotionRatings = [];
+    assert.equal(saveState(original).ok, true);
+    const state = loadState().state;
+    assert.deepEqual(state.moments[0].before.emotionRatings, []);
+    assert.equal(state.moments[0].before.eis, 0);
+    assert.equal(Object.hasOwn(state.days[0].ratings, "emotionRatings"), false);
+    assert.deepEqual(parseBackup(exportBackup(state)), state);
+  });
+
+  it("accepts bounded rows but rejects malformed or ambiguous rows before replacing saved data", () => {
+    const row: EmotionRating = {
+      id: "emotion-1",
+      label: "Boos",
+      intensity: 50,
+    };
+    const bounded = populated();
+    bounded.moments[0].before.emotionRatings = Array.from(
+      { length: 20 },
+      (_, index) => ({
+        id: `emotion-${index}`.padEnd(128, "x"),
+        label: "L".repeat(150),
+        intensity: index,
+      }),
+    );
+    assert.equal(saveState(bounded).ok, true);
+    const raw = store.values.get(STORAGE_KEY);
+    const malformedLists: unknown[] = [
+      null,
+      undefined,
+      {},
+      [null],
+      ["Boos"],
+      [row, { ...row }],
+      Array.from({ length: 21 }, (_, index) => ({
+        ...row,
+        id: `emotion-${index}`,
+      })),
+      [{ ...row, id: "" }],
+      [{ ...row, id: "new" }],
+      [{ ...row, id: "x".repeat(129) }],
+      [{ ...row, label: "" }],
+      [{ ...row, label: "   " }],
+      [{ ...row, label: null }],
+      [{ ...row, label: "L".repeat(151) }],
+      [{ id: row.id, label: row.label }],
+      [{ ...row, extra: true }],
+      ...[-1, 101, 0.5, NaN, Infinity, "50", undefined].map((intensity) => [
+        { ...row, intensity },
+      ]),
+    ];
+    for (const emotionRatings of malformedLists) {
+      const candidate = loadState().state;
+      Object.assign(candidate.moments[0].before, { emotionRatings });
+      assert.throws(() => validateState(candidate));
+      assert.equal(saveState(candidate).ok, false);
+      assert.equal(store.values.get(STORAGE_KEY), raw);
+    }
+    const backup = JSON.parse(exportBackup(loadState().state));
+    backup.state.moments[0].before.emotionRatings = [row, row];
+    assert.throws(() => parseBackup(JSON.stringify(backup)), /dubbele/);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+  });
+
+  it("keeps unfinished linked scores in drafts while enforcing committed validation", () => {
+    const entry = makeMoment();
+    entry.before.emotionRatings = [
+      { id: "emotion-1", label: "", intensity: 101.5 },
+      { id: "emotion-2", label: "Bang", intensity: -1 },
+      { id: "emotion-3", label: "Onbekend", intensity: null },
+      { id: "emotion-4", label: "Verdrietig", intensity: 0 },
+    ];
+    assert.equal(saveDraft("moment:new", entry).ok, true);
+    assert.deepEqual(loadDrafts()["moment:new"], entry);
+    assert.equal(
+      saveState({ ...createEmptyState(), moments: [entry] }).ok,
+      false,
+    );
+    const day = { ...populated().days[0], ratings: entry.before };
+    assert.equal(saveDraft("day:2026-10-12", day).ok, true);
+    assert.deepEqual(loadDrafts()["day:2026-10-12"], day);
+    assert.equal(saveState({ ...createEmptyState(), days: [day] }).ok, false);
+    entry.before.emotionRatings[0] = {
+      id: "emotion-1",
+      label: "Boos",
+      intensity: 100,
+    };
+    entry.before.emotionRatings[1].intensity = 1;
+    assert.equal(
+      saveState({ ...createEmptyState(), moments: [entry] }).ok,
+      true,
+    );
+  });
+
+  it("retains failed linked-emotion edits across navigation and in recovery exports", () => {
+    const entry = makeMoment();
+    entry.before.emotionRatings = [
+      { id: "emotion-1", label: "Bang", intensity: 75 },
+    ];
+    assert.equal(saveDraft("moment:new", entry).ok, true);
+    const raw = store.values.get(DRAFT_STORAGE_KEY);
+    store.failWrite = true;
+    const changed = {
+      ...entry,
+      before: {
+        ...entry.before,
+        emotionRatings: [{ id: "emotion-1", label: "", intensity: 125 }],
+      },
+    };
+    assert.equal(saveDraft("moment:new", changed).ok, false);
+    assert.equal(hasUnpersistedDrafts(), true);
+    assert.deepEqual(loadDrafts()["moment:new"], changed);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), raw);
+    assert.deepEqual(
+      JSON.parse(exportDraftRecovery()).pendingRecords["moment:new"],
+      changed,
+    );
+    store.failWrite = false;
+    assert.equal(saveDraft("moment:new", changed).ok, true);
+    assert.equal(hasUnpersistedDrafts(), false);
+    assert.deepEqual(loadDrafts()["moment:new"], changed);
+  });
+
+  it("does not replace a recoverable draft with non-finite scores or malformed emotion rows", () => {
+    const entry = makeMoment();
+    entry.before.emotionRatings = [
+      { id: "emotion-1", label: "Bang", intensity: 75 },
+    ];
+    assert.equal(saveDraft("moment:new", entry).ok, true);
+    const raw = store.values.get(DRAFT_STORAGE_KEY);
+    for (const intensity of [NaN, Infinity, "50", undefined]) {
+      const invalid = {
+        ...entry,
+        before: {
+          ...entry.before,
+          emotionRatings: [{ id: "emotion-1", label: "Bang", intensity }],
+        },
+      };
+      assert.equal(saveDraft("moment:new", invalid).ok, false);
+      assert.equal(store.values.get(DRAFT_STORAGE_KEY), raw);
+      assert.deepEqual(loadDrafts()["moment:new"], entry);
+    }
+    const invalid = {
+      ...entry,
+      before: {
+        ...entry.before,
+        emotionRatings: [
+          { id: "emotion-1", label: "Bang", intensity: 75, extra: true },
+        ],
+      },
+    };
+    assert.equal(saveDraft("moment:new", invalid).ok, false);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), raw);
+  });
+});
+
+describe("optional independent pans rating", () => {
+  it("round-trips 1–5 and null without converting mood, legacy EIS, or emotion intensity", () => {
+    for (const pans of [null, 1, 2, 3, 4, 5]) {
+      const original = populated();
+      original.revision = loadState().state.revision;
+      original.moments[0].before = {
+        mood: -1,
+        eis: 72,
+        emotionRatings: [{ id: "emotion-1", label: "Bang", intensity: 75 }],
+        pans,
+      };
+      original.moments[0].after = { mood: 1, eis: 20, pans: null };
+      original.moments[0].afterDate = "2026-10-12";
+      original.moments[0].afterTime = "17:00";
+      original.days[0].ratings.pans = 2;
+      const saved = saveState(original);
+      assert.equal(saved.ok, true);
+      assert.deepEqual(loadState().state, {
+        ...original,
+        revision: original.revision + 1,
+      });
+      const backup = parseBackup(exportBackup(saved.state!));
+      assert.deepEqual(backup, saved.state);
+      assert.equal(replaceFromBackup(backup, saved.state!.revision).ok, true);
+      assert.deepEqual(loadState().state, {
+        ...original,
+        revision: original.revision + 2,
+      });
+      assert.equal(saveDraft("moment:new", original.moments[0]).ok, true);
+      assert.equal(saveDraft("day:2026-10-12", original.days[0]).ok, true);
+      assert.deepEqual(loadDrafts()["moment:new"], original.moments[0]);
+      assert.deepEqual(loadDrafts()["day:2026-10-12"], original.days[0]);
+    }
+  });
+
+  it("rejects invalid pans in data, backups, and drafts without replacing existing values", () => {
+    const original = populated();
+    original.moments[0].before.pans = 3;
+    assert.equal(saveState(original).ok, true);
+    assert.equal(saveDraft("moment:new", original.moments[0]).ok, true);
+    const raw = store.values.get(STORAGE_KEY);
+    const draftRaw = store.values.get(DRAFT_STORAGE_KEY);
+    for (const pans of [
+      0,
+      6,
+      1.5,
+      "3",
+      true,
+      {},
+      [],
+      undefined,
+      NaN,
+      Infinity,
+    ]) {
+      const candidate = loadState().state;
+      Object.assign(candidate.moments[0].before, { pans });
+      assert.throws(() => validateState(candidate), /Emotionele spanning/);
+      assert.equal(saveState(candidate).ok, false);
+      assert.equal(saveDraft("moment:new", candidate.moments[0]).ok, false);
+      assert.equal(store.values.get(STORAGE_KEY), raw);
+      assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+      assert.deepEqual(loadDrafts()["moment:new"], original.moments[0]);
+    }
+    for (const pans of [0, 6, 1.5, "3"]) {
+      const backup = JSON.parse(exportBackup(loadState().state));
+      backup.state.moments[0].before.pans = pans;
+      assert.throws(
+        () => parseBackup(JSON.stringify(backup)),
+        /Emotionele spanning/,
+      );
+      assert.equal(store.values.get(STORAGE_KEY), raw);
+    }
   });
 });
 

@@ -3,7 +3,18 @@ import { PALETTE_IDS, isPalette, type Palette } from "./palettes.ts";
 export const STORAGE_KEY = "anchor.app.data.v1";
 export const DRAFT_STORAGE_KEY = "anchor.app.drafts.v1";
 
-export type Ratings = { mood: number | null; eis: number | null };
+export type EmotionRating = {
+  id: string;
+  label: string;
+  intensity: number | null;
+};
+export type Ratings = {
+  mood: number | null;
+  // Legacy, unlinked intensity. Never infer its emotion from other fields.
+  eis: number | null;
+  emotionRatings?: EmotionRating[];
+  pans?: number | null;
+};
 export type Moment = {
   id: string;
   date: string;
@@ -187,8 +198,40 @@ function score(
   return value;
 }
 
+function emotionRating(value: unknown, draft: boolean): EmotionRating {
+  const item = fields(value, ["id", "label", "intensity"], "Emotiescore");
+  const label = string(item.label, "Emotie", 150);
+  if (!draft && !label.trim())
+    return invalid("Geef de emotie bij deze intensiteit een naam.");
+  if (
+    draft &&
+    item.intensity !== null &&
+    (typeof item.intensity !== "number" || !Number.isFinite(item.intensity))
+  )
+    return invalid("Emotionele intensiteit moet leeg zijn of een getal.");
+  return {
+    id: identifier(item.id),
+    label,
+    intensity: draft
+      ? (item.intensity as number | null)
+      : score(item.intensity, 0, 100, "Emotionele intensiteit"),
+  };
+}
+
 function ratings(value: unknown, draft = false): Ratings {
-  const item = fields(value, ["mood", "eis"], "Scores");
+  const input = object(value, "Scores");
+  const hasEmotionRatings = Object.hasOwn(input, "emotionRatings");
+  const hasPans = Object.hasOwn(input, "pans");
+  const item = fields(
+    input,
+    [
+      "mood",
+      "eis",
+      ...(hasEmotionRatings ? ["emotionRatings"] : []),
+      ...(hasPans ? ["pans"] : []),
+    ],
+    "Scores",
+  );
   if (
     draft &&
     item.eis !== null &&
@@ -200,6 +243,23 @@ function ratings(value: unknown, draft = false): Ratings {
     eis: draft
       ? (item.eis as number | null)
       : score(item.eis, 0, 100, "Emotionele intensiteit"),
+    // Keep older shapes unchanged, including backups and unfinished drafts.
+    // Explicit empty arrays remain explicit; missing fields stay omitted.
+    ...(hasEmotionRatings
+      ? {
+          emotionRatings: unique(
+            list(
+              item.emotionRatings,
+              "Emotiescores",
+              (entry) => emotionRating(entry, draft),
+              20,
+            ),
+            (entry) => entry.id,
+            "Emotiescores",
+          ),
+        }
+      : {}),
+    ...(hasPans ? { pans: score(item.pans, 1, 5, "Emotionele spanning") } : {}),
   };
 }
 

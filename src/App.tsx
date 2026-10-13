@@ -51,15 +51,16 @@ import {
 } from "./SecondaryViews";
 import { CravingView } from "./CravingView";
 import "./secondary.css";
+import {
+  MOODS,
+  RatingLine,
+  RatingsEditor,
+  hasRating,
+  cleanRatings,
+  followupRatings,
+  revealInvalidField,
+} from "./RatingsEditor";
 
-const MOODS = ["Erg laag", "Laag", "Neutraal", "Goed", "Erg goed"];
-const MOUTHS = [
-  "M10 23 Q17 13 24 23",
-  "M11 22 Q17 17 23 22",
-  "M11 21 H23",
-  "M11 19 Q17 25 23 19",
-  "M9 18 Q17 29 25 18 Z",
-];
 const KINDS: Record<Moment["kind"], string> = { checkin: "Check-in" };
 const blankRatings = (): Ratings => ({ mood: null, eis: null });
 const uid = () => crypto.randomUUID();
@@ -87,8 +88,6 @@ const dateText = (date: string, long = false) =>
         year: "numeric",
         ...(long ? { weekday: "long" as const } : {}),
       }).format(new Date(`${date}T12:00:00`));
-const hasRating = (ratings: Ratings) =>
-  Object.values(ratings).some((value) => value !== null);
 const emptyMoment = (): Moment => ({
   id: uid(),
   date: today(),
@@ -182,96 +181,6 @@ function Dialog({
       </div>
       {children}
     </dialog>
-  );
-}
-function RatingLine({ value, label }: { value: Ratings; label?: string }) {
-  return (
-    <div className="dp-rating-line" aria-label={label}>
-      <span>
-        <i className="dp-dot" />
-        {value.mood === null ? "Stemming niet ingevuld" : MOODS[value.mood + 2]}
-      </span>
-      {value.eis !== null && (
-        <span>
-          EIS <b>{value.eis}</b>
-        </span>
-      )}
-    </div>
-  );
-}
-function RatingsEditor({
-  value,
-  onChange,
-  prefix = "",
-}: {
-  value: Ratings;
-  onChange: (next: Ratings) => void;
-  prefix?: string;
-}) {
-  return (
-    <div className="dp-ratings-editor">
-      <fieldset>
-        <legend>
-          {prefix}Stemming <span className="dp-optional">optioneel</span>
-        </legend>
-        <div className="dp-mood-options">
-          {MOODS.map((label, index) => (
-            <button
-              type="button"
-              key={label}
-              aria-pressed={value.mood === index - 2}
-              aria-label={`${index - 2 > 0 ? "+" : ""}${index - 2} ${label}`}
-              onClick={() =>
-                onChange({
-                  ...value,
-                  mood: value.mood === index - 2 ? null : index - 2,
-                })
-              }
-            >
-              <svg
-                aria-hidden="true"
-                className="dp-mood-face"
-                viewBox="0 0 34 34"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="17" cy="17" r="15.5" />
-                <path d="M11 12 V13 M23 12 V13" />
-                <path d={MOUTHS[index]} />
-              </svg>
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <div className="dp-form-grid">
-        <label className="dp-field">
-          {prefix}Emotionele intensiteit (EIS)
-          <span className="dp-hint">0 = geen · 100 = zeer sterk</span>
-          <input
-            type="number"
-            inputMode="numeric"
-            min="0"
-            max="100"
-            step="1"
-            placeholder="Niet ingevuld"
-            value={value.eis ?? ""}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                eis: e.target.value === "" ? null : Number(e.target.value),
-              })
-            }
-          />
-        </label>
-      </div>
-      <p className="dp-hint">
-        Je eigen inschatting van dit moment. Een leeg veld blijft leeg.
-      </p>
-    </div>
   );
 }
 function PageTitle({
@@ -1624,17 +1533,7 @@ function MomentView({
   const [value, setValue] = useState<Moment>(
     () => draft ?? record ?? emptyMoment(),
   );
-  const knownEmotions = [
-    "Onrustig",
-    "Verdrietig",
-    "Boos",
-    "Blij",
-    "Hoopvol",
-    "Moe",
-  ];
-  const otherEmotion = value.emotions
-    .filter((item) => !knownEmotions.includes(item))
-    .join(", ");
+  const beforeFormRef = useRef<HTMLFormElement>(null);
   const [customActivity, setCustomActivity] = useState(
     () =>
       !["", "Buiten wandelen", "Schilderen", "5-4-3-2-1"].includes(
@@ -1657,13 +1556,14 @@ function MomentView({
   function submit(event: React.FormEvent, followup: boolean) {
     event.preventDefault();
     setError("");
+    if (followup && !beforeFormRef.current?.reportValidity()) return;
     if (
       !hasRating(value.before) &&
       !value.note.trim() &&
       !value.activity.trim() &&
       !value.emotions.length
     ) {
-      setError("Vul een score, een notitie of een activiteit in.");
+      setError("Vul een stemming, emotie, notitie of activiteit in.");
       return;
     }
     if (customActivity && !value.activity.trim()) {
@@ -1693,12 +1593,14 @@ function MomentView({
     const saved: Moment = {
       ...value,
       note: value.note.trim(),
+      before: cleanRatings(value.before),
+      after: value.after ? cleanRatings(value.after) : null,
       emotions: [
         ...new Set(value.emotions.map((item) => item.trim()).filter(Boolean)),
       ],
       ...(followup
         ? {
-            after: value.after ?? blankRatings(),
+            after: cleanRatings(value.after ?? followupRatings(value.before)),
             afterTime: record?.afterTime ?? value.afterTime ?? clockTime(),
             afterDate: record?.afterDate ?? value.afterDate ?? today(),
           }
@@ -1753,64 +1655,62 @@ function MomentView({
           </Button>
         </div>
       )}
-      <form onSubmit={(event) => submit(event, false)}>
+      <form
+        ref={beforeFormRef}
+        onSubmit={(event) => submit(event, false)}
+        onInvalidCapture={revealInvalidField}
+      >
         <section className="dp-form-section">
           <div className="dp-section-head">
             <h2>{record?.activity ? "Voor je activiteit" : "Dit moment"}</h2>
-            <span className="dp-tag">{value.time}</span>
+            <span className="dp-tag">
+              {dateText(value.date)} · {value.time}
+            </span>
           </div>
 
+          <details className="dp-extra-fields dp-moment-time">
+            <summary>Datum en tijd aanpassen</summary>
+            <div className="dp-form-grid anchor-datetime-grid">
+              <label className="dp-field">
+                Datum
+                <input
+                  aria-label="Datum momentopname"
+                  type="date"
+                  required
+                  min="1900-01-01"
+                  max="2199-12-31"
+                  value={value.date}
+                  onChange={(event) => update({ date: event.target.value })}
+                />
+              </label>
+              <label className="dp-field">
+                Tijd
+                <input
+                  aria-label="Tijd momentopname"
+                  type="time"
+                  required
+                  value={value.time}
+                  onChange={(event) => update({ time: event.target.value })}
+                />
+              </label>
+            </div>
+          </details>
           <RatingsEditor
             value={value.before}
             onChange={(before) => update({ before })}
           />
+          {value.emotions.length > 0 && (
+            <p className="dp-hint">
+              Eerder genoteerde emoties: {value.emotions.join(", ")}. Deze zijn
+              niet aan een intensiteitscijfer gekoppeld.
+            </p>
+          )}
           <details className="dp-extra-fields">
-            <summary>Emoties en context toevoegen</summary>
-            <fieldset>
-              <legend>Welke emoties herken je?</legend>
-              <div className="dp-chip-list">
-                {[
-                  "Onrustig",
-                  "Verdrietig",
-                  "Boos",
-                  "Blij",
-                  "Hoopvol",
-                  "Moe",
-                ].map((emotion) => (
-                  <button
-                    type="button"
-                    key={emotion}
-                    aria-pressed={value.emotions.includes(emotion)}
-                    onClick={() =>
-                      update({
-                        emotions: value.emotions.includes(emotion)
-                          ? value.emotions.filter((item) => item !== emotion)
-                          : [...value.emotions, emotion],
-                      })
-                    }
-                  >
-                    {emotion}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <label className="dp-field">
-              Andere emotie
-              <input
-                value={otherEmotion}
-                maxLength={100}
-                onChange={(e) =>
-                  update({
-                    emotions: [
-                      ...value.emotions.filter((item) =>
-                        knownEmotions.includes(item),
-                      ),
-                      ...(e.target.value ? [e.target.value] : []),
-                    ],
-                  })
-                }
-              />
-            </label>
+            <summary>Hulp bij je notitie</summary>
+            <p className="dp-hint">
+              Wat gebeurde er? Welke gedachten had je? Wat merkte je in je
+              lichaam? Gebruik alleen wat je helpt om dit moment te beschrijven.
+            </p>
           </details>
           <label className="dp-field">
             In je eigen woorden
@@ -1825,7 +1725,11 @@ function MomentView({
             />
           </label>
         </section>
-        <section className="dp-form-section dp-activity-section">
+        <details
+          className="dp-form-section dp-activity-section dp-extra-fields"
+          open={!!value.activity || customActivity}
+        >
+          <summary>Activiteit toevoegen</summary>
           <span className="dp-kicker">Optioneel</span>
           <h2>Wat zou je willen proberen?</h2>
           <p>Een activiteit uit je eigen leven telt net zo goed mee.</p>
@@ -1887,7 +1791,7 @@ function MomentView({
               <ArrowRight size={17} />
             </Button>
           )}
-        </section>
+        </details>
         {error && (
           <p className="dp-error" role="alert">
             {error}
@@ -1934,7 +1838,7 @@ function MomentView({
           </fieldset>
           <RatingsEditor
             prefix="Na: "
-            value={value.after ?? blankRatings()}
+            value={value.after ?? followupRatings(value.before)}
             onChange={(after) => update({ after })}
           />
           <p className="dp-hint">
@@ -2060,7 +1964,7 @@ function DayView({
                 ...state,
                 days: [
                   ...state.days.filter((item) => item.date !== date),
-                  value,
+                  { ...value, ratings: cleanRatings(value.ratings) },
                 ],
               },
               "Je dagoverzicht is opgeslagen op dit apparaat.",
@@ -2074,6 +1978,7 @@ function DayView({
         <section className="dp-form-section">
           <h2>Hoe voelde deze dag?</h2>
           <RatingsEditor
+            day
             value={value.ratings}
             onChange={(ratings) => update({ ratings })}
           />

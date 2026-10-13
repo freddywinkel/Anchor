@@ -8,7 +8,13 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import type { AppState, Goal } from "./lib/storage";
+import type {
+  AppState,
+  EmotionRating,
+  Goal,
+  Moment,
+  Ratings,
+} from "./lib/storage";
 import { today, loadDrafts, saveDraft } from "./lib/storage";
 import type { Palette } from "./lib/palettes";
 import "./secondary.css";
@@ -67,6 +73,88 @@ function moodLabel(value: number | null) {
       ? `+${value}`
       : String(value);
 }
+function ratingsSearchText(ratings: Ratings | null) {
+  return `${ratings?.emotionRatings?.map((emotion) => emotion.label).join(" ") || ""} ${ratings?.pans != null ? `pannetjes ${ratings.pans}/5` : ""}`;
+}
+function momentSearchText(moment: Moment) {
+  return `${moment.note} ${moment.activity} ${moment.emotions.join(" ")} ${ratingsSearchText(moment.before)} ${ratingsSearchText(moment.after)} check-in`.toLocaleLowerCase(
+    "nl-NL",
+  );
+}
+function intensityLabel(value: number | null | undefined) {
+  return value === null || value === undefined
+    ? "niet ingevuld"
+    : `${value}/100`;
+}
+function HistoryRatings({
+  before,
+  after,
+}: {
+  before: Ratings;
+  after?: Ratings | null;
+}) {
+  const rows: {
+    key: string;
+    before?: EmotionRating;
+    after?: EmotionRating;
+  }[] = (before.emotionRatings || []).map((emotion) => ({
+    key: `before-${emotion.id}`,
+    before: emotion,
+  }));
+  for (const emotion of after?.emotionRatings || []) {
+    // A changed label is a different observation, even if an old draft kept
+    // the same id. Do not suggest that two different emotions were compared.
+    const matching = rows.find(
+      (row) =>
+        row.before?.id === emotion.id &&
+        row.before.label.toLocaleLowerCase("nl-NL") ===
+          emotion.label.toLocaleLowerCase("nl-NL"),
+    );
+    if (matching) matching.after = emotion;
+    else rows.push({ key: `after-${emotion.id}`, after: emotion });
+  }
+  const hasLegacyIntensity =
+    before.eis !== null ||
+    (after !== null && after !== undefined && after.eis !== null);
+  const hasPans = before.pans != null || after?.pans != null;
+  if (!rows.length && !hasLegacyIntensity && !hasPans) return null;
+  const values = (
+    first: number | null | undefined,
+    second: number | null | undefined,
+  ) =>
+    after
+      ? `Vóór: ${intensityLabel(first)} · Na: ${intensityLabel(second)}`
+      : intensityLabel(first);
+  return (
+    <div role="group" aria-label="Gevoel en intensiteit">
+      {hasPans && (
+        <p className="dp-entry-note">
+          <strong>Pannetjes</strong>
+          <br />
+          <span>
+            {after
+              ? `Vóór: ${before.pans == null ? "niet ingevuld" : `${before.pans}/5`} · Na: ${after.pans == null ? "niet ingevuld" : `${after.pans}/5`}`
+              : `${before.pans}/5`}
+          </span>
+        </p>
+      )}
+      {rows.map((row) => (
+        <p className="dp-entry-note" key={row.key}>
+          <strong>{row.before?.label ?? row.after?.label}</strong>
+          <br />
+          <span>{values(row.before?.intensity, row.after?.intensity)}</span>
+        </p>
+      ))}
+      {hasLegacyIntensity && (
+        <p className="dp-entry-note">
+          <strong>Intensiteit — emotie niet gekoppeld</strong>
+          <br />
+          <span>{values(before.eis, after?.eis)}</span>
+        </p>
+      )}
+    </div>
+  );
+}
 function goalLabel(goal: Goal) {
   return goal.name.trim() || targetLabel(goal.target);
 }
@@ -101,9 +189,7 @@ export function HistoryView({
               item.afterDate !== null &&
               withinPeriod(item.afterDate))) &&
           (kind === "all" || item.kind === kind) &&
-          `${item.note} ${item.activity} ${item.emotions.join(" ")} check-in`
-            .toLocaleLowerCase("nl-NL")
-            .includes(search),
+          momentSearchText(item).includes(search),
       )
       .map((item) => ({
         type: "moment" as const,
@@ -116,7 +202,7 @@ export function HistoryView({
         (item) =>
           (period === "all" || (item.date >= start && item.date <= today())) &&
           (kind === "all" || kind === "day") &&
-          `${item.note} mijn hele dag dagsamenvatting`
+          `${item.note} ${ratingsSearchText(item.ratings)} mijn hele dag dagsamenvatting`
             .toLocaleLowerCase("nl-NL")
             .includes(search),
       )
@@ -149,9 +235,9 @@ export function HistoryView({
     .filter(
       (item) =>
         (kind === "all" || kind === "checkin") &&
-        `${item.note} ${item.activity} ${item.emotions.join(" ")} check-in`
-          .toLocaleLowerCase("nl-NL")
-          .includes(query.trim().toLocaleLowerCase("nl-NL")),
+        momentSearchText(item).includes(
+          query.trim().toLocaleLowerCase("nl-NL"),
+        ),
     )
     .flatMap((m) => {
       return [
@@ -371,6 +457,23 @@ export function HistoryView({
                         ? entry.item.situation || "Situatie niet ingevuld"
                         : `Momentcheck-in · stemming ${moodLabel(entry.item.before.mood)}${entry.item.after ? ` → ${moodLabel(entry.item.after.mood)}` : ""}`}
                   </p>
+                  {entry.type === "moment" && (
+                    <>
+                      <HistoryRatings
+                        before={entry.item.before}
+                        after={entry.item.after}
+                      />
+                      {entry.item.emotions.length > 0 && (
+                        <p className="dp-entry-note">
+                          Emoties zonder gekoppelde score:{" "}
+                          {entry.item.emotions.join(", ")}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {entry.type === "day" && (
+                    <HistoryRatings before={entry.item.ratings} />
+                  )}
                   {entry.type === "craving" ? (
                     <dl className="dp-craving-summary">
                       {(

@@ -525,7 +525,11 @@ test("een gecorrigeerde nameting behoudt de oorspronkelijke datum en tijd", asyn
   await open(page, "/moment/historical-after");
   await page
     .locator(".dp-after-form")
-    .getByLabel(/^Na: Emotionele intensiteit/)
+    .getByText("Eerder vastgelegde intensiteit: 20", { exact: true })
+    .click();
+  await page
+    .locator(".dp-after-form")
+    .getByLabel("Na: Intensiteit — emotie niet gekoppeld", { exact: true })
     .fill("25");
   await page
     .getByRole("button", { name: "Nameting opslaan", exact: true })
@@ -544,6 +548,7 @@ test("een onafgemaakte nameting blijft na herladen zichtbaar en invulbaar", asyn
   await page
     .getByLabel(/^In je eigen woorden/)
     .fill("Even stilstaan voor het schilderen.");
+  await page.getByText("Activiteit toevoegen", { exact: true }).click();
   await page
     .getByRole("combobox", { name: "Activiteit", exact: true })
     .selectOption("Schilderen");
@@ -559,14 +564,18 @@ test("een onafgemaakte nameting blijft na herladen zichtbaar en invulbaar", asyn
     .click();
   await page
     .locator(".dp-after-form")
-    .getByLabel(/^Na: Emotionele intensiteit/)
+    .getByRole("combobox", { name: "Kies een emotie", exact: true })
+    .selectOption({ label: "Onrustig" });
+  await page
+    .locator(".dp-after-form")
+    .getByLabel("Intensiteit van Onrustig", { exact: true })
     .fill("55");
   await page.reload();
   const after = page.locator(".dp-after-form");
   await expect(after).toBeVisible();
-  await expect(after.getByLabel(/^Na: Emotionele intensiteit/)).toHaveValue(
-    "55",
-  );
+  await expect(
+    after.getByLabel("Intensiteit van Onrustig", { exact: true }),
+  ).toHaveValue("55");
   await expect(
     after.getByRole("button", { name: "Ja", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -575,7 +584,11 @@ test("een onafgemaakte nameting blijft na herladen zichtbaar en invulbaar", asyn
     .getByRole("button", { name: "Nameting opslaan", exact: true })
     .click();
   expect((await state(page)).moments[0]).toMatchObject({
-    after: { mood: null, eis: 55 },
+    after: {
+      mood: null,
+      eis: null,
+      emotionRatings: [{ label: "Onrustig", intensity: 55 }],
+    },
     attempted: true,
   });
 });
@@ -621,7 +634,11 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
 }) => {
   await open(page, "/moment/new");
   await page.getByRole("button", { name: "-1 Laag", exact: true }).click();
-  await page.getByLabel(/^Emotionele intensiteit/).fill("70");
+  await page
+    .getByRole("combobox", { name: "Kies een emotie", exact: true })
+    .selectOption({ label: "Onrustig" });
+  await page.getByLabel("Intensiteit van Onrustig", { exact: true }).fill("70");
+  await page.getByText("Activiteit toevoegen", { exact: true }).click();
   await page
     .getByRole("combobox", { name: "Activiteit", exact: true })
     .selectOption("Buiten wandelen");
@@ -633,7 +650,9 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
   const after = page.locator(".dp-after-form");
   await after.getByRole("button", { name: "Ja", exact: true }).click();
   await after.getByRole("button", { name: "+1 Goed", exact: true }).click();
-  await after.getByLabel(/^Na: Emotionele intensiteit/).fill("30");
+  await after
+    .getByLabel("Intensiteit van Onrustig", { exact: true })
+    .fill("30");
   await page.getByRole("button", { name: "Dit moment opslaan" }).click();
   expect((await state(page)).moments[0].after).toBeNull();
   await after.getByRole("button", { name: "Nameting opslaan" }).click();
@@ -660,10 +679,19 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
   const saved = await state(page);
   expect(saved.moments).toHaveLength(2);
   expect(saved.cravings).toHaveLength(0);
-  expect(saved.days[0].ratings).toEqual({ mood: null, eis: null });
+  expect(saved.days[0].ratings).toMatchObject({ mood: null, eis: null });
+  expect(saved.days[0].ratings.emotionRatings ?? []).toEqual([]);
   expect(saved.moments.find((entry: any) => entry.activity)).toMatchObject({
-    before: { mood: -1, eis: 70 },
-    after: { mood: 1, eis: 30 },
+    before: {
+      mood: -1,
+      eis: null,
+      emotionRatings: [{ label: "Onrustig", intensity: 70 }],
+    },
+    after: {
+      mood: 1,
+      eis: null,
+      emotionRatings: [{ label: "Onrustig", intensity: 30 }],
+    },
     attempted: true,
   });
 });
@@ -932,9 +960,11 @@ test("losse check-in- en cravingconcepten hervatten zonder opgeslagen record en 
   );
   const after = page.locator(".dp-after-form");
   await expect(after).toBeVisible();
-  await expect(after.getByLabel(/^Na: Emotionele intensiteit/)).toHaveValue(
-    "30",
-  );
+  await expect(
+    after.getByLabel("Na: Intensiteit — emotie niet gekoppeld", {
+      exact: true,
+    }),
+  ).toHaveValue("30");
   await expect(
     after.getByRole("button", { name: "Ja", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");

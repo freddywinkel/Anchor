@@ -6,8 +6,9 @@ Een rustig, Nederlandstalig dagboek om meerdere keren per dag in te checken, een
 
 - **Craving:** datum en tijd, externe situatie (wie, wat en waar), gedachte, lichamelijke sensatie, emotie en gedrag. De weekdag volgt uit de datum. Je kunt kort beginnen en later aanvullen; er zijn geen extra scores of vragen in dit formulier.
 - **Voorbeelden bij interne situatie:** optionele keuzelijsten voor gedachten, lichamelijke sensaties en emoties voegen tekst toe aan het bestaande tekstvak. Je kunt meerdere voorbeelden kiezen, ze aanpassen of helemaal zelf schrijven.
-- **Check-in:** stemming, persoonlijke emotionele intensiteit (EIS 0–100), woorden/emoties en eventueel een activiteit met een afzonderlijke nameting. Meerdere momenten per dag zijn mogelijk.
-- **Mijn hele dag:** een eigen dagoverzicht met stemming, intensiteit, slaap en notitie. Dit is geen berekend gemiddelde van losse registraties.
+- **Check-in:** aanpasbare datum/tijd, stemming, optionele pannetjes (1–5) voor emotionele spanning en benoemde emoties met elk een eigen intensiteit (0–100). Kies een emotie of schrijf je eigen woord; ieder cijfer mag leeg blijven. Meerdere momenten per dag zijn mogelijk.
+- **Activiteit en nameting:** kies optioneel een activiteit of schrijf je eigen activiteit. De nameting biedt dezelfde emotienamen met lege nieuwe cijfers; stemming en pannetjes beginnen ook leeg. Het proberen van de activiteit wordt afzonderlijk bevestigd. Alleen dezelfde emotie wordt vóór en na vergeleken.
+- **Mijn hele dag:** een eigen dagoverzicht met stemming, slaap en notitie. Benoemde emoties kunnen optioneel worden toegevoegd; hun cijfer beschrijft het opvallendste moment van die emotie die dag. Dit is geen berekend gemiddelde van losse registraties.
 - **Terugkijken:** geschiedenis, filters, zoeken en een weergave van de ingevulde stemmingsmetingen.
 - **Mijn plan en Mijn groei:** kies een middel of gedrag en daarna je doel: Minderen, Stoppen, Gecontroleerd gebruik of Eigen doel. Een bekend middel hoef je niet opnieuw te typen; bij een eigen middel of gedrag vul je zelf de naam in. Bestaande eigen namen en doelteksten blijven bewerkbaar. Er is ook ruimte voor een persoonlijk plan en fijne momenten.
 - **Hulpmiddelen:** een eenvoudige grondoefening en ruimte voor eigen activiteiten, zonder automatisch een effect of gebruik te registreren.
@@ -42,6 +43,10 @@ Een nieuwe appversie wordt voorbereid en pas na de knop **Bijwerken** geactiveer
 Concepten blijven bewaard wanneer je naar een ander scherm gaat. De updatemelding toont hoeveel er zijn en opent de conceptlijst als ze het bijwerken tegenhouden. Je vindt ze ook via **Meer opties → Open concepten**. Alleen een nieuw doel openen of een bestaand doel bekijken maakt nog geen concept; ingevulde wijzigingen wel.
 
 Normale back-ups kunnen worden geïmporteerd na validatie, een veiligheidskopie en bevestiging. Een afzonderlijk **concept-herstelbestand** bevat ruwe tekst voor handmatig herstel; dit is geen reguliere importback-up. Gegevens uit Substance Recovery vereisen een later afzonderlijk ontworpen import en worden nu niet automatisch gemigreerd.
+
+Vanaf 1.4.0 staan emotienamen en hun intensiteiten per meting bij elkaar. Oude losse EIS-cijfers blijven bewaard als **Intensiteit — emotie niet gekoppeld**, samen met de oorspronkelijke emotiewoorden; er wordt geen koppeling gegokt. Het openen van oude data schrijft niets om. Nieuwe optionele velden worden ook in concepten en back-ups gevalideerd. Een oudere appversie kan nieuwe velden niet bewerken en blokkeert onbekende gegevens in plaats van ze stilzwijgend weg te schrijven.
+
+De pannetjes en emotiecijfers zijn afzonderlijke persoonlijke inschattingen. De [VERS-EIS gebruikt vijf niveaus](https://documenten.trimbos.nl/openen-downloadbaar-bestand-prs/werkblad-4-eis-thermometer-aug-pdf); [emotiedagboeken gebruiken ook 0–100 per benoemde emotie](https://www.cci.health.wa.gov.au/~/media/CCI/Mental-Health-Professionals/Social-Anxiety/Social-Anxiety---Worksheets/Social-Anxiety-Worksheet---07---Thought-Diary-1.pdf). Anchor rekent deze schalen niet naar elkaar om en leidt er geen behandeling of klinische conclusie uit af. De vijf stemmingsgezichten blijven een eigen meting.
 
 Voor toekomstige wijzigingen:
 

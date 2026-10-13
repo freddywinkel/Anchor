@@ -5,7 +5,10 @@ import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
 import path from "node:path";
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const directory = path.join(repositoryRoot, "tmp/update-check");
-const approvedBaseline = "2072cf1af8ddedd1d49c2e40e8286d0874842ff3";
+const approvedBaselines = [
+  "2072cf1af8ddedd1d49c2e40e8286d0874842ff3",
+  "a42fc3bf9a0be0c3b09f4b3bb52d2830cb1e6f19",
+];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
 await mkdir(directory, { recursive: true });
@@ -20,9 +23,12 @@ let baselineRoot = repositoryRoot;
 if (baselineRef) {
   // Historical source is extracted only under ignored tmp. Never check out or
   // reset the user's working tree, and never build the baseline into normal dist.
-  if (baselineRef !== "2072cf1" && baselineRef !== approvedBaseline)
+  const approvedBaseline = approvedBaselines.find(
+    (commit) => baselineRef === commit || baselineRef === commit.slice(0, 7),
+  );
+  if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify the approved 2072cf1 release.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1 or a42fc3b.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -130,6 +136,8 @@ const errors = [];
 const documents = [];
 const currentGuardChecks = [];
 const draftKey = "anchor.app.drafts.v1";
+const oldestBaseline = baselineCommit === approvedBaselines[0];
+let legacyMoment = null;
 const draftRecords = async () =>
   page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key) || '{"records":{}}').records,
@@ -178,7 +186,7 @@ try {
   await page
     .getByRole("button", { name: "Craving vastleggen", exact: true })
     .click();
-  const situation = baselineCommit
+  const situation = oldestBaseline
     ? page.getByLabel(/^Situatie \(wie, wat, waar\)/)
     : page.getByLabel("Wie, wat en waar", { exact: true });
   await situation.fill("Updatecontrole: een fictief moment");
@@ -195,8 +203,44 @@ try {
   expect(JSON.parse(saved).cravings[0].situation).toBe(
     "Updatecontrole: een fictief moment",
   );
-  if (baselineCommit)
+  if (oldestBaseline)
     expect(Object.hasOwn(JSON.parse(saved), "palette")).toBe(false);
+  if (baselineCommit) {
+    await go("/moment/new");
+    await page.getByRole("button", { name: "-1 Laag", exact: true }).click();
+    await page.getByLabel(/^Emotionele intensiteit/).fill("67");
+    await page
+      .getByText("Emoties en context toevoegen", { exact: true })
+      .click();
+    await page.getByRole("button", { name: "Onrustig", exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Activiteit", exact: true })
+      .selectOption("Schilderen");
+    await page
+      .getByRole("button", { name: "Dit moment opslaan", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Nameting invullen", exact: true })
+      .click();
+    const after = page.locator(".dp-after-form");
+    await after.getByRole("button", { name: "Ja", exact: true }).click();
+    await after.getByRole("button", { name: "+1 Goed", exact: true }).click();
+    await after.getByLabel(/^Na: Emotionele intensiteit/).fill("24");
+    await after
+      .getByRole("button", { name: "Nameting opslaan", exact: true })
+      .click();
+    saved = await page.evaluate(() =>
+      localStorage.getItem("anchor.app.data.v1"),
+    );
+    legacyMoment = JSON.parse(saved).moments[0];
+    expect(legacyMoment).toMatchObject({
+      before: { mood: -1, eis: 67 },
+      after: { mood: 1, eis: 24 },
+      emotions: ["Onrustig"],
+    });
+    expect(Object.hasOwn(legacyMoment.before, "emotionRatings")).toBe(false);
+    expect(Object.hasOwn(legacyMoment.after, "emotionRatings")).toBe(false);
+  }
   if (!baselineCommit) {
     await go("/plan");
     await page
@@ -289,7 +333,7 @@ try {
     window.anchorUpdateController = navigator.serviceWorker.controller;
   });
   await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
-  if (baselineCommit) {
+  if (oldestBaseline) {
     await expect(
       page.getByRole("alert").filter({ hasText: "open concepten" }),
     ).toBeVisible();
@@ -297,8 +341,12 @@ try {
     await expect(
       page.getByRole("dialog", { name: "Open concepten", exact: true }),
     ).toBeVisible();
-    await expect(page.locator(".anchor-draft-row")).toHaveCount(4);
-    for (const title of ["Craving", "Doel", "Fijn moment", "Mijn plan"])
+    await expect(page.locator(".anchor-draft-row")).toHaveCount(
+      baselineCommit ? 1 : 4,
+    );
+    for (const title of baselineCommit
+      ? ["Craving"]
+      : ["Craving", "Doel", "Fijn moment", "Mijn plan"])
       await expect(draftRow(title)).toHaveCount(1);
   }
   expect(
@@ -308,6 +356,10 @@ try {
     await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
   ).toBe(draft);
   await expectWaitingWorker();
+  if (baselineCommit && !oldestBaseline)
+    await draftRow("Craving")
+      .getByRole("button", { name: "Verder schrijven", exact: true })
+      .click();
   if (!baselineCommit) {
     await draftRow("Doel")
       .getByRole("button", { name: "Verder schrijven", exact: true })
@@ -574,6 +626,21 @@ try {
   await expect(
     page.getByRole("radio", { name: "Amber", exact: true }),
   ).toBeChecked();
+  if (legacyMoment) {
+    const upgradedMoment = await page.evaluate(
+      (id) =>
+        JSON.parse(localStorage.getItem("anchor.app.data.v1")).moments.find(
+          (moment) => moment.id === id,
+        ),
+      legacyMoment.id,
+    );
+    expect(upgradedMoment).toEqual(legacyMoment);
+    expect(Object.hasOwn(upgradedMoment.before, "emotionRatings")).toBe(false);
+    expect(Object.hasOwn(upgradedMoment.after, "emotionRatings")).toBe(false);
+    currentGuardChecks.push(
+      "historical before/after EIS and unscored emotion labels survive unchanged without invented emotion scores",
+    );
+  }
 
   // The update itself must leave the historical serialized state untouched.
   // A later palette save is the first write that may add normalized metadata.

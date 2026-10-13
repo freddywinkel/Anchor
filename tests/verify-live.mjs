@@ -335,6 +335,132 @@ try {
     fullPage: true,
   });
 
+  await page.goto(new URL("#/moment/new", base).href);
+  await expect(
+    page.getByRole("heading", { name: "Hoe gaat het nu?", exact: true }),
+  ).toBeVisible();
+  const momentForm = page.locator("form").first();
+  await momentForm
+    .getByRole("button", { name: "-1 Laag", exact: true })
+    .click();
+  await momentForm
+    .getByRole("button", { name: "Pannetje 4 van 5", exact: true })
+    .click();
+  await momentForm
+    .getByRole("combobox", { name: "Kies een emotie", exact: true })
+    .selectOption({ label: "Onrustig" });
+  await momentForm
+    .getByLabel("Intensiteit van Onrustig", { exact: true })
+    .fill("70");
+  await momentForm
+    .getByRole("button", { name: "Nog een emotie", exact: true })
+    .click();
+  await momentForm
+    .locator(".dp-emotion-row")
+    .last()
+    .getByRole("combobox", { name: "Kies een emotie", exact: true })
+    .selectOption({ label: "Blij" });
+  await momentForm
+    .getByLabel("Intensiteit van Blij", { exact: true })
+    .fill("0");
+  await momentForm
+    .getByRole("button", { name: "Nog een emotie", exact: true })
+    .click();
+  await momentForm
+    .locator(".dp-emotion-row")
+    .last()
+    .getByRole("combobox", { name: "Kies een emotie", exact: true })
+    .selectOption({ label: "Verdrietig" });
+  await expect(
+    momentForm.getByLabel("Intensiteit van Verdrietig", { exact: true }),
+  ).toHaveValue("");
+  await momentForm.getByText("Activiteit toevoegen", { exact: true }).click();
+  await momentForm
+    .getByRole("combobox", { name: "Activiteit", exact: true })
+    .selectOption("Buiten wandelen");
+  await momentForm
+    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Jouw check-in", exact: true }),
+  ).toBeVisible();
+  const firstMomentState = await stored();
+  assert.equal(firstMomentState.state.moments.length, 1);
+  const savedBeforeMoment = firstMomentState.state.moments[0];
+  assert.equal(savedBeforeMoment.before.mood, -1);
+  assert.equal(savedBeforeMoment.before.pans, 4);
+  assert.equal(savedBeforeMoment.before.eis, null);
+  assert.deepEqual(
+    savedBeforeMoment.before.emotionRatings.map(({ label, intensity }) => ({
+      label,
+      intensity,
+    })),
+    [
+      { label: "Onrustig", intensity: 70 },
+      { label: "Blij", intensity: 0 },
+      { label: "Verdrietig", intensity: null },
+    ],
+  );
+  assert.equal(savedBeforeMoment.after, null);
+  await page
+    .getByRole("button", { name: "Nameting invullen", exact: true })
+    .click();
+  const afterForm = page.locator(".dp-after-form");
+  await expect(afterForm.locator(".dp-emotion-row")).toHaveCount(3);
+  for (const label of ["Onrustig", "Blij", "Verdrietig"])
+    await expect(
+      afterForm.getByLabel(`Intensiteit van ${label}`, { exact: true }),
+    ).toHaveValue("");
+  await afterForm.getByRole("button", { name: "Ja", exact: true }).click();
+  await afterForm
+    .getByLabel("Intensiteit van Onrustig", { exact: true })
+    .fill("0");
+  await afterForm
+    .getByRole("button", { name: "Pannetje 2 van 5", exact: true })
+    .click();
+  await afterForm.getByRole("button", { name: "+1 Goed", exact: true }).click();
+  await afterForm
+    .getByRole("button", { name: "Nameting opslaan", exact: true })
+    .click();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Jouw check-in", exact: true }),
+  ).toBeVisible();
+  const withMoment = await stored();
+  assert.equal(withMoment.state.moments.length, 1);
+  const savedMoment = withMoment.state.moments[0];
+  assert.equal(savedMoment.id, savedBeforeMoment.id);
+  assert.deepEqual(savedMoment.before, savedBeforeMoment.before);
+  assert.equal(savedMoment.after.mood, 1);
+  assert.equal(savedMoment.after.pans, 2);
+  assert.equal(savedMoment.after.eis, null);
+  assert.equal(savedMoment.attempted, true);
+  assert.deepEqual(
+    savedMoment.after.emotionRatings.map(({ label, intensity }) => ({
+      label,
+      intensity,
+    })),
+    [
+      { label: "Onrustig", intensity: 0 },
+      { label: "Blij", intensity: null },
+      { label: "Verdrietig", intensity: null },
+    ],
+  );
+  assert.deepEqual(withMoment.state.cravings, after.state.cravings);
+  await expect(
+    afterForm.getByLabel("Intensiteit van Onrustig", { exact: true }),
+  ).toHaveValue("0");
+  await expect(
+    afterForm.getByLabel("Intensiteit van Blij", { exact: true }),
+  ).toHaveValue("");
+  await expect(
+    afterForm.getByLabel("Intensiteit van Verdrietig", { exact: true }),
+  ).toHaveValue("");
+  await afterForm.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: path.join(directory, "phone-emotions-after-offline.png"),
+  });
+
   await page.getByRole("button", { name: "Meer opties", exact: true }).click();
   await page
     .getByRole("dialog")
@@ -370,6 +496,7 @@ try {
   ).toBeChecked();
   const themed = await stored();
   assert.deepEqual(themed.state.cravings, after.state.cravings);
+  assert.deepEqual(themed.state.moments, withMoment.state.moments);
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page
@@ -419,12 +546,17 @@ try {
       "date/time controls fill their available width",
       "section dividers align above all headings",
       "three suggestion pickers append text and saved records retain it",
+      "offline check-in keeps mood, pans and individual emotion intensities independent",
+      "follow-up copies emotion names with blank scores and preserves zero versus missing after offline reload",
+      "follow-up leaves original emotion ratings unchanged and is included in the validated backup",
       "five palettes and mode persist offline without changing records",
       "downloaded backup validates and matches saved data",
       "no external or data-bearing requests",
       "no page errors",
     ],
-    savedRecords: after.state.cravings.length,
+    savedRecords: themed.state.cravings.length + themed.state.moments.length,
+    savedCravings: themed.state.cravings.length,
+    savedMoments: themed.state.moments.length,
     offlineProbe,
     caches,
     documents,
