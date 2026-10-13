@@ -26,6 +26,8 @@ const targetNames: Record<string, string> = {
   Alcohol: "Alcohol",
   Nicotine: "Nicotine",
   Cannabis: "Cannabis",
+  Cocaine: "Cocaine",
+  "3-MMC": "3-MMC",
   "Other substance": "Ander middel",
   Other: "Ander doel",
 };
