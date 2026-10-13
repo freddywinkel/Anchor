@@ -350,6 +350,43 @@ export function App() {
     setRoute(to);
     location.hash = to;
   };
+  const draftCount = Object.keys(drafts).length;
+  function openDrafts() {
+    setDrafts(loadDrafts());
+    setDiscardKey(null);
+    setModal("drafts");
+  }
+  function openDraftRecovery() {
+    try {
+      setDraftRecoveryRaw(localStorage.getItem(DRAFT_STORAGE_KEY));
+      setDraftRecoveryDownloaded(false);
+      setModal("draft-recovery");
+    } catch {
+      setError("De conceptopslag is niet toegankelijk. Houd dit venster open.");
+    }
+  }
+  function requestUpdate() {
+    const currentDrafts = loadDrafts();
+    const currentWarning = draftStorageWarning();
+    setDrafts(currentDrafts);
+    setDraftWarning(currentWarning);
+    if (currentWarning) {
+      openDraftRecovery();
+      return;
+    }
+    if (Object.keys(currentDrafts).length) {
+      openDrafts();
+      return;
+    }
+    if (hasUnpersistedDrafts() || draftError) {
+      setError(
+        "Niet alle conceptwijzigingen zijn bewaard. Houd dit venster open en bewaar je invoer voordat je bijwerkt.",
+      );
+      return;
+    }
+    setError("");
+    void updateServiceWorker(true);
+  }
   useEffect(() => {
     let release: (() => void) | undefined;
     let disposed = false;
@@ -749,19 +786,7 @@ export function App() {
           {draftWarning && (
             <div className="dp-error" role="alert">
               {draftWarning}
-              <Button
-                onClick={() => {
-                  try {
-                    setDraftRecoveryRaw(
-                      localStorage.getItem(DRAFT_STORAGE_KEY),
-                    );
-                    setDraftRecoveryDownloaded(false);
-                    setModal("draft-recovery");
-                  } catch {
-                    setError("De conceptopslag is niet toegankelijk.");
-                  }
-                }}
-              >
+              <Button onClick={openDraftRecovery}>
                 Conceptopslag herstellen
               </Button>
             </div>
@@ -793,28 +818,26 @@ export function App() {
             </div>
           )}
           {needRefresh && (
-            <div className="dp-notice" role="status">
-              Een nieuwe versie van Anchor staat klaar. Sla je open formulieren
-              eerst op.
-              <Button
-                disabled={!writer}
-                onClick={() => {
-                  if (
-                    Object.keys(loadDrafts()).length ||
-                    Object.keys(drafts).length ||
-                    hasUnpersistedDrafts() ||
-                    draftError
-                  ) {
-                    setError(
-                      "Bewaar of annuleer eerst je open concepten voordat je bijwerkt.",
-                    );
-                    return;
-                  }
-                  void updateServiceWorker(true);
-                }}
-              >
-                Bijwerken
-              </Button>
+            <div className="dp-notice dp-update-notice" role="status">
+              <p>Een nieuwe versie van Anchor staat klaar.</p>
+              {draftCount > 0 && (
+                <p>
+                  Je hebt {draftCount}{" "}
+                  {draftCount === 1 ? "bewaard concept" : "bewaarde concepten"}.{" "}
+                  Ook als het formulier niet in beeld is. Rond je concepten
+                  eerst af of verwijder wat je niet wilt bewaren.
+                </p>
+              )}
+              <div className="dp-actions">
+                {draftCount > 0 && (
+                  <Button onClick={openDrafts}>
+                    Concepten bekijken ({draftCount})
+                  </Button>
+                )}
+                <Button disabled={!writer} onClick={requestUpdate}>
+                  Bijwerken
+                </Button>
+              </div>
             </div>
           )}
           <fieldset
@@ -909,7 +932,7 @@ export function App() {
               />
             )}
             {momentId &&
-              (momentId === "new" || moment ? (
+              (momentId === "new" || moment || drafts[`moment:${momentId}`] ? (
                 <MomentView
                   key={momentId}
                   record={moment}
@@ -925,7 +948,9 @@ export function App() {
                 <Missing navigate={navigate} />
               ))}
             {cravingId &&
-              (cravingId === "new" || craving ? (
+              (cravingId === "new" ||
+              craving ||
+              drafts[`craving:${cravingId}`] ? (
                 <CravingView
                   key={cravingId}
                   record={craving}
@@ -969,12 +994,7 @@ export function App() {
               Over je gegevens
             </button>
             {Object.keys(drafts).length > 0 && (
-              <button
-                onClick={() => {
-                  setDiscardKey(null);
-                  setModal("drafts");
-                }}
-              >
+              <button onClick={openDrafts}>
                 Open concepten ({Object.keys(drafts).length})
               </button>
             )}
@@ -991,6 +1011,10 @@ export function App() {
       {modal === "menu" && (
         <Dialog title="Meer in Anchor" onClose={() => setModal(null)}>
           <div className="dp-menu-links">
+            <Button onClick={openDrafts}>
+              Open concepten ({draftCount})
+              <BookOpen size={20} />
+            </Button>
             <a href="#/growth" onClick={() => setModal(null)}>
               Mijn groei
               <Leaf size={20} />
@@ -1005,10 +1029,14 @@ export function App() {
       {modal === "drafts" && (
         <Dialog title="Open concepten" onClose={() => setModal(null)}>
           <p>
-            Concepten zijn onafgemaakte formulieren. Je kunt verder schrijven of
+            Concepten zijn bewaarde, onafgemaakte formulieren. Ze blijven hier
+            staan als je naar een ander scherm gaat. Je kunt verder schrijven of
             een concept verwijderen. Opgeslagen registraties blijven behouden.
           </p>
-          {Object.keys(drafts).map((key) => {
+          {needRefresh && draftCount > 0 && (
+            <p>Rond deze concepten af of verwijder ze voordat je bijwerkt.</p>
+          )}
+          {Object.entries(drafts).map(([key, value]) => {
             const type = key.split(":")[0];
             const id = key.includes(":") ? key.slice(type.length + 1) : "";
             const route =
@@ -1033,12 +1061,18 @@ export function App() {
                       : type === "growth"
                         ? "Fijn moment"
                         : "Mijn plan";
+            const details = value as {
+              date?: string;
+              time?: string;
+              name?: string;
+            };
+            const description = details.date
+              ? `${dateText(details.date)}${details.time ? " · " + details.time : ""}`
+              : details.name;
             return (
               <div className="anchor-draft-row" key={key}>
-                <strong>
-                  {title}
-                  {id && id !== "new" && type === "day" ? " · " + id : ""}
-                </strong>
+                <strong>{title}</strong>
+                {description && <p className="dp-muted">{description}</p>}
                 {discardKey === key ? (
                   <>
                     <p>
@@ -1665,8 +1699,8 @@ function MomentView({
       ...(followup
         ? {
             after: value.after ?? blankRatings(),
-            afterTime: record?.afterTime ?? clockTime(),
-            afterDate: record?.afterDate ?? today(),
+            afterTime: record?.afterTime ?? value.afterTime ?? clockTime(),
+            afterDate: record?.afterDate ?? value.afterDate ?? today(),
           }
         : {}),
     };
@@ -1867,17 +1901,17 @@ function MomentView({
           <span>Op dit apparaat</span>
         </div>
       </form>
-      {record?.activity && afterOpen && (
+      {value.activity && afterOpen && (
         <form
           className="dp-after-form"
           onSubmit={(event) => submit(event, true)}
         >
-          <p className="dp-kicker">Nameting · {record.activity}</p>
-          <h2>{record.after ? "Je nameting" : "Hoe is het nu?"}</h2>
-          {record.afterDate && record.afterTime && (
+          <p className="dp-kicker">Nameting · {value.activity}</p>
+          <h2>{value.after ? "Je nameting" : "Hoe is het nu?"}</h2>
+          {value.afterDate && value.afterTime && (
             <p className="dp-hint">
-              Vastgelegd op {dateText(record.afterDate, true)} om{" "}
-              {record.afterTime}. Aanpassen behoudt dit tijdstip.
+              Tijdstip nameting: {dateText(value.afterDate, true)} om{" "}
+              {value.afterTime}. Aanpassen behoudt dit tijdstip.
             </p>
           )}
           <fieldset>

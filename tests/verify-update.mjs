@@ -128,6 +128,36 @@ const context = await browser.newContext({
 const page = await context.newPage();
 const errors = [];
 const documents = [];
+const currentGuardChecks = [];
+const draftKey = "anchor.app.drafts.v1";
+const draftRecords = async () =>
+  page.evaluate(
+    (key) => JSON.parse(localStorage.getItem(key) || '{"records":{}}').records,
+    draftKey,
+  );
+const draftRow = (title) =>
+  page.locator(".anchor-draft-row").filter({
+    has: page
+      .locator("strong")
+      .filter({ hasText: new RegExp(`^${title}(?: ·|$)`) }),
+  });
+const go = async (route) => {
+  await page.goto(`http://127.0.0.1:8801/Anchor/#${route}`);
+  await expect(page.locator("main h1")).toBeVisible();
+};
+const expectWaitingWorker = async () => {
+  expect(
+    await page.evaluate(
+      () =>
+        navigator.serviceWorker.controller === window.anchorUpdateController,
+    ),
+  ).toBe(true);
+  expect(
+    await page.evaluate(
+      async () => !!(await navigator.serviceWorker.getRegistration()).waiting,
+    ),
+  ).toBe(true);
+};
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("response", (response) => {
   if (response.request().resourceType() === "document")
@@ -159,7 +189,7 @@ try {
   await expect(
     page.getByRole("heading", { name: "Je craving", exact: true }),
   ).toBeVisible();
-  const saved = await page.evaluate(() =>
+  let saved = await page.evaluate(() =>
     localStorage.getItem("anchor.app.data.v1"),
   );
   expect(JSON.parse(saved).cravings[0].situation).toBe(
@@ -167,6 +197,53 @@ try {
   );
   if (baselineCommit)
     expect(Object.hasOwn(JSON.parse(saved), "palette")).toBe(false);
+  if (!baselineCommit) {
+    await go("/plan");
+    await page
+      .getByRole("button", { name: "Doel toevoegen", exact: true })
+      .click();
+    await expect(
+      page.getByRole("combobox", { name: "Middel of gedrag", exact: true }),
+    ).toBeVisible();
+    expect(await draftRecords()).toEqual({});
+    await go("/today");
+    expect(await draftRecords()).toEqual({});
+    await go("/plan");
+    await page
+      .getByRole("button", { name: "Doel toevoegen", exact: true })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+      .selectOption("Cocaine");
+    await page
+      .getByRole("combobox", { name: "Mijn doel", exact: true })
+      .selectOption("Stoppen");
+    await page
+      .getByRole("button", { name: "Doel opslaan", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+    ).toBeVisible();
+    const goalBeforeOpening = await page.evaluate(() =>
+      localStorage.getItem("anchor.app.data.v1"),
+    );
+    await page
+      .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+      .click();
+    await expect(
+      page.getByRole("combobox", { name: "Mijn doel", exact: true }),
+    ).toHaveValue("Stoppen");
+    expect(await draftRecords()).toEqual({});
+    await go("/today");
+    expect(await draftRecords()).toEqual({});
+    saved = await page.evaluate(() =>
+      localStorage.getItem("anchor.app.data.v1"),
+    );
+    expect(saved).toBe(goalBeforeOpening);
+    currentGuardChecks.push(
+      "opening a blank or unchanged goal creates no invisible draft",
+    );
+  }
   await page.goto("http://127.0.0.1:8801/Anchor/#/craving/new");
   await expect(
     page.getByRole("heading", { name: "Craving vastleggen", exact: true }),
@@ -174,6 +251,29 @@ try {
   await page
     .getByLabel(/^Gedachte/)
     .fill("Concept blijft tijdens de update behouden.");
+  if (!baselineCommit) {
+    await go("/plan");
+    await page
+      .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Mijn doel", exact: true })
+      .selectOption("Minderen");
+    await page
+      .getByLabel("Dit kan ik doen")
+      .fill("Een fictieve wandeling voor de updatecontrole.");
+    await go("/growth");
+    await page
+      .getByLabel("Wat wil je onthouden?")
+      .fill("Fictief fijn moment voor de updatecontrole.");
+    await go("/today");
+    expect(Object.keys(await draftRecords()).sort()).toEqual([
+      "craving:new",
+      "goal",
+      "growth",
+      "plan",
+    ]);
+  }
   const draft = await page.evaluate(() =>
     localStorage.getItem("anchor.app.drafts.v1"),
   );
@@ -189,26 +289,130 @@ try {
     window.anchorUpdateController = navigator.serviceWorker.controller;
   });
   await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
-  await expect(
-    page.getByRole("alert").filter({ hasText: "open concepten" }),
-  ).toBeVisible();
+  if (baselineCommit) {
+    await expect(
+      page.getByRole("alert").filter({ hasText: "open concepten" }),
+    ).toBeVisible();
+  } else {
+    await expect(
+      page.getByRole("dialog", { name: "Open concepten", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".anchor-draft-row")).toHaveCount(4);
+    for (const title of ["Craving", "Doel", "Fijn moment", "Mijn plan"])
+      await expect(draftRow(title)).toHaveCount(1);
+  }
   expect(
     await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
   ).toBe(saved);
   expect(
     await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
   ).toBe(draft);
-  expect(
-    await page.evaluate(
-      () =>
-        navigator.serviceWorker.controller === window.anchorUpdateController,
-    ),
-  ).toBe(true);
-  expect(
-    await page.evaluate(
-      async () => !!(await navigator.serviceWorker.getRegistration()).waiting,
-    ),
-  ).toBe(true);
+  await expectWaitingWorker();
+  if (!baselineCommit) {
+    await draftRow("Doel")
+      .getByRole("button", { name: "Verder schrijven", exact: true })
+      .click();
+    await expect(page).toHaveURL(/#\/plan$/);
+    await expect(
+      page.getByRole("combobox", { name: "Mijn doel", exact: true }),
+    ).toHaveValue("Minderen");
+    await expect(page.getByLabel("Dit kan ik doen")).toHaveValue(
+      "Een fictieve wandeling voor de updatecontrole.",
+    );
+    await page
+      .getByRole("button", { name: "Doel opslaan", exact: true })
+      .click();
+    expect(Object.keys(await draftRecords()).sort()).toEqual([
+      "craving:new",
+      "growth",
+      "plan",
+    ]);
+    await go("/today");
+    await expect(
+      page.getByRole("button", { name: "Concepten bekijken (3)", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
+    await draftRow("Mijn plan")
+      .getByRole("button", { name: "Verder schrijven", exact: true })
+      .click();
+    await expect(page.getByLabel("Dit kan ik doen")).toHaveValue(
+      "Een fictieve wandeling voor de updatecontrole.",
+    );
+    await page
+      .getByRole("button", { name: "Mijn plan opslaan", exact: true })
+      .click();
+    expect(Object.keys(await draftRecords()).sort()).toEqual([
+      "craving:new",
+      "growth",
+    ]);
+    await go("/today");
+    await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
+    await draftRow("Fijn moment")
+      .getByRole("button", { name: "Verder schrijven", exact: true })
+      .click();
+    await expect(page).toHaveURL(/#\/growth$/);
+    await expect(page.getByLabel("Wat wil je onthouden?")).toHaveValue(
+      "Fictief fijn moment voor de updatecontrole.",
+    );
+    await page
+      .getByRole("button", { name: "Moment bewaren", exact: true })
+      .click();
+    expect(Object.keys(await draftRecords())).toEqual(["craving:new"]);
+    currentGuardChecks.push(
+      "update from another screen reveals and resumes goal, plan and growth drafts without losing other drafts",
+    );
+
+    // Reproduce an empty draft left by the previous version. It is not silently discarded.
+    await page.evaluate((key) => {
+      const envelope = JSON.parse(localStorage.getItem(key));
+      envelope.records.goal = {
+        id: "legacy-empty-goal",
+        target: "",
+        name: "",
+        direction: "",
+        note: "",
+      };
+      localStorage.setItem(key, JSON.stringify(envelope));
+      window.dispatchEvent(new StorageEvent("storage", { key }));
+    }, draftKey);
+    await go("/today");
+    await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
+    await expect(page.locator(".anchor-draft-row")).toHaveCount(2);
+    await draftRow("Doel")
+      .getByRole("button", { name: "Concept verwijderen", exact: true })
+      .click();
+    expect((await draftRecords()).goal.id).toBe("legacy-empty-goal");
+    await draftRow("Doel")
+      .getByRole("button", { name: "Behouden", exact: true })
+      .click();
+    expect((await draftRecords()).goal.id).toBe("legacy-empty-goal");
+    const savedBeforeDiscard = await page.evaluate(() =>
+      localStorage.getItem("anchor.app.data.v1"),
+    );
+    await draftRow("Doel")
+      .getByRole("button", { name: "Concept verwijderen", exact: true })
+      .click();
+    await draftRow("Doel")
+      .getByRole("button", {
+        name: "Concept verwijderen bevestigen",
+        exact: true,
+      })
+      .click();
+    expect(Object.keys(await draftRecords())).toEqual(["craving:new"]);
+    expect(
+      await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
+    ).toBe(savedBeforeDiscard);
+    currentGuardChecks.push(
+      "legacy empty drafts stay visible until explicit per-draft removal; saved data and other drafts remain intact",
+    );
+    await draftRow("Craving")
+      .getByRole("button", { name: "Verder schrijven", exact: true })
+      .click();
+    await expect(page.getByRole("textbox", { name: /^Gedachte/ })).toHaveValue(
+      "Concept blijft tijdens de update behouden.",
+    );
+    await expectWaitingWorker();
+  }
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
@@ -228,6 +432,115 @@ try {
       await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
     ).records,
   ).toEqual({});
+  if (!baselineCommit) {
+    await go("/today");
+    await page
+      .getByRole("button", { name: "Meer opties", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Open concepten (0)", exact: true })
+      .click();
+    await expect(
+      page.getByRole("dialog", { name: "Open concepten", exact: true }),
+    ).toContainText("Je hebt geen open concepten.");
+    await page
+      .getByRole("button", { name: "Venster sluiten", exact: true })
+      .click();
+
+    const corruptRaw = '{"version":1,"records":';
+    await page.evaluate(
+      ({ key, raw }) => {
+        localStorage.setItem(key, raw);
+        window.dispatchEvent(new StorageEvent("storage", { key }));
+      },
+      { key: draftKey, raw: corruptRaw },
+    );
+    await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
+    await expect(
+      page.getByRole("dialog", {
+        name: "Conceptopslag herstellen",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Alleen concepten wissen",
+        exact: true,
+      }),
+    ).toBeDisabled();
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), draftKey),
+    ).toBe(corruptRaw);
+    await expectWaitingWorker();
+    await page.getByRole("button", { name: "Annuleren", exact: true }).click();
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), draftKey),
+    ).toBe(corruptRaw);
+    await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
+    const recoveryDownload = page.waitForEvent("download");
+    await page
+      .getByRole("button", { name: "Herstelbestand downloaden", exact: true })
+      .click();
+    const recovery = JSON.parse(
+      await readFile(await (await recoveryDownload).path(), "utf8"),
+    );
+    expect(recovery.format).toBe("anchor.app.draft-recovery");
+    expect(recovery.raw).toBe(corruptRaw);
+    expect(
+      await page.evaluate((key) => localStorage.getItem(key), draftKey),
+    ).toBe(corruptRaw);
+    await expectWaitingWorker();
+    await page
+      .getByRole("button", { name: "Alleen concepten wissen", exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await draftRecords()).toEqual({});
+    expect(
+      await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
+    ).toBe(beforeUpdate);
+    await expectWaitingWorker();
+    currentGuardChecks.push(
+      "corrupt draft storage opens recovery and keeps the worker waiting until recovery download and explicit clearing; saved records stay byte-identical",
+    );
+    const emptyDraftStorage = await page.evaluate(
+      (key) => localStorage.getItem(key),
+      draftKey,
+    );
+    await page.evaluate((key) => {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          version: 1,
+          records: {
+            goal: {
+              id: "stale-empty-goal",
+              target: "",
+              name: "",
+              direction: "",
+              note: "",
+            },
+          },
+        }),
+      );
+      window.dispatchEvent(new StorageEvent("storage", { key }));
+    }, draftKey);
+    await expect(
+      page.getByRole("button", { name: "Concepten bekijken (1)", exact: true }),
+    ).toBeVisible();
+    // Deliberately omit the notification to reproduce a stale rendered count.
+    // The final update must consult current storage and activate, not open an empty list.
+    await page.evaluate(({ key, raw }) => localStorage.setItem(key, raw), {
+      key: draftKey,
+      raw: emptyDraftStorage,
+    });
+    expect(await draftRecords()).toEqual({});
+    await expect(
+      page.getByRole("button", { name: "Concepten bekijken (1)", exact: true }),
+    ).toBeVisible();
+    currentGuardChecks.push(
+      "a stale rendered draft count cannot block the actual worker update when current storage is empty",
+    );
+  }
   const documentsBeforeUpdate = documents.length;
   await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
   // The old document has already fired DOMContentLoaded. Waiting for that state
@@ -324,6 +637,7 @@ try {
       "all stored bytes unchanged by update; all records preserved after palette save",
       "new palette persists without changing records or drafts",
       "updated app reloads fully offline",
+      ...currentGuardChecks,
     ],
     savedRecords: JSON.parse(beforeUpdate).cravings.length,
     moduleA: originalModule,

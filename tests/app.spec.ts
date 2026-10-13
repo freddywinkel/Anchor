@@ -769,6 +769,222 @@ test("open concepten zijn hervatbaar en alleen na bevestiging te verwijderen", a
   ]);
 });
 
+test("het mobiele menu toont bewaarde concepten buiten het formulier bij 320px en 200 procent tekst", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await open(page, "/craving/new");
+  await page
+    .getByLabel("Gedachte", { exact: true })
+    .fill("Mijn bewaarde cravingconcept.");
+  await open(page, "/moment/new");
+  await page
+    .getByLabel(/^In je eigen woorden/)
+    .fill("Mijn bewaarde check-inconcept.");
+  await open(page);
+  for (const theme of ["dark", "light"]) {
+    if (theme === "light")
+      await page
+        .getByRole("button", { name: "Licht thema", exact: true })
+        .click();
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = "200%";
+    });
+    await page
+      .getByRole("button", { name: "Meer opties", exact: true })
+      .click();
+    const menu = page.getByRole("dialog", {
+      name: "Meer in Anchor",
+      exact: true,
+    });
+    await expect(menu).toBeVisible();
+    await menu
+      .getByRole("button", { name: "Open concepten (2)", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Open concepten",
+      exact: true,
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(".anchor-draft-row")).toHaveCount(2);
+    await expect(dialog.getByText("Craving", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("Check-in", { exact: true })).toBeVisible();
+    expect(new URL(page.url()).hash).toBe("#/today");
+    const geometry = await dialog.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        width: innerWidth,
+        height: innerHeight,
+        overflow: element.scrollWidth > element.clientWidth,
+        pageOverflow: document.documentElement.scrollWidth > innerWidth,
+      };
+    });
+    expect(geometry.overflow).toBe(false);
+    expect(geometry.pageOverflow).toBe(false);
+    expect(geometry.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.right).toBeLessThanOrEqual(geometry.width);
+    expect(geometry.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.bottom).toBeLessThanOrEqual(geometry.height);
+    for (const button of await dialog.getByRole("button").all()) {
+      await button.scrollIntoViewIfNeeded();
+      await button.focus();
+      await expect(button).toBeFocused();
+      const bounds = await button.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(geometry.left);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(geometry.right);
+      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    }
+    await dialog.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await dialog.screenshot({
+      path: testInfo.outputPath(`drafts-320-${theme}-200.png`),
+    });
+    await dialog
+      .getByRole("button", { name: "Venster sluiten", exact: true })
+      .click();
+  }
+  await page.getByRole("button", { name: "Meer opties", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Meer in Anchor", exact: true })
+    .getByRole("button", { name: "Open concepten (2)", exact: true })
+    .click();
+  await page
+    .getByRole("dialog", { name: "Open concepten", exact: true })
+    .locator(".anchor-draft-row")
+    .filter({ has: page.getByText("Craving", { exact: true }) })
+    .getByRole("button", { name: "Verder schrijven", exact: true })
+    .click();
+  await expect(page.getByLabel("Gedachte", { exact: true })).toHaveValue(
+    "Mijn bewaarde cravingconcept.",
+  );
+});
+
+test("losse check-in- en cravingconcepten hervatten zonder opgeslagen record en behouden hun metadata", async ({
+  page,
+}) => {
+  const moment = {
+    id: "orphan-followup",
+    date: "2026-10-10",
+    time: "09:15",
+    kind: "checkin",
+    before: { mood: -1, eis: 70 },
+    after: { mood: 1, eis: 30 },
+    afterDate: "2026-10-11",
+    afterTime: "00:20",
+    activity: "Schilderen",
+    attempted: true,
+    emotions: ["Onrustig", "Opgelucht"],
+    note: "Een bewaard concept met nameting.",
+  };
+  const craving = {
+    id: "orphan-craving",
+    date: "2026-10-10",
+    time: "21:45",
+    situation: "Alleen thuis na een drukke dag.",
+    thought: "Ik wil rust.",
+    bodySensation: "Gespannen schouders.",
+    emotion: "Onrust.",
+    behavior: "Ik ging naar buiten.",
+  };
+  await page.addInitScript(
+    ({ dataKey, draftKey, initial, records }) => {
+      if (!localStorage.getItem(dataKey))
+        localStorage.setItem(dataKey, JSON.stringify(initial));
+      if (!localStorage.getItem(draftKey))
+        localStorage.setItem(draftKey, JSON.stringify({ version: 1, records }));
+    },
+    {
+      dataKey: DATA_KEY,
+      draftKey: DRAFT_KEY,
+      initial: createEmptyState(),
+      records: {
+        [`moment:${moment.id}`]: moment,
+        [`craving:${craving.id}`]: craving,
+      },
+    },
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  async function resume(type: "Check-in" | "Craving", count: number) {
+    await page
+      .getByRole("button", { name: "Meer opties", exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Meer in Anchor", exact: true })
+      .getByRole("button", { name: `Open concepten (${count})`, exact: true })
+      .click();
+    await page
+      .getByRole("dialog", { name: "Open concepten", exact: true })
+      .locator(".anchor-draft-row")
+      .filter({ has: page.getByText(type, { exact: true }) })
+      .getByRole("button", { name: "Verder schrijven", exact: true })
+      .click();
+  }
+  await resume("Check-in", 2);
+  await expect(page).toHaveURL(/#\/moment\/orphan-followup$/);
+  await expect(page.getByLabel(/^In je eigen woorden/)).toHaveValue(
+    moment.note,
+  );
+  const after = page.locator(".dp-after-form");
+  await expect(after).toBeVisible();
+  await expect(after.getByLabel(/^Na: Emotionele intensiteit/)).toHaveValue(
+    "30",
+  );
+  await expect(
+    after.getByRole("button", { name: "Ja", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await after
+    .getByRole("button", { name: "Nameting opslaan", exact: true })
+    .click();
+  expect((await state(page)).moments).toEqual([moment]);
+  await page.reload();
+  await expect(page.locator(".dp-after-form")).toContainText("00:20");
+  expect((await state(page)).moments).toEqual([moment]);
+  await resume("Craving", 1);
+  await expect(page).toHaveURL(/#\/craving\/orphan-craving$/);
+  await expect(page.getByLabel("Datum", { exact: true })).toHaveValue(
+    craving.date,
+  );
+  await expect(page.getByLabel("Tijd", { exact: true })).toHaveValue(
+    craving.time,
+  );
+  await expect(page.getByLabel("Gedachte", { exact: true })).toHaveValue(
+    craving.thought,
+  );
+  const revisedThought = `${craving.thought} Ik neem even pauze.`;
+  await page.getByLabel("Gedachte", { exact: true }).fill(revisedThought);
+  await page
+    .getByRole("button", { name: "Craving opslaan", exact: true })
+    .click();
+  expect((await state(page)).cravings).toEqual([
+    { ...craving, thought: revisedThought },
+  ]);
+  expect((await state(page)).moments).toEqual([moment]);
+  expect(
+    await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)!).records,
+      DRAFT_KEY,
+    ),
+  ).toEqual({});
+  await page.reload();
+  await expect(page.getByLabel("Gedachte", { exact: true })).toHaveValue(
+    revisedThought,
+  );
+  await page.getByRole("button", { name: "Meer opties", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Meer in Anchor", exact: true })
+    .getByRole("button", { name: "Open concepten (0)", exact: true })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Open concepten", exact: true }),
+  ).toContainText("Je hebt geen open concepten.");
+});
+
 test("een back-up kan een open concept niet ongemerkt vervangen", async ({
   page,
 }) => {

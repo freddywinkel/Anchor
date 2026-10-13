@@ -1150,6 +1150,15 @@ body:has(#anchor-root) {
   border-left-color: var(--dp-danger);
   color: var(--dp-danger);
 }
+.dp .dp-update-notice > p:last-of-type {
+  margin-bottom: 0;
+}
+.dp .dp-update-notice .dp-actions {
+  margin-top: 12px;
+}
+.dp .dp-update-notice .dp-actions > .dp-button {
+  margin: 0;
+}
 .dp .dp-empty {
   padding: 36px 20px;
   border-block: 1px solid var(--dp-border);
@@ -1194,6 +1203,11 @@ body:has(#anchor-root) {
   font-family: Georgia, serif;
   font-size: 1.7rem;
   font-weight: 400;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dp .dp-dialog > .dp-section-head > button {
+  flex-shrink: 0;
 }
 .dp .dp-dialog h3 {
   margin-top: 25px;

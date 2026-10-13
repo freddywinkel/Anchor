@@ -486,6 +486,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   const [goal, setGoal] = useState<Goal | null>(
     () => (loadDrafts().goal as Goal | undefined) || null,
   );
+  const [goalHasDraft, setGoalHasDraft] = useState(!!goal);
   const [customName, setCustomName] = useState(() => hasCustomName(goal));
   const [customDirection, setCustomDirection] = useState(
     () => !!goal?.direction && !goalDirections.includes(goal.direction),
@@ -515,6 +516,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   }, [goal?.id]);
   function updateGoal(next: Goal) {
     setGoal(next);
+    setGoalHasDraft(true);
     const result = saveDraft("goal", next);
     setDraftError(
       result.ok ? "" : result.message || "Je concept kon niet worden bewaard.",
@@ -529,7 +531,8 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
     setCustomDirection(
       !!existing?.direction && !goalDirections.includes(existing.direction),
     );
-    updateGoal(
+    setGoalHasDraft(false);
+    setGoal(
       existing || {
         id: crypto.randomUUID(),
         target: "",
@@ -549,6 +552,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
       return;
     }
     setGoal(null);
+    setGoalHasDraft(false);
     setDiscarding(false);
     setGoalError("");
     setDraftError("");
@@ -840,7 +844,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                 }
               />
             </label>
-            <DraftNotice error={draftError} />
+            {goalHasDraft && <DraftNotice error={draftError} />}
             {goalError && (
               <p className="dp-error" role="alert">
                 {goalError}

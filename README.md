@@ -39,6 +39,8 @@ Alle gegevens staan lokaal in deze browser, onder uitsluitend `anchor.app.data.v
 
 Een nieuwe appversie wordt voorbereid en pas na de knop **Bijwerken** geactiveerd. Open concepten moeten eerst worden opgeslagen of bewust verworpen. Het vernieuwen van appbestanden wist geen registraties. Opslagfouten laten een zichtbare melding zien en houden tekst beschikbaar; herstel van beschadigde gegevens vraagt eerst om een herstelkopie en expliciete bevestiging. Gebruik één bewerkend tabblad tegelijk. Een tweede tabblad is alleen-lezen totdat het eerste is gesloten en het tweede is herladen.
 
+Concepten blijven bewaard wanneer je naar een ander scherm gaat. De updatemelding toont hoeveel er zijn en opent de conceptlijst als ze het bijwerken tegenhouden. Je vindt ze ook via **Meer opties → Open concepten**. Alleen een nieuw doel openen of een bestaand doel bekijken maakt nog geen concept; ingevulde wijzigingen wel.
+
 Normale back-ups kunnen worden geïmporteerd na validatie, een veiligheidskopie en bevestiging. Een afzonderlijk **concept-herstelbestand** bevat ruwe tekst voor handmatig herstel; dit is geen reguliere importback-up. Gegevens uit Substance Recovery vereisen een later afzonderlijk ontworpen import en worden nu niet automatisch gemigreerd.
 
 Voor toekomstige wijzigingen:
