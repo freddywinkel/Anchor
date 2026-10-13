@@ -452,7 +452,7 @@
   border: 0;
 }
 @media (max-width: 700px) {
-  .dp .dp-goal-editor {
+  .dp .dp-goal-editor.dp-panel {
     padding: 16px;
   }
   .dp .dp-history .dp-section-head,
