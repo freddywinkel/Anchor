@@ -14,6 +14,7 @@ Een rustig, Nederlandstalig dagboek om meerdere keren per dag in te checken, een
 - **Hulpmiddelen:** een eenvoudige grondoefening en ruimte voor eigen activiteiten, zonder automatisch een effect of gebruik te registreren.
 - **Eigen kleuren:** kies in Instellingen uit Amber, Salie, Oceaan, Roos en Lavendel. Elk palet heeft een lichte en donkere stand; de knop bovenin wisselt de stand met behoud van je palet.
 - **Verzorgde vormgeving:** zachte kaarten, verfijnde typografie en geïllustreerde stemmingsgezichten en pannetjes. De pannetjes krijgen oplopende stoom en een eigen gezichtsuitdrukking; het geselecteerde antwoord heeft ook een vinkje. Bij grotere tekst verdelen de keuzes zich over meerdere regels.
+- **Duidelijke onderdelen:** Vandaag, ‘Ook de kleine dingen’, formulieren, hulpmiddelen en je persoonlijke plan gebruiken dezelfde kaartopbouw. Velden passen zich aan de beschikbare ruimte aan; fouten bij bewaren komen zichtbaar in beeld.
 
 De app start leeg. Er zijn geen accounts, Fitbit-koppelingen, externe analytics, automatische synchronisatie of medische conclusies.
 

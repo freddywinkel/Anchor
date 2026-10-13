@@ -88,12 +88,17 @@ export function RatingLine({
         ?.filter((emotion) => emotion.label.trim())
         .map((emotion) => (
           <span key={emotion.id}>
-            {emotion.label}: <b>{emotion.intensity ?? "niet ingevuld"}</b>
+            {emotion.label}:{" "}
+            <b>
+              {emotion.intensity == null
+                ? "niet ingevuld"
+                : `${emotion.intensity}/100`}
+            </b>
           </span>
         ))}
       {value.eis !== null && (
         <span>
-          Intensiteit — emotie niet gekoppeld: <b>{value.eis}</b>
+          Intensiteit — emotie niet gekoppeld: <b>{value.eis}/100</b>
         </span>
       )}
     </div>

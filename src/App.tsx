@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   Anchor,
   ArrowLeft,
@@ -1287,7 +1287,7 @@ function Today({
         </div>
       </section>
       <div className="dp-today-grid">
-        <section>
+        <section className="dp-card dp-today-moments">
           <div className="dp-section-head">
             <div>
               <p className="dp-kicker">Kleine momentopnamen</p>
@@ -1364,12 +1364,16 @@ function Today({
           </button>
         </section>
         <aside className="dp-day-aside">
-          <section className="dp-reflection">
-            <span className="dp-round-icon">
-              <Moon size={22} />
-            </span>
-            <p className="dp-kicker">Wanneer je dag rond is</p>
-            <h2>Mijn hele dag</h2>
+          <section className="dp-card dp-reflection">
+            <div className="dp-card-heading">
+              <div>
+                <p className="dp-kicker">Wanneer je dag rond is</p>
+                <h2>Mijn hele dag</h2>
+              </div>
+              <span className="dp-round-icon" aria-hidden="true">
+                <Moon size={22} />
+              </span>
+            </div>
             <p>
               Hoe was de dag als geheel? Sta stil bij je stemming en je slaap.
             </p>
@@ -1386,20 +1390,21 @@ function Today({
             <small>Een aparte terugblik, naast je losse momenten.</small>
           </section>
           {state.homeShowGrowth && (
-            <section className="dp-growth-peek">
-              <Leaf size={22} />
-              <h3>Ook de kleine dingen</h3>
+            <section className="dp-card dp-growth-peek">
+              <div className="dp-card-heading">
+                <h2>Ook de kleine dingen</h2>
+                <span className="dp-round-icon" aria-hidden="true">
+                  <Leaf size={22} />
+                </span>
+              </div>
               <p>
                 {favorite?.text ||
                   "Een fijn moment, iets wat je koos, of iets dat je wilt onthouden."}
               </p>
-              <button
-                className="dp-text-button"
-                onClick={() => navigate("/growth")}
-              >
+              <Button onClick={() => navigate("/growth")}>
                 Mijn groei
                 <ArrowRight size={16} />
-              </button>
+              </Button>
             </section>
           )}
         </aside>
@@ -1417,7 +1422,7 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
       />
       <div className="dp-tools-layout">
         <button
-          className="dp-featured-tool"
+          className="dp-card dp-featured-tool"
           onClick={() => navigate("/exercise")}
         >
           <span className="dp-round-icon">
@@ -1433,7 +1438,7 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
             </span>
           </div>
         </button>
-        <section className="dp-plain-section">
+        <section className="dp-card dp-plain-section">
           <h2>Ook in je eigen leven</h2>
           <p>
             Een wandeling, schilderen of iemand spreken. Koppel een eigen
@@ -1445,7 +1450,7 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
           </Button>
         </section>
       </div>
-      <section className="dp-help-inset">
+      <section className="dp-card dp-help-inset">
         <Heart size={22} />
         <div>
           <h3>Je eigen houvast</h3>
@@ -1467,7 +1472,7 @@ function Support({
     <div className="dp-help-page">
       <PageTitle kicker="Ondersteuning dichtbij" title="Mijn houvast" />
       <section className="dp-help-choices">
-        <div>
+        <div className="dp-card">
           <p className="dp-kicker">Een kleine stap</p>
           <h2>Wat ik kan doen</h2>
           <p className="anchor-prose">
@@ -1476,7 +1481,7 @@ function Support({
           </p>
           <Button onClick={() => navigate("/plan")}>Mijn plan openen</Button>
         </div>
-        <div>
+        <div className="dp-card">
           <p className="dp-kicker">Iemand dichtbij</p>
           <h2>Waar ik steun vind</h2>
           <p className="anchor-prose">
@@ -1485,7 +1490,7 @@ function Support({
           </p>
         </div>
       </section>
-      <section className="dp-plain-section">
+      <section className="dp-card dp-plain-section">
         <h2>Aandacht voor je omgeving</h2>
         <Button onClick={() => navigate("/exercise")}>5-4-3-2-1 openen</Button>
       </section>
@@ -1534,6 +1539,10 @@ function MomentView({
     () => draft ?? record ?? emptyMoment(),
   );
   const beforeFormRef = useRef<HTMLFormElement>(null);
+  const afterHeadingRef = useRef<HTMLHeadingElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const timeInputRef = useRef<HTMLInputElement>(null);
+  const fieldErrorId = useId();
   const [customActivity, setCustomActivity] = useState(
     () =>
       !["", "Buiten wandelen", "Schilderen", "5-4-3-2-1"].includes(
@@ -1546,28 +1555,87 @@ function MomentView({
       !!draft?.after ||
       draft?.attempted != null,
   );
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{
+    message: string;
+    form: "before" | "after";
+    field?: "date" | "time";
+  } | null>(null);
+  const errorRef = useRef<HTMLParagraphElement>(null);
   const [deleting, setDeleting] = useState(false);
+  useEffect(() => {
+    if (!error) return;
+    const target =
+      error.field === "date"
+        ? dateInputRef.current
+        : error.field === "time"
+          ? timeInputRef.current
+          : errorRef.current;
+    const details = target?.closest("details");
+    if (details) details.open = true;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: "center", behavior: "auto" });
+  }, [error]);
+  function showError(
+    message: string,
+    form: "before" | "after" = "before",
+    field?: "date" | "time",
+  ) {
+    // A fresh object also reveals the same message after another save attempt.
+    setError({ message, form, field });
+  }
+  function revealBeforeInvalid(event: React.InvalidEvent<HTMLFormElement>) {
+    revealInvalidField(event);
+    const form = event.currentTarget;
+    requestAnimationFrame(() => {
+      const firstInvalid = form.querySelector<HTMLElement>(":invalid");
+      firstInvalid?.focus({ preventScroll: true });
+      firstInvalid?.scrollIntoView({ block: "center", behavior: "auto" });
+    });
+  }
+  function openAfter() {
+    setAfterOpen(true);
+    requestAnimationFrame(() => {
+      afterHeadingRef.current?.focus({ preventScroll: true });
+      afterHeadingRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "auto",
+      });
+    });
+  }
   function update(patch: Partial<Moment>) {
     const next = { ...value, ...patch };
+    setError(null);
     setValue(next);
     onDraft(next);
   }
   function submit(event: React.FormEvent, followup: boolean) {
     event.preventDefault();
-    setError("");
+    setError(null);
     if (followup && !beforeFormRef.current?.reportValidity()) return;
+    // Date/time inputs fall back to plain text in some browsers.
+    if (!validCalendarDate(value.date)) {
+      showError(
+        "Vul een geldige datum tussen 1900 en 2199 in.",
+        "before",
+        "date",
+      );
+      return;
+    }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time)) {
+      showError("Vul een geldige tijd in, zoals 14:30.", "before", "time");
+      return;
+    }
     if (
       !hasRating(value.before) &&
       !value.note.trim() &&
       !value.activity.trim() &&
       !value.emotions.length
     ) {
-      setError("Vul een stemming, emotie, notitie of activiteit in.");
+      showError("Vul een stemming, emotie, notitie of activiteit in.");
       return;
     }
     if (customActivity && !value.activity.trim()) {
-      setError("Geef je activiteit een naam of kies Alleen deze check-in.");
+      showError("Geef je activiteit een naam of kies Alleen deze check-in.");
       return;
     }
     if (
@@ -1575,19 +1643,20 @@ function MomentView({
       (JSON.stringify(value.after) !== JSON.stringify(record?.after ?? null) ||
         value.attempted !== (record?.attempted ?? null))
     ) {
-      setError(
+      showError(
         "Je hebt je nameting aangepast. Gebruik Nameting opslaan om deze samen met je moment te bewaren.",
       );
       return;
     }
     if (followup && value.attempted === null) {
-      setError(
+      showError(
         "Geef aan of je de activiteit hebt geprobeerd. Nee is ook een antwoord.",
+        "after",
       );
       return;
     }
     if (followup && !value.activity.trim()) {
-      setError("Kies eerst een activiteit.");
+      showError("Kies eerst een activiteit.", "after");
       return;
     }
     const saved: Moment = {
@@ -1623,6 +1692,11 @@ function MomentView({
       setValue(saved);
       onClear();
       navigate(`/moment/${saved.id}`);
+    } else {
+      showError(
+        "Opslaan is niet gelukt. Je ingevulde waarden staan hier nog. Probeer het opnieuw.",
+        followup ? "after" : "before",
+      );
     }
   }
   return (
@@ -1658,9 +1732,9 @@ function MomentView({
       <form
         ref={beforeFormRef}
         onSubmit={(event) => submit(event, false)}
-        onInvalidCapture={revealInvalidField}
+        onInvalidCapture={revealBeforeInvalid}
       >
-        <section className="dp-form-section">
+        <section className="dp-card dp-form-section">
           <div className="dp-section-head">
             <h2>{record?.activity ? "Voor je activiteit" : "Dit moment"}</h2>
             <span className="dp-tag">
@@ -1675,6 +1749,11 @@ function MomentView({
                 Datum
                 <input
                   aria-label="Datum momentopname"
+                  ref={dateInputRef}
+                  aria-invalid={error?.field === "date" || undefined}
+                  aria-describedby={
+                    error?.field === "date" ? `${fieldErrorId}-date` : undefined
+                  }
                   type="date"
                   required
                   min="1900-01-01"
@@ -1682,16 +1761,39 @@ function MomentView({
                   value={value.date}
                   onChange={(event) => update({ date: event.target.value })}
                 />
+                {error?.field === "date" && (
+                  <span
+                    className="dp-error"
+                    role="alert"
+                    id={`${fieldErrorId}-date`}
+                  >
+                    {error.message}
+                  </span>
+                )}
               </label>
               <label className="dp-field">
                 Tijd
                 <input
                   aria-label="Tijd momentopname"
+                  ref={timeInputRef}
+                  aria-invalid={error?.field === "time" || undefined}
+                  aria-describedby={
+                    error?.field === "time" ? `${fieldErrorId}-time` : undefined
+                  }
                   type="time"
                   required
                   value={value.time}
                   onChange={(event) => update({ time: event.target.value })}
                 />
+                {error?.field === "time" && (
+                  <span
+                    className="dp-error"
+                    role="alert"
+                    id={`${fieldErrorId}-time`}
+                  >
+                    {error.message}
+                  </span>
+                )}
               </label>
             </div>
           </details>
@@ -1726,7 +1828,7 @@ function MomentView({
           </label>
         </section>
         <details
-          className="dp-form-section dp-activity-section dp-extra-fields"
+          className="dp-card dp-form-section dp-activity-section dp-extra-fields"
           open={!!value.activity || customActivity}
         >
           <summary>Activiteit toevoegen</summary>
@@ -1773,7 +1875,7 @@ function MomentView({
             <Button
               onClick={() => {
                 if (JSON.stringify(value) !== JSON.stringify(record)) {
-                  setError(
+                  showError(
                     "Sla je moment eerst op voordat je de oefening opent.",
                   );
                   return;
@@ -1786,15 +1888,15 @@ function MomentView({
             </Button>
           )}
           {record && record.activity && (
-            <Button className="quiet" onClick={() => setAfterOpen(true)}>
+            <Button className="quiet" onClick={openAfter}>
               Nameting invullen
               <ArrowRight size={17} />
             </Button>
           )}
         </details>
-        {error && (
-          <p className="dp-error" role="alert">
-            {error}
+        {error?.form === "before" && !error.field && (
+          <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {error.message}
           </p>
         )}
         <div className="dp-form-actions">
@@ -1807,11 +1909,13 @@ function MomentView({
       </form>
       {value.activity && afterOpen && (
         <form
-          className="dp-after-form"
+          className="dp-card dp-after-form"
           onSubmit={(event) => submit(event, true)}
         >
           <p className="dp-kicker">Nameting · {value.activity}</p>
-          <h2>{value.after ? "Je nameting" : "Hoe is het nu?"}</h2>
+          <h2 ref={afterHeadingRef} tabIndex={-1}>
+            {value.after ? "Je nameting" : "Hoe is het nu?"}
+          </h2>
           {value.afterDate && value.afterTime && (
             <p className="dp-hint">
               Tijdstip nameting: {dateText(value.afterDate, true)} om{" "}
@@ -1845,6 +1949,11 @@ function MomentView({
             Een verschil is een observatie. Het zegt niet automatisch waardoor
             je gevoel veranderde.
           </p>
+          {error?.form === "after" && (
+            <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
+              {error.message}
+            </p>
+          )}
           <Button type="submit" primary>
             Nameting opslaan
             <Check size={18} />
@@ -1975,7 +2084,7 @@ function DayView({
           }
         }}
       >
-        <section className="dp-form-section">
+        <section className="dp-card dp-form-section">
           <h2>Hoe voelde deze dag?</h2>
           <RatingsEditor
             day
@@ -1983,7 +2092,7 @@ function DayView({
             onChange={(ratings) => update({ ratings })}
           />
         </section>
-        <section className="dp-form-section">
+        <section className="dp-card dp-form-section">
           <span className="dp-round-icon">
             <Moon size={22} />
           </span>
@@ -2019,7 +2128,7 @@ function DayView({
             </label>
           </div>
         </section>
-        <section className="dp-form-section">
+        <section className="dp-card dp-form-section">
           <label className="dp-field">
             Wat wil je onthouden van vandaag?
             <textarea
@@ -2096,7 +2205,7 @@ function ExerciseView({
         description="Gebruik wat prettig is. Je mag elke stap overslaan."
       />
       {current ? (
-        <>
+        <section className="dp-card dp-exercise-card">
           <div
             className="dp-exercise-progress"
             aria-label={`Stap ${step + 1} van 5`}
@@ -2143,9 +2252,9 @@ function ExerciseView({
               <ArrowRight size={17} />
             </Button>
           </div>
-        </>
+        </section>
       ) : (
-        <div className="dp-exercise-done">
+        <div className="dp-card dp-exercise-done">
           <span className="dp-round-icon">
             <Leaf size={27} />
           </span>

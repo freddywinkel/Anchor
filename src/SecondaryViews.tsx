@@ -275,7 +275,7 @@ export function HistoryView({
   const visibleEntries = entries.slice(0, visibleCount);
   return (
     <div className="dp-history">
-      <div className="dp-history-filters">
+      <div className="dp-history-filters dp-card">
         <label className="dp-field">
           Periode
           <select value={period} onChange={(e) => setPeriod(e.target.value)}>
@@ -305,7 +305,10 @@ export function HistoryView({
         </label>
       </div>
       {(kind === "all" || kind === "checkin") && (
-        <section className="dp-mood-plot" aria-labelledby="dp-mood-plot-title">
+        <section
+          className="dp-mood-plot dp-card"
+          aria-labelledby="dp-mood-plot-title"
+        >
           <div className="dp-section-head">
             <div>
               <h2 id="dp-mood-plot-title">Stemming per moment</h2>
@@ -841,7 +844,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
           ))}
         </ul>
         {goal && (
-          <form className="dp-goal-editor dp-panel" onSubmit={saveGoal}>
+          <form className="dp-goal-editor dp-panel dp-card" onSubmit={saveGoal}>
             <h3>
               {state.goals.some((item) => item.id === goal.id)
                 ? "Doel aanpassen"
@@ -998,7 +1001,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
         )}
       </section>
       <form
-        className="dp-personal-plan"
+        className="dp-personal-plan dp-card"
         onSubmit={savePlan}
         aria-labelledby="dp-personal-plan-title"
       >
@@ -1128,10 +1131,21 @@ export function GrowthView({
   );
   const [error, setError] = useState("");
   const [draftError, setDraftError] = useState("");
+  const [actionError, setActionError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
+  const [dateError, setDateError] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [hasDraft, setHasDraft] = useState(!!loadDrafts().growth);
   const textField = useRef<HTMLTextAreaElement>(null);
+  const dateField = useRef<HTMLInputElement>(null);
+  const actionErrorField = useRef<HTMLParagraphElement>(null);
+  const showActionError = (id: string, message: string) => {
+    setActionError({ id, message });
+    requestAnimationFrame(() => actionErrorField.current?.focus());
+  };
   const update = (next: Growth) => {
     setEntry(next);
     setHasDraft(true);
@@ -1151,6 +1165,8 @@ export function GrowthView({
     setDiscarding(false);
     setError("");
     setDraftError("");
+    setActionError(null);
+    setDateError("");
     textField.current?.focus();
   };
   const save = (event: React.FormEvent) => {
@@ -1162,6 +1178,21 @@ export function GrowthView({
       textField.current?.focus();
       return;
     }
+    const parsedDate = new Date(`${entry.date}T12:00:00`);
+    const [year, month, day] = entry.date.split("-").map(Number);
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
+      entry.date < "1900-01-01" ||
+      entry.date > today() ||
+      parsedDate.getFullYear() !== year ||
+      parsedDate.getMonth() + 1 !== month ||
+      parsedDate.getDate() !== day
+    ) {
+      setDateError("Kies een geldige datum tussen 1 januari 1900 en vandaag.");
+      dateField.current?.focus();
+      return;
+    }
+    setDateError("");
     const existing = state.growth.find((item) => item.id === entry.id);
     const next = {
       ...entry,
@@ -1193,7 +1224,7 @@ export function GrowthView({
         Een klein plezier, iets dat lukte of zomaar een gedachte. Dit is altijd
         optioneel.
       </p>
-      <form className="dp-growth-compose" onSubmit={save}>
+      <form className="dp-growth-compose dp-card" onSubmit={save}>
         <label className="dp-field">
           {state.growth.some((item) => item.id === entry.id)
             ? "Je fijne moment aanpassen"
@@ -1212,12 +1243,25 @@ export function GrowthView({
         <label className="dp-field">
           Datum
           <input
+            ref={dateField}
             type="date"
+            aria-label="Datum"
+            aria-invalid={!!dateError}
+            aria-describedby={dateError ? "dp-growth-date-error" : undefined}
             value={entry.date}
+            min="1900-01-01"
             max={today()}
             required
-            onChange={(event) => update({ ...entry, date: event.target.value })}
+            onChange={(event) => {
+              setDateError("");
+              update({ ...entry, date: event.target.value });
+            }}
           />
+          {dateError && (
+            <span id="dp-growth-date-error" className="dp-error" role="alert">
+              {dateError}
+            </span>
+          )}
         </label>
         <label className="dp-toggle-label">
           <input
@@ -1304,6 +1348,7 @@ export function GrowthView({
                       aria-pressed={item.favorite}
                       aria-label={`${item.favorite ? "Verwijder favoriet" : "Maak favoriet"}: ${item.text.slice(0, 60)}`}
                       onClick={() => {
+                        setActionError(null);
                         if (
                           !onSave(
                             {
@@ -1319,7 +1364,8 @@ export function GrowthView({
                               : "Als favoriet bewaard.",
                           )
                         )
-                          setError(
+                          showActionError(
+                            item.id,
                             "De favoriet kon niet worden aangepast. Probeer opnieuw.",
                           );
                       }}
@@ -1337,6 +1383,9 @@ export function GrowthView({
                       onClick={() => {
                         update(item);
                         setError("");
+                        setActionError(null);
+                        setRemoving(null);
+                        setDateError("");
                         textField.current?.focus();
                       }}
                     >
@@ -1349,6 +1398,7 @@ export function GrowthView({
                       onClick={() => {
                         setRemoving(item.id);
                         setError("");
+                        setActionError(null);
                       }}
                     >
                       <Trash2 size={17} aria-hidden="true" />
@@ -1379,7 +1429,8 @@ export function GrowthView({
                               setRemoving(null);
                               textField.current?.focus();
                             } else
-                              setError(
+                              showActionError(
+                                item.id,
                                 "Verwijderen is niet gelukt. Je moment blijft bewaard.",
                               );
                           }}
@@ -1388,12 +1439,25 @@ export function GrowthView({
                         </button>
                         <button
                           className="dp-button quiet"
-                          onClick={() => setRemoving(null)}
+                          onClick={() => {
+                            setRemoving(null);
+                            setActionError(null);
+                          }}
                         >
                           Behouden
                         </button>
                       </div>
                     </div>
+                  )}
+                  {actionError?.id === item.id && (
+                    <p
+                      className="dp-error dp-list-error"
+                      role="alert"
+                      tabIndex={-1}
+                      ref={actionErrorField}
+                    >
+                      {actionError.message}
+                    </p>
                   )}
                 </li>
               ))}
@@ -1422,15 +1486,20 @@ export function SettingsView({
   blocked?: boolean;
 }) {
   const [error, setError] = useState("");
-  const save = (next: AppState, message: string) =>
+  const errorField = useRef<HTMLParagraphElement>(null);
+  const save = (next: AppState, message: string) => {
+    const saved = onSave(next, message);
     setError(
-      onSave(next, message)
-        ? ""
-        : "De instelling kon niet worden bewaard. Probeer opnieuw.",
+      saved ? "" : "De instelling kon niet worden bewaard. Probeer opnieuw.",
     );
+    if (!saved) requestAnimationFrame(() => errorField.current?.focus());
+  };
   return (
     <div className="dp-settings">
-      <section className="dp-settings-section" aria-labelledby="dp-appearance">
+      <section
+        className="dp-settings-section dp-card"
+        aria-labelledby="dp-appearance"
+      >
         <h2 id="dp-appearance">Weergave</h2>
         <fieldset className="dp-theme-options">
           <legend>Kleurthema</legend>
@@ -1535,12 +1604,15 @@ export function SettingsView({
           />
         </label>
         {error && (
-          <p className="dp-error" role="alert">
+          <p className="dp-error" role="alert" tabIndex={-1} ref={errorField}>
             {error}
           </p>
         )}
       </section>
-      <section className="dp-settings-section" aria-labelledby="dp-backup">
+      <section
+        className="dp-settings-section dp-card"
+        aria-labelledby="dp-backup"
+      >
         <h2 id="dp-backup">Je gegevens bewaren</h2>
         <p>
           Anchor bewaart je registraties op dit apparaat, in deze browser. Maak
@@ -1572,7 +1644,10 @@ export function SettingsView({
           </button>
         </div>
       </section>
-      <section className="dp-settings-section" aria-labelledby="dp-about">
+      <section
+        className="dp-settings-section dp-card"
+        aria-labelledby="dp-about"
+      >
         <h2 id="dp-about">Over Anchor</h2>
         <dl className="dp-settings-list">
           <div>

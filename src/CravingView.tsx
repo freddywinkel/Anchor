@@ -245,7 +245,10 @@ export function CravingView({
       </header>
 
       <form onSubmit={submit} className="anchor-craving-form">
-        <section className="dp-form-section" aria-labelledby={`${prefix}-when`}>
+        <section
+          className="dp-card dp-form-section"
+          aria-labelledby={`${prefix}-when`}
+        >
           <h2 id={`${prefix}-when`}>Wanneer was het?</h2>
           <div className="dp-form-grid anchor-craving-datetime">
             <label className="dp-field" htmlFor={`${prefix}-date`}>
@@ -278,7 +281,7 @@ export function CravingView({
         </section>
 
         <section
-          className="dp-form-section"
+          className="dp-card dp-form-section"
           aria-labelledby={`${prefix}-situation-title`}
         >
           <h2 id={`${prefix}-situation-title`}>Externe situatie</h2>
@@ -300,7 +303,7 @@ export function CravingView({
         </section>
 
         <section
-          className="dp-form-section anchor-craving-internal"
+          className="dp-card dp-form-section anchor-craving-internal"
           aria-labelledby={`${prefix}-internal-title`}
         >
           <h2 id={`${prefix}-internal-title`}>Interne situatie</h2>
@@ -365,7 +368,7 @@ export function CravingView({
         </section>
 
         <section
-          className="dp-form-section"
+          className="dp-card dp-form-section"
           aria-labelledby={`${prefix}-behavior-title`}
         >
           <h2 id={`${prefix}-behavior-title`}>Je gedrag</h2>

@@ -216,6 +216,52 @@ try {
     icons.push({ url: iconUrl.href, size });
   }
 
+  const growthCard = page.locator(".dp-growth-peek");
+  await expect(
+    growthCard.getByRole("heading", {
+      name: "Ook de kleine dingen",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await growthCard.scrollIntoViewIfNeeded();
+  const todayCards = await page
+    .locator(".dp-today-moments, .dp-reflection, .dp-growth-peek")
+    .evaluateAll((cards) =>
+      cards.map((card) => {
+        const style = getComputedStyle(card);
+        const box = card.getBoundingClientRect();
+        return {
+          border: style.borderTopWidth,
+          background: style.backgroundColor,
+          radius: style.borderTopLeftRadius,
+          contentFits: [...card.querySelectorAll("h2, button")].every(
+            (child) => {
+              const rect = child.getBoundingClientRect();
+              return (
+                rect.left >= box.left &&
+                rect.right <= box.right &&
+                rect.top >= box.top &&
+                rect.bottom <= box.bottom
+              );
+            },
+          ),
+        };
+      }),
+    );
+  assert.equal(todayCards.length, 3);
+  assert.ok(
+    todayCards.every(
+      (card) =>
+        card.border === "1px" &&
+        card.background !== "rgba(0, 0, 0, 0)" &&
+        parseFloat(card.radius) > 0 &&
+        card.contentFits,
+    ),
+  );
+  await page.screenshot({
+    path: path.join(directory, "phone-today-cards.png"),
+  });
+
   await page
     .getByRole("button", { name: "Craving vastleggen", exact: true })
     .click();
@@ -601,12 +647,14 @@ try {
     release,
     worker,
     icons,
+    todayCards,
     fonts,
     offlineFonts,
     fontCache,
     checks: [
       "exact live commit",
       "fresh empty profile",
+      "Today groups the timeline, whole day and small positive moments in visible cards with fitting actions",
       "real craving UI save/reload",
       "manifest/icons and scoped worker",
       "local display and body fonts load and remain cached offline, including accented characters",

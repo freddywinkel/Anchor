@@ -314,6 +314,10 @@
 .dp :where(input, select, textarea):focus-visible {
   border-color: var(--dp-accent);
 }
+.dp input[type="checkbox"]:not(:focus-visible) {
+  outline: 1px solid var(--dp-control-border);
+  outline-offset: 0;
+}
 .dp .dp-extra-fields > summary {
   font-weight: 600;
 }
@@ -362,6 +366,12 @@
 .dp .dp-history-entry {
   min-width: 0;
   container: history-entry / inline-size;
+}
+.dp .dp-rating-line > span {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
 }
 @container history-list (max-width: 40rem) {
   .dp .dp-history-list > li {
@@ -501,5 +511,197 @@
   .dp *::after {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+/* Shared surfaces: a card groups one task; fields inside keep their own edges. */
+.dp {
+  --dp-card-padding: clamp(16px, 3vw, 28px);
+  --dp-card-gap: 20px;
+}
+.dp .dp-card {
+  min-width: 0;
+  padding: var(--dp-card-padding);
+  border: 1px solid var(--dp-border);
+  border-radius: 24px;
+  background: var(--dp-surface);
+  color: var(--dp-ink);
+  box-shadow: var(--dp-soft-shadow), var(--dp-inset-light);
+}
+.dp .dp-card > :last-child {
+  margin-bottom: 0;
+}
+.dp .dp-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 1rem;
+}
+.dp .dp-card-heading > :first-child {
+  min-width: 0;
+}
+.dp .dp-card-heading h2 {
+  margin: 0;
+}
+.dp .dp-card-heading .dp-kicker {
+  margin-bottom: 0.75rem;
+}
+.dp .dp-today-grid {
+  gap: var(--dp-card-gap);
+  align-items: start;
+}
+.dp .dp-day-aside {
+  display: grid;
+  gap: var(--dp-card-gap);
+  padding: 0;
+  border: 0;
+}
+.dp .dp-growth-peek {
+  margin: 0;
+}
+.dp .dp-growth-peek .dp-button {
+  font-size: 0.9rem;
+}
+.dp .dp-reflection p:not(.dp-kicker),
+.dp .dp-reflection small {
+  font-size: 0.9rem;
+}
+.dp .dp-reflection small {
+  line-height: 1.6;
+}
+.dp .dp-today-moments .dp-empty {
+  padding: 1.5rem 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.dp .dp-timeline > li {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+.dp .dp-moment-row::before {
+  outline-color: var(--dp-surface);
+}
+.dp .dp-tools-layout {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--dp-card-gap);
+}
+.dp .dp-help-choices {
+  gap: var(--dp-card-gap);
+  margin: 0 0 var(--dp-card-gap);
+}
+.dp .dp-help-page > .dp-plain-section {
+  margin-bottom: var(--dp-card-gap);
+}
+.dp .dp-help-inset {
+  margin-top: var(--dp-card-gap);
+  gap: 16px;
+}
+.dp .dp-help-inset > .dp-button {
+  margin-left: 0;
+}
+.dp .dp-card.dp-form-section {
+  padding: 24px var(--dp-card-padding);
+  margin: 0 0 var(--dp-card-gap);
+}
+.dp .dp-card.dp-after-form {
+  margin-top: var(--dp-card-gap);
+  background: var(--dp-sage-soft);
+}
+.dp .dp-card.dp-extra-fields[open] > summary {
+  margin-bottom: 1.25rem;
+}
+.dp .dp-card .dp-section-head {
+  flex-wrap: wrap;
+}
+.dp .dp-card .dp-section-head > h2 {
+  min-width: 0;
+}
+.dp .dp-card .dp-tag {
+  margin-top: 0;
+}
+.dp .dp-card .dp-emotion-row {
+  background: var(--dp-bg);
+  box-shadow: none;
+  padding: 12px;
+}
+.dp .dp-ratings-editor {
+  container: rating-choices / inline-size;
+}
+.dp .dp-ratings-editor legend {
+  max-inline-size: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.dp .dp-mood-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.dp .dp-pans-options {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+@container rating-choices (max-width: 18rem) {
+  .dp .dp-mood-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@container rating-choices (max-width: 12rem) {
+  .dp .dp-mood-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dp .dp-pans-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.dp .dp-form-grid:not(.anchor-craving-datetime):not(.anchor-datetime-grid) {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+}
+.dp .dp-field {
+  min-width: 0;
+}
+.dp .dp-field > :where(input, select, textarea) {
+  max-width: 100%;
+}
+.dp :where(input[type="date"], input[type="time"]) {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  text-align: start;
+}
+.dp
+  :where(input[type="date"], input[type="time"])::-webkit-date-and-time-value {
+  min-inline-size: 0;
+  text-align: start;
+}
+.dp :where(input[type="date"], input[type="time"])::-webkit-datetime-edit {
+  padding: 0;
+}
+.dp .dp-exercise-card .dp-exercise-progress {
+  margin-top: 0;
+}
+.dp .dp-exercise-card > h2,
+.dp .dp-exercise-card > p {
+  text-align: center;
+}
+.dp .dp-exercise-card > .dp-field {
+  text-align: left;
+}
+@media (max-width: 600px) {
+  .dp .dp-today-grid {
+    padding-top: var(--dp-card-gap);
+  }
+  .dp .dp-card-heading {
+    gap: 12px;
+  }
+  .dp .dp-card-heading h2 {
+    font-size: 1.25rem;
+  }
+  .dp .dp-form-actions {
+    align-items: stretch;
+  }
+  .dp .dp-form-actions > span {
+    text-align: center;
   }
 }

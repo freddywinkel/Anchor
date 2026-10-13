@@ -314,6 +314,10 @@
   border-top: 1px solid var(--dp-border, #38322e);
   padding-block: 1.5rem;
 }
+.dp .dp-list-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
 .dp .dp-growth-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;

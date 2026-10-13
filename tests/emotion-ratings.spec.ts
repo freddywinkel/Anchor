@@ -516,6 +516,288 @@ test("een lege datum in een gesloten onderdeel wordt bij opslaan zichtbaar zonde
   });
 });
 
+test("datum en tijd als tekstvelden worden lokaal gevalideerd en openen het juiste veld zonder conceptverlies", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await open(page);
+  const form = beforeForm(page);
+  await form
+    .getByLabel(/^In je eigen woorden/)
+    .fill("Een datum die ik nog controleer.");
+  const summary = form.getByText("Datum en tijd aanpassen", { exact: true });
+  await summary.click();
+  const date = form.getByLabel("Datum momentopname", { exact: true });
+  const time = form.getByLabel("Tijd momentopname", { exact: true });
+  // React restores the native input type after an edit. Bypass native form
+  // validation so the app guard receives the raw draft from a text fallback.
+  await form.evaluate((element: HTMLFormElement) => {
+    element.noValidate = true;
+  });
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  for (const invalidDate of ["1899-12-31", "2026-02-30"]) {
+    await date.evaluate((element: HTMLInputElement) => {
+      element.type = "text";
+    });
+    await date.fill(invalidDate);
+    await summary.click();
+    await form
+      .getByRole("button", { name: "Dit moment opslaan", exact: true })
+      .click();
+    await expect(date).toBeFocused();
+    await expect(date).toHaveAttribute("aria-invalid", "true");
+    await expect(date).toHaveAccessibleDescription(
+      "Vul een geldige datum tussen 1900 en 2199 in.",
+    );
+    await expect(form.locator(".dp-moment-time")).toHaveAttribute("open", "");
+    await expect(form.getByRole("alert")).toBeVisible();
+    expect(await state(page)).toBeNull();
+    expect(await draft(page, "moment:new")).toMatchObject({
+      date: invalidDate,
+      note: "Een datum die ik nog controleer.",
+    });
+  }
+  await date.fill("2026-02-28");
+  await time.evaluate((element: HTMLInputElement) => {
+    element.type = "text";
+  });
+  await time.fill("24:15");
+  await summary.click();
+  await form
+    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .click();
+  await expect(time).toBeFocused();
+  await expect(time).toHaveAttribute("aria-invalid", "true");
+  await expect(time).toHaveAccessibleDescription(
+    "Vul een geldige tijd in, zoals 14:30.",
+  );
+  expect(await state(page)).toBeNull();
+  expect(await draft(page, "moment:new")).toMatchObject({
+    date: "2026-02-28",
+    time: "24:15",
+  });
+  await time.fill("23:59");
+  await saveMoment(page);
+  expect((await state(page)).moments[0]).toMatchObject({
+    date: "2026-02-28",
+    time: "23:59",
+    note: "Een datum die ik nog controleer.",
+  });
+});
+
+test("een opslagfout blijft zichtbaar bij moment of nameting en bewaart alle ingevulde waarden voor opnieuw proberen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await open(page);
+  const before = beforeForm(page);
+  await selectEmotion(before, "Boos");
+  await intensity(before, "Boos").fill("0");
+  await addEmotion(before, "Opgelucht");
+  await before
+    .getByLabel(/^In je eigen woorden/)
+    .fill("Deze gegevens blijven hier bij een opslagfout.");
+  await page.getByText("Activiteit toevoegen", { exact: true }).click();
+  await before
+    .getByRole("combobox", { name: "Activiteit", exact: true })
+    .selectOption("Schilderen");
+  async function failWrites() {
+    await page.evaluate((key) => {
+      const original = Storage.prototype.setItem;
+      (window as any).__restoreStorage = () => {
+        Storage.prototype.setItem = original;
+      };
+      Storage.prototype.setItem = function (name, value) {
+        if (name === key)
+          throw new DOMException("Test: opslag vol", "QuotaExceededError");
+        return original.call(this, name, value);
+      };
+    }, DATA_KEY);
+  }
+  const pendingBefore = await draft(page, "moment:new");
+  await failWrites();
+  await before
+    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .click();
+  await expect(before.getByRole("alert")).toBeFocused();
+  await expect(before.getByRole("alert")).toContainText(
+    "Je ingevulde waarden staan hier nog",
+  );
+  expect(await state(page)).toBeNull();
+  expect(await draft(page, "moment:new")).toEqual(pendingBefore);
+  await page.evaluate(() => (window as any).__restoreStorage());
+  await saveMoment(page);
+  const saved = (await state(page)).moments[0];
+  await page
+    .getByRole("button", { name: "Nameting invullen", exact: true })
+    .click();
+  const after = page.locator(".dp-after-form");
+  await after.getByRole("button", { name: "Nee", exact: true }).click();
+  await intensity(after, "Boos").fill("0");
+  const pendingAfter = await draft(page, `moment:${saved.id}`);
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  await failWrites();
+  await after
+    .getByRole("button", { name: "Nameting opslaan", exact: true })
+    .click();
+  const error = after.getByRole("alert");
+  await expect(error).toBeFocused();
+  await expect(error).toContainText("Je ingevulde waarden staan hier nog");
+  await expect
+    .poll(() =>
+      error.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return (
+          bounds.top >= 0 &&
+          bounds.bottom <=
+            document.querySelector(".dp-bottom-nav")!.getBoundingClientRect()
+              .top +
+              1
+        );
+      }),
+    )
+    .toBe(true);
+  expect((await state(page)).moments[0]).toEqual(saved);
+  expect(await draft(page, `moment:${saved.id}`)).toEqual(pendingAfter);
+  await page.evaluate(() => (window as any).__restoreStorage());
+  await after
+    .getByRole("button", { name: "Nameting opslaan", exact: true })
+    .click();
+  const restored = (await state(page)).moments[0];
+  expect(restored.before).toEqual(saved.before);
+  expect(restored.after.emotionRatings).toEqual(
+    pendingAfter.after.emotionRatings,
+  );
+  expect(restored.attempted).toBe(false);
+  await open(page, "/today");
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  await expect(page.locator(".dp-rating-line")).toContainText("Boos: 0/100");
+  await expect(page.locator(".dp-rating-line")).toContainText(
+    "Opgelucht: niet ingevuld",
+  );
+  const textFits = await page
+    .locator(".dp-rating-line b")
+    .evaluateAll((elements) =>
+      elements.every((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const line = element
+          .closest(".dp-rating-line")!
+          .getBoundingClientRect();
+        return [...range.getClientRects()].every(
+          (rect) => rect.left >= line.left - 1 && rect.right <= line.right + 1,
+        );
+      }),
+    );
+  expect(textFits).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    320,
+  );
+});
+
+test("nametingfouten staan bij het juiste formulier, krijgen telkens zichtbare focus en behouden het concept", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await open(page);
+  const before = beforeForm(page);
+  await selectEmotion(before, "Boos");
+  await intensity(before, "Boos").fill("70");
+  await before
+    .getByLabel(/^In je eigen woorden/)
+    .fill("Dit moment en de nameting horen bij dezelfde wandeling.");
+  await page.getByText("Activiteit toevoegen", { exact: true }).click();
+  await before
+    .getByRole("combobox", { name: "Activiteit", exact: true })
+    .selectOption("Buiten wandelen");
+  await saveMoment(page);
+  const savedBefore = (await state(page)).moments[0];
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = "200%";
+  });
+  await page
+    .getByRole("button", { name: "Nameting invullen", exact: true })
+    .click();
+  const after = page.locator(".dp-after-form");
+  const afterHeading = after.locator("h2").first();
+  await expect(afterHeading).toBeFocused();
+  await expect
+    .poll(() =>
+      afterHeading.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const nav = document
+          .querySelector(".dp-bottom-nav")!
+          .getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= nav.top + 1;
+      }),
+    )
+    .toBe(true);
+  await intensity(after, "Boos").fill("42");
+  const pending = await draft(page, `moment:${savedBefore.id}`);
+  await page
+    .getByRole("button", { name: "Nameting invullen", exact: true })
+    .click();
+  await expect(afterHeading).toBeFocused();
+  await expect(intensity(after, "Boos")).toHaveValue("42");
+
+  await before
+    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .click();
+  await expect(before.getByRole("alert")).toBeFocused();
+  await expect(before.getByRole("alert")).toContainText(
+    "Gebruik Nameting opslaan",
+  );
+  await expect(after.getByRole("alert")).toHaveCount(0);
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await after
+      .getByRole("button", { name: "Nameting opslaan", exact: true })
+      .click();
+    const error = after.getByRole("alert");
+    await expect(error).toHaveText(
+      "Geef aan of je de activiteit hebt geprobeerd. Nee is ook een antwoord.",
+    );
+    await expect(error).toBeFocused();
+    await expect(before.getByRole("alert")).toHaveCount(0);
+    await expect
+      .poll(() =>
+        error.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const nav = document
+            .querySelector(".dp-bottom-nav")!
+            .getBoundingClientRect();
+          return rect.top >= 0 && rect.bottom <= nav.top + 1;
+        }),
+      )
+      .toBe(true);
+    await expect(intensity(after, "Boos")).toHaveValue("42");
+    expect((await state(page)).moments[0]).toEqual(savedBefore);
+    expect(await draft(page, `moment:${savedBefore.id}`)).toEqual(pending);
+  }
+  await page.screenshot({
+    path: testInfo.outputPath("nameting-error-320-large-text.png"),
+  });
+  await after.getByRole("button", { name: "Ja", exact: true }).click();
+  await expect(after.getByRole("alert")).toHaveCount(0);
+  await after
+    .getByRole("button", { name: "Nameting opslaan", exact: true })
+    .click();
+  const saved = (await state(page)).moments[0];
+  expect(saved.before).toEqual(savedBefore.before);
+  expect(saved.note).toBe(savedBefore.note);
+  expect(saved.after.emotionRatings).toEqual([
+    { ...savedBefore.before.emotionRatings[0], intensity: 42 },
+  ]);
+  expect(saved.attempted).toBe(true);
+  expect(await draft(page, `moment:${savedBefore.id}`)).toBeUndefined();
+});
+
 test("emotierijen en lange eigen namen blijven bruikbaar op een smal scherm en bij grotere tekst", async ({
   page,
 }, testInfo) => {
