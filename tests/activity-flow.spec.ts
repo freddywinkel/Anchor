@@ -38,9 +38,16 @@ const intensity = (scope: Locator, label: string) =>
   scope.getByLabel(`Intensiteit van ${label}`, { exact: true });
 
 async function saveMoment(page: Page) {
+  const hasActivity = !!(await page
+    .locator(".dp-activity-section select")
+    .inputValue());
   await page
     .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
+  if (!hasActivity) {
+    await expect(page).toHaveURL(/#\/today$/);
+    await open(page, `/moment/${(await state(page)).moments.at(-1).id}`);
+  }
   await expect(
     page.getByRole("heading", { name: "Jouw check-in", exact: true }),
   ).toBeVisible();
@@ -458,6 +465,8 @@ for (const hasSavedRecord of [true, false]) {
     await after
       .getByRole("button", { name: "Nameting opslaan", exact: true })
       .click();
+    await expect(page).toHaveURL(/#\/today$/);
+    await open(page, `/moment/${original.id}`);
     await expect(activity(page)).toBeDisabled();
     await expect(name).toBeDisabled();
     expect((await state(page)).moments).toEqual([repaired]);

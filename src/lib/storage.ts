@@ -40,6 +40,7 @@ export type CravingRecord = {
   id: string;
   date: string;
   time: string;
+  substance?: string;
   situation: string;
   thought: string;
   bodySensation: string;
@@ -400,8 +401,10 @@ function day(value: unknown, draft = false): Day {
 }
 
 function craving(value: unknown, draft = false): CravingRecord {
+  const input = object(value, "Drangregistratie");
+  const hasSubstance = Object.hasOwn(input, "substance");
   const item = fields(
-    value,
+    input,
     [
       "id",
       "date",
@@ -411,6 +414,7 @@ function craving(value: unknown, draft = false): CravingRecord {
       "bodySensation",
       "emotion",
       "behavior",
+      ...(hasSubstance ? ["substance"] : []),
     ],
     "Drangregistratie",
   );
@@ -423,6 +427,10 @@ function craving(value: unknown, draft = false): CravingRecord {
     bodySensation: string(item.bodySensation, "Lichamelijke sensatie"),
     emotion: string(item.emotion, "Emotie"),
     behavior: string(item.behavior, "Gedrag"),
+    // Additive v1 field: never infer a substance for older records or drafts.
+    ...(hasSubstance
+      ? { substance: string(item.substance, "Middel", 120) }
+      : {}),
   };
 }
 

@@ -4,7 +4,7 @@ Anchor is a standalone Dutch personal diary/PWA. Do not import or modify the adj
 
 - Node 24 and pnpm 11.9.0. Use the lockfile; no runtime external services.
 - App and repository name: Anchor. Default state is empty; never seed real users with demo records.
-- Craving registration contains only date/time (weekday derived), situation (who/what/where), thought, physical sensation, emotion, and behavior. No intensity/substance/risk/usage/attempt fields in that form.
+- Craving registration contains date/time (weekday derived), optional substance or behavior, situation (who/what/where), thought, physical sensation, emotion, and behavior. Leave substance unknown for existing records; never infer it from goals. No intensity/risk/usage/attempt fields in that form.
 - Keep check-ins, daily summaries, cravings and positive memories independent; missing is not zero. Do not infer clinical outcomes.
 - Data keys: `anchor.app.data.v1` and `anchor.app.drafts.v1`. Never enumerate or clear unrelated storage. All saved data passes validation and revision checks; obtain the app writer lock before writing.
 - Preserve records and drafts across updates. No forced worker activation with open drafts; no destructive schema reset. Validate backups before any replacement and require confirmation.

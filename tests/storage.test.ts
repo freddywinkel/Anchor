@@ -239,6 +239,130 @@ describe("Anchor storage isolation and independent records", () => {
   });
 });
 
+describe("optional craving substance and legacy preservation", () => {
+  it("keeps old records, backups, and drafts unchanged without inferring a substance from goals", () => {
+    const original = populated();
+    const raw = JSON.stringify(original);
+    const draftRaw = JSON.stringify({
+      version: 1,
+      records: { "craving:new": original.cravings[0] },
+    });
+    store.values.set(STORAGE_KEY, raw);
+    store.values.set(DRAFT_STORAGE_KEY, draftRaw);
+
+    const loaded = loadState();
+    assert.equal(loaded.blocked, false);
+    assert.deepEqual(loaded.state, original);
+    assert.deepEqual(loadDrafts()["craving:new"], original.cravings[0]);
+    assert.equal(Object.hasOwn(loaded.state.cravings[0], "substance"), false);
+    const restored = parseBackup(exportBackup(loaded.state));
+    assert.deepEqual(restored, original);
+    assert.equal(Object.hasOwn(restored.cravings[0], "substance"), false);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+    assert.equal(store.writes.length, 0);
+
+    const saved = saveState({ ...loaded.state, theme: "dark" });
+    assert.equal(saved.ok, true);
+    assert.deepEqual(saved.state?.cravings, original.cravings);
+    assert.equal(Object.hasOwn(saved.state!.cravings[0], "substance"), false);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+  });
+
+  it("round-trips known, custom, empty, and maximum-length names in data, backups, and drafts", () => {
+    const original = populated();
+    original.cravings = [
+      "Alcohol",
+      "Eigen middel – mijn naam",
+      "",
+      "x".repeat(120),
+    ].map((substance, index) => ({
+      ...makeCraving(`substance-${index}`),
+      substance,
+    }));
+    const saved = saveState(original);
+    assert.equal(saved.ok, true);
+    assert.deepEqual(loadState().state.cravings, original.cravings);
+    assert.deepEqual(
+      parseBackup(exportBackup(saved.state!)).cravings,
+      original.cravings,
+    );
+
+    for (const record of original.cravings) {
+      const incomplete = { ...record, date: "", time: "" };
+      assert.equal(saveDraft("craving:new", incomplete).ok, true);
+      assert.deepEqual(loadDrafts()["craving:new"], incomplete);
+      assert.equal(saveDraft(`craving:${record.id}`, record).ok, true);
+      assert.deepEqual(loadDrafts()[`craving:${record.id}`], record);
+    }
+    const draftsBefore = store.values.get(DRAFT_STORAGE_KEY);
+    const restored = replaceFromBackup(
+      parseBackup(exportBackup(original)),
+      saved.state!.revision,
+    );
+    assert.equal(restored.ok, true);
+    assert.deepEqual(restored.state?.cravings, original.cravings);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftsBefore);
+  });
+
+  it("rejects malformed names in saved data, backups, and drafts before changing stored values", () => {
+    const original = populated();
+    original.cravings[0].substance = "Cannabis";
+    const saved = saveState(original).state!;
+    assert.equal(saveDraft("craving:new", saved.cravings[0]).ok, true);
+    const raw = store.values.get(STORAGE_KEY);
+    const draftRaw = store.values.get(DRAFT_STORAGE_KEY);
+
+    for (const substance of [
+      null,
+      undefined,
+      0,
+      false,
+      [],
+      {},
+      "x".repeat(121),
+    ]) {
+      const candidate = structuredClone(saved);
+      Object.assign(candidate.cravings[0], { substance });
+      assert.throws(() => validateState(candidate), /Middel/);
+      assert.equal(saveState(candidate).ok, false);
+      assert.equal(saveDraft("craving:new", candidate.cravings[0]).ok, false);
+      if (substance !== undefined) {
+        const backup = JSON.parse(exportBackup(saved));
+        backup.state.cravings[0].substance = substance;
+        assert.throws(() => parseBackup(JSON.stringify(backup)), /Middel/);
+      }
+      assert.equal(store.values.get(STORAGE_KEY), raw);
+      assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+      assert.deepEqual(loadDrafts()["craving:new"], saved.cravings[0]);
+    }
+
+    const unknownField = structuredClone(saved);
+    Object.assign(unknownField.cravings[0], { dose: "unknown new field" });
+    assert.throws(() => validateState(unknownField), /onbekende velden/);
+    assert.equal(saveState(unknownField).ok, false);
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+  });
+
+  it("retains an edited substance in memory and the recovery export when draft persistence fails", () => {
+    const original = { ...makeCraving(), substance: "Alcohol" };
+    assert.equal(saveDraft("craving:new", original).ok, true);
+    const raw = store.values.get(DRAFT_STORAGE_KEY);
+    store.failWrite = true;
+    const edited = { ...original, substance: "Eigen middel" };
+    assert.equal(saveDraft("craving:new", edited).ok, false);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), raw);
+    assert.deepEqual(loadDrafts()["craving:new"], edited);
+    const recovery = JSON.parse(exportDraftRecovery());
+    assert.equal(recovery.raw, raw);
+    assert.deepEqual(recovery.pendingRecords["craving:new"], edited);
+    store.failWrite = false;
+    assert.equal(saveDraft("craving:new", edited).ok, true);
+    assert.deepEqual(loadDrafts()["craving:new"], edited);
+    assert.equal(hasUnpersistedDrafts(), false);
+  });
+});
+
 describe("backward-compatible palette preferences", () => {
   it("loads old v1 data as amber without changing stored bytes, records, or drafts", () => {
     const expected = populated();

@@ -360,19 +360,22 @@ try {
   }, DRAFT_STORAGE_KEY);
   await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
   expect((await data()).goals).toHaveLength(1);
+  const savedBeforeCleanup = await data();
   await page
-    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
+    .getByRole("button", { name: "Afronden opnieuw proberen", exact: true })
     .click();
-  expect((await data()).goals).toHaveLength(1);
+  expect(await data()).toEqual(savedBeforeCleanup);
   await page.evaluate(
     () => (Storage.prototype.setItem = window.qaOriginalSetItem),
   );
   await page
-    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
+    .getByRole("button", { name: "Afronden opnieuw proberen", exact: true })
     .click();
-  expect((await data()).goals).toHaveLength(1);
+  expect(await data()).toEqual(savedBeforeCleanup);
   expect((await drafts()).goal).toBeUndefined();
-  saveCheck("Draft cleanup failure cannot duplicate a successfully saved goal");
+  saveCheck(
+    "Draft cleanup retries leave the saved goal and revision unchanged",
+  );
   await navigate("#/growth");
   await page
     .getByRole("button", {

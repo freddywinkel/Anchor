@@ -6,6 +6,7 @@ import {
   type CravingRecord,
 } from "./lib/storage";
 import { CRAVING_SUGGESTIONS } from "./lib/cravingSuggestions";
+import { SUBSTANCE_OPTIONS } from "./lib/substances";
 import "./craving.css";
 
 type CravingViewProps = {
@@ -15,7 +16,7 @@ type CravingViewProps = {
   navigate: (path: string) => void;
   onDraft: (value: CravingRecord) => void;
   draft?: CravingRecord;
-  onClear: () => void;
+  onClear: () => boolean;
 };
 
 const narrativeFields = [
@@ -73,9 +74,17 @@ export function CravingView({
         behavior: "",
       },
   );
-  const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<{ message: string } | null>(null);
+  const [pendingCompletion, setPendingCompletion] = useState<
+    "saved" | "deleted" | null
+  >(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [customSubstance, setCustomSubstance] = useState(
+    () =>
+      !!value.substance &&
+      !SUBSTANCE_OPTIONS.some((option) => option === value.substance),
+  );
+  const substanceNameRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
@@ -90,8 +99,28 @@ export function CravingView({
   }, [confirmDelete]);
 
   useEffect(() => {
-    if (error) errorRef.current?.focus();
+    if (!error) return;
+    errorRef.current?.focus({ preventScroll: true });
+    errorRef.current?.scrollIntoView({ block: "center", behavior: "auto" });
   }, [error]);
+
+  function showError(message: string) {
+    // A new object reveals the same error again after another failed attempt.
+    setError({ message });
+  }
+
+  function complete(action: "saved" | "deleted") {
+    if (onClear()) {
+      navigate("/today");
+      return;
+    }
+    setPendingCompletion(action);
+    showError(
+      action === "saved"
+        ? "Je craving is opgeslagen, maar het concept kon niet worden opgeruimd. Probeer opnieuw."
+        : "Je craving is verwijderd, maar het concept kon niet worden opgeruimd. Probeer opnieuw.",
+    );
+  }
 
   function update<K extends keyof CravingRecord>(
     field: K,
@@ -100,8 +129,26 @@ export function CravingView({
     const next = { ...value, [field]: fieldValue };
     setValue(next);
     onDraft(next);
-    setError("");
-    setSaved(false);
+    setError(null);
+  }
+
+  function updateSubstance(substance: string) {
+    const next = { ...value };
+    if (substance) next.substance = substance;
+    else delete next.substance;
+    setValue(next);
+    onDraft(next);
+    setError(null);
+  }
+
+  function chooseSubstance(choice: string) {
+    const custom = choice === "__custom__";
+    setCustomSubstance(custom);
+    if (!custom) updateSubstance(choice);
+    else {
+      if (!customSubstance) updateSubstance("");
+      requestAnimationFrame(() => substanceNameRef.current?.focus());
+    }
   }
 
   function addSuggestion(
@@ -123,7 +170,7 @@ export function CravingView({
     const next =
       current + (current && !current.endsWith("\n") ? "\n" : "") + suggestion;
     if (next.length > 4000) {
-      setError(
+      showError(
         "Dit voorbeeld past niet meer in het tekstvak. Je bestaande tekst is behouden.",
       );
       return;
@@ -161,20 +208,23 @@ export function CravingView({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pendingCompletion) return;
     if (
       !validDate(value.date) ||
       !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time)
     ) {
-      setError("Vul een geldige datum tussen 1900 en 2199 en een tijd in.");
+      showError("Vul een geldige datum tussen 1900 en 2199 en een tijd in.");
       return;
     }
     if (!narrativeFields.some((field) => value[field].trim())) {
-      setError(
+      showError(
         "Schrijf iets bij ten minste één onderdeel. Je hoeft niet alles in te vullen.",
       );
       return;
     }
     const nextRecord = { ...value };
+    if (value.substance?.trim()) nextRecord.substance = value.substance.trim();
+    else delete nextRecord.substance;
     for (const field of narrativeFields)
       nextRecord[field] = value[field].trim();
     const exists = state.cravings.some((item) => item.id === nextRecord.id);
@@ -190,12 +240,10 @@ export function CravingView({
       )
     ) {
       setValue(nextRecord);
-      setError("");
-      setSaved(true);
-      onClear();
-      navigate(`/craving/${nextRecord.id}`);
+      setError(null);
+      complete("saved");
     } else {
-      setError(
+      showError(
         "Opslaan is niet gelukt. Je ingevulde tekst staat hier nog. Probeer het opnieuw.",
       );
     }
@@ -207,6 +255,7 @@ export function CravingView({
   }
 
   function remove() {
+    if (pendingCompletion) return;
     if (
       onSave(
         {
@@ -216,11 +265,34 @@ export function CravingView({
         "De craving is verwijderd.",
       )
     ) {
-      onClear();
-      navigate("/history");
+      setConfirmDelete(false);
+      complete("deleted");
     } else {
-      setError("Verwijderen is niet gelukt. Je craving blijft bewaard.");
+      showError("Verwijderen is niet gelukt. Je craving blijft bewaard.");
     }
+  }
+
+  if (pendingCompletion) {
+    return (
+      <article className="dp-form-page anchor-craving">
+        <header className="anchor-craving-intro">
+          <p className="dp-kicker">Een moment van drang</p>
+          <h1 tabIndex={-1}>Nog één stap</h1>
+        </header>
+        <section className="dp-card dp-form-section">
+          <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
+            {error?.message}
+          </p>
+          <button
+            type="button"
+            className="dp-button primary"
+            onClick={() => complete(pendingCompletion)}
+          >
+            Afronden opnieuw proberen
+          </button>
+        </section>
+      </article>
+    );
   }
 
   return (
@@ -278,6 +350,40 @@ export function CravingView({
           <p id={dateHintId} className="anchor-craving-day">
             {dayLabel(value.date)}
           </p>
+          <label className="dp-field" htmlFor={`${prefix}-substance`}>
+            <span id={`${prefix}-substance-label`}>Middel of gedrag</span>
+            <span className="dp-hint" id={`${prefix}-substance-hint`}>
+              Optioneel. Waar was de drang op gericht?
+            </span>
+            <select
+              id={`${prefix}-substance`}
+              aria-labelledby={`${prefix}-substance-label`}
+              aria-describedby={`${prefix}-substance-hint`}
+              value={customSubstance ? "__custom__" : (value.substance ?? "")}
+              onChange={(event) => chooseSubstance(event.target.value)}
+            >
+              <option value="">Niet ingevuld</option>
+              {SUBSTANCE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              <option value="__custom__">Ander middel of gedrag</option>
+            </select>
+          </label>
+          {customSubstance && (
+            <label className="dp-field" htmlFor={`${prefix}-substance-name`}>
+              Naam van middel of gedrag
+              <input
+                id={`${prefix}-substance-name`}
+                ref={substanceNameRef}
+                type="text"
+                maxLength={120}
+                value={value.substance ?? ""}
+                onChange={(event) => updateSubstance(event.target.value)}
+              />
+            </label>
+          )}
         </section>
 
         <section
@@ -391,7 +497,7 @@ export function CravingView({
 
         {error && (
           <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
-            {error}
+            {error.message}
           </p>
         )}
         <div className="anchor-craving-save">
@@ -415,7 +521,7 @@ export function CravingView({
             </a>
           </div>
           <p role="status" className="anchor-craving-save-status">
-            {saved || (record && !dirty)
+            {record && !dirty
               ? "Opgeslagen. Je kunt dit moment later weer aanpassen."
               : ""}
           </p>

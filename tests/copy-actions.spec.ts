@@ -217,10 +217,12 @@ test("Behouden annuleert verwijderen zonder de onopgeslagen cravingwijziging op 
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
+  await expect(page).toHaveURL(/#\/today$/);
+  const saved = await state(page);
+  await page.locator(".dp-today-moments .dp-moment-row").click();
   await expect(
     page.getByRole("heading", { name: "Je craving", exact: true }),
   ).toBeVisible();
-  const saved = await state(page);
   await thought.fill("Deze wijziging is nog een concept.");
   const draftsBefore = await page.evaluate(
     (key) => localStorage.getItem(key),
@@ -243,6 +245,7 @@ test("Behouden annuleert verwijderen zonder de onopgeslagen cravingwijziging op 
   await page
     .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
     .click();
+  await expect(page).toHaveURL(/#\/today$/);
   expect((await state(page)).cravings[0]).toMatchObject({
     id: saved.cravings[0].id,
     thought: "Deze wijziging is nog een concept.",

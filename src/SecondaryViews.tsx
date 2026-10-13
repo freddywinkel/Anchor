@@ -17,6 +17,7 @@ import type {
 } from "./lib/storage";
 import { today, loadDrafts, saveDraft } from "./lib/storage";
 import type { Palette } from "./lib/palettes";
+import { SUBSTANCE_OPTIONS } from "./lib/substances";
 import "./secondary.css";
 
 const palettes: { id: Palette; name: string; description: string }[] = [
@@ -29,11 +30,7 @@ const palettes: { id: Palette; name: string; description: string }[] = [
 
 type Save = (next: AppState, message: string) => boolean;
 const targetNames: Record<string, string> = {
-  Alcohol: "Alcohol",
-  Nicotine: "Nicotine",
-  Cannabis: "Cannabis",
-  Cocaine: "Cocaine",
-  "3-MMC": "3-MMC",
+  ...Object.fromEntries(SUBSTANCE_OPTIONS.map((name) => [name, name])),
   "Other substance": "Ander middel",
   Other: "Ander gedrag",
 };
@@ -217,7 +214,7 @@ export function HistoryView({
         (item) =>
           (period === "all" || (item.date >= start && item.date <= today())) &&
           (kind === "all" || kind === "craving") &&
-          `${item.situation} ${item.thought} ${item.bodySensation} ${item.emotion} ${item.behavior} craving drang`
+          `${item.substance || ""} ${item.situation} ${item.thought} ${item.bodySensation} ${item.emotion} ${item.behavior} craving drang`
             .toLocaleLowerCase("nl-NL")
             .includes(search),
       )
@@ -298,7 +295,7 @@ export function HistoryView({
           </span>
           <input
             type="search"
-            placeholder="Situatie, gedachte, emotie of activiteit"
+            placeholder="Middel, situatie, emotie of activiteit"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -481,6 +478,7 @@ export function HistoryView({
                     <dl className="dp-craving-summary">
                       {(
                         [
+                          ["Middel of gedrag", entry.item.substance || ""],
                           ["Gedachte", entry.item.thought],
                           ["Lichamelijk", entry.item.bodySensation],
                           ["Emotie", entry.item.emotion],
@@ -576,9 +574,15 @@ export function HistoryView({
   );
 }
 
-function DraftNotice({ error }: { error: string }) {
+function DraftNotice({
+  error,
+  focusRef,
+}: {
+  error: string;
+  focusRef?: React.RefObject<HTMLParagraphElement | null>;
+}) {
   return error ? (
-    <p className="dp-error" role="alert">
+    <p className="dp-error" role="alert" tabIndex={-1} ref={focusRef}>
       {error} Houd dit scherm open tot je het opnieuw hebt geprobeerd.
     </p>
   ) : (
@@ -593,6 +597,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
     () => (loadDrafts().goal as Goal | undefined) || null,
   );
   const [goalHasDraft, setGoalHasDraft] = useState(!!goal);
+  const [goalCleanupPending, setGoalCleanupPending] = useState(false);
   const [customName, setCustomName] = useState(() => hasCustomName(goal));
   const [customDirection, setCustomDirection] = useState(
     () => !!goal?.direction && !goalDirections.includes(goal.direction),
@@ -606,6 +611,8 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   );
   const [planError, setPlanError] = useState("");
   const [planDraftError, setPlanDraftError] = useState("");
+  const [planSaved, setPlanSaved] = useState(false);
+  const [planCleanupPending, setPlanCleanupPending] = useState(false);
   const [discardingPlan, setDiscardingPlan] = useState(false);
   const goalName = useRef<HTMLInputElement>(null);
   const goalTarget = useRef<HTMLSelectElement>(null);
@@ -614,6 +621,8 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   const planStart = useRef<HTMLTextAreaElement>(null);
   const planDirty = useRef(!!loadDrafts().plan);
   const addButton = useRef<HTMLButtonElement>(null);
+  const goalFeedback = useRef<HTMLParagraphElement>(null);
+  const planFeedback = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     if (!planDirty.current) setPlan(state.plan);
   }, [state.plan]);
@@ -621,7 +630,10 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
     if (goal) goalTarget.current?.focus();
   }, [goal?.id]);
   function updateGoal(next: Goal) {
+    if (JSON.stringify(next) !== JSON.stringify(goal))
+      setGoalCleanupPending(false);
     setGoal(next);
+    setGoalError("");
     setGoalHasDraft(true);
     const result = saveDraft("goal", next);
     setDraftError(
@@ -638,6 +650,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
       !!existing?.direction && !goalDirections.includes(existing.direction),
     );
     setGoalHasDraft(false);
+    setGoalCleanupPending(false);
     setGoal(
       existing || {
         id: crypto.randomUUID(),
@@ -651,14 +664,23 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
     setRemoving(null);
     setDiscarding(false);
   }
-  function clearGoal() {
-    const result = saveDraft("goal", null);
+  function clearGoal(saved = false) {
+    const result = goalHasDraft
+      ? saveDraft("goal", null)
+      : { ok: true, message: null };
     if (!result.ok) {
-      setDraftError(result.message || "Het concept kon niet worden gewist.");
+      setGoalCleanupPending(saved || goalCleanupPending);
+      setDraftError(
+        saved || goalCleanupPending
+          ? "Je doel is opgeslagen, maar het concept kon niet worden opgeruimd. Probeer het afronden opnieuw."
+          : result.message || "Het concept kon niet worden gewist.",
+      );
+      requestAnimationFrame(() => goalFeedback.current?.focus());
       return;
     }
     setGoal(null);
     setGoalHasDraft(false);
+    setGoalCleanupPending(false);
     setDiscarding(false);
     setGoalError("");
     setDraftError("");
@@ -667,6 +689,10 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   function saveGoal(event: React.FormEvent) {
     event.preventDefault();
     if (!goal) return;
+    if (goalCleanupPending) {
+      clearGoal(true);
+      return;
+    }
     if (!goal.target.trim() || !goal.name.trim() || !goal.direction.trim()) {
       setGoalError("Kies een middel of gedrag en vul je doel in.");
       if (!goal.target.trim()) goalTarget.current?.focus();
@@ -690,23 +716,47 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
         },
         "Je doel is opgeslagen.",
       )
-    )
-      clearGoal();
-    else
+    ) {
+      setGoal(entry);
+      setGoalError("");
+      setDiscarding(false);
+      clearGoal(true);
+    } else {
       setGoalError(
         "Opslaan is niet gelukt. Je wijzigingen blijven in het formulier staan.",
       );
+      requestAnimationFrame(() => goalFeedback.current?.focus());
+    }
   }
   function updatePlan(next: AppState["plan"]) {
+    if (JSON.stringify(next) !== JSON.stringify(plan))
+      setPlanCleanupPending(false);
     setPlan(next);
+    setPlanError("");
+    setPlanSaved(false);
     planDirty.current = true;
     const result = saveDraft("plan", next);
     setPlanDraftError(
       result.ok ? "" : result.message || "Je concept kon niet worden bewaard.",
     );
   }
+  function finishPlanSave() {
+    const result = saveDraft("plan", null);
+    planDirty.current = !result.ok;
+    setPlanCleanupPending(!result.ok);
+    setPlanDraftError(
+      result.ok
+        ? ""
+        : "Je plan is opgeslagen, maar het concept kon niet worden opgeruimd. Probeer het afronden opnieuw.",
+    );
+    if (!result.ok) requestAnimationFrame(() => planFeedback.current?.focus());
+  }
   function savePlan(event: React.FormEvent) {
     event.preventDefault();
+    if (planCleanupPending) {
+      finishPlanSave();
+      return;
+    }
     if (
       onSave(
         {
@@ -722,18 +772,15 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
     ) {
       planDirty.current = false;
       setPlanError("");
-      const result = saveDraft("plan", null);
-      planDirty.current = !result.ok;
-      setPlanDraftError(
-        result.ok
-          ? ""
-          : result.message ||
-              "Je plan is opgeslagen, maar het concept kon niet worden gewist.",
-      );
-    } else
+      setPlanSaved(true);
+      setDiscardingPlan(false);
+      finishPlanSave();
+    } else {
       setPlanError(
         "Opslaan is niet gelukt. Je tekst blijft hier staan; probeer opnieuw.",
       );
+      requestAnimationFrame(() => planFeedback.current?.focus());
+    }
   }
   return (
     <div className="dp-plan">
@@ -818,10 +865,14 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                         ) {
                           setRemoving(null);
                           addButton.current?.focus();
-                        } else
+                        } else {
                           setGoalError(
                             "Verwijderen is niet gelukt. Je doel staat nog in de lijst.",
                           );
+                          requestAnimationFrame(() =>
+                            goalFeedback.current?.focus(),
+                          );
+                        }
                       }}
                     >
                       Ja, doel verwijderen
@@ -834,7 +885,12 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                     </button>
                   </div>
                   {goalError && (
-                    <p className="dp-error" role="alert">
+                    <p
+                      className="dp-error"
+                      role="alert"
+                      tabIndex={-1}
+                      ref={goalFeedback}
+                    >
                       {goalError}
                     </p>
                   )}
@@ -950,18 +1006,27 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                 }
               />
             </label>
-            {goalHasDraft && <DraftNotice error={draftError} />}
+            {goalHasDraft && (
+              <DraftNotice error={draftError} focusRef={goalFeedback} />
+            )}
             {goalError && (
-              <p className="dp-error" role="alert">
+              <p
+                className="dp-error"
+                role="alert"
+                tabIndex={-1}
+                ref={goalFeedback}
+              >
                 {goalError}
               </p>
             )}
             <div className="dp-row-actions">
               <button className="dp-button primary" type="submit">
                 <Check size={17} aria-hidden="true" />
-                {state.goals.some((item) => item.id === goal.id)
-                  ? "Wijzigingen opslaan"
-                  : "Doel opslaan"}
+                {goalCleanupPending
+                  ? "Afronden opnieuw proberen"
+                  : state.goals.some((item) => item.id === goal.id)
+                    ? "Wijzigingen opslaan"
+                    : "Doel opslaan"}
               </button>
               <button
                 className="dp-button quiet"
@@ -990,7 +1055,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                   <button
                     type="button"
                     className="dp-button"
-                    onClick={clearGoal}
+                    onClick={() => clearGoal()}
                   >
                     {goalHasDraft
                       ? "Ja, concept wissen"
@@ -1054,15 +1119,28 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
             placeholder="Iemand of een plek waar ik terecht kan."
           />
         </label>
-        <DraftNotice error={planDraftError} />
+        {planDirty.current && (
+          <DraftNotice error={planDraftError} focusRef={planFeedback} />
+        )}
         {planError && (
-          <p className="dp-error" role="alert">
+          <p className="dp-error" role="alert" tabIndex={-1} ref={planFeedback}>
             {planError}
           </p>
         )}
+        {planSaved && !planDirty.current && (
+          <p className="dp-muted" role="status">
+            Je plan is opgeslagen.
+          </p>
+        )}
         <div className="dp-row-actions">
-          <button className="dp-button primary" type="submit">
-            Mijn plan opslaan
+          <button
+            className="dp-button primary"
+            type="submit"
+            disabled={!planDirty.current}
+          >
+            {planCleanupPending
+              ? "Afronden opnieuw proberen"
+              : "Mijn plan opslaan"}
           </button>
           {planDirty.current && (
             <button
@@ -1091,9 +1169,11 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                     setPlanDraftError(
                       result.message || "Je concept kon niet worden gewist.",
                     );
+                    requestAnimationFrame(() => planFeedback.current?.focus());
                     return;
                   }
                   planDirty.current = false;
+                  setPlanCleanupPending(false);
                   setPlan(state.plan);
                   setPlanError("");
                   setPlanDraftError("");
@@ -1145,29 +1225,52 @@ export function GrowthView({
   const [removing, setRemoving] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [hasDraft, setHasDraft] = useState(!!loadDrafts().growth);
+  const [cleanupPending, setCleanupPending] = useState(false);
   const textField = useRef<HTMLTextAreaElement>(null);
   const dateField = useRef<HTMLInputElement>(null);
   const actionErrorField = useRef<HTMLParagraphElement>(null);
+  const saveFeedback = useRef<HTMLParagraphElement>(null);
   const showActionError = (id: string, message: string) => {
     setActionError({ id, message });
     requestAnimationFrame(() => actionErrorField.current?.focus());
   };
   const update = (next: Growth) => {
+    if (JSON.stringify(next) !== JSON.stringify(entry))
+      setCleanupPending(false);
     setEntry(next);
-    setHasDraft(true);
-    const result = saveDraft("growth", next);
+    setError("");
+    const saved = state.growth.find((item) => item.id === next.id);
+    const unchanged =
+      !!saved &&
+      saved.date === next.date &&
+      saved.text === next.text &&
+      saved.favorite === next.favorite;
+    const result =
+      unchanged && !hasDraft
+        ? { ok: true, message: null }
+        : saveDraft("growth", unchanged ? null : next);
+    setHasDraft(!unchanged || !result.ok);
     setDraftError(
       result.ok ? "" : result.message || "Je concept kon niet worden bewaard.",
     );
   };
-  const clear = () => {
-    const result = saveDraft("growth", null);
+  const clear = (saved = false) => {
+    const result = hasDraft
+      ? saveDraft("growth", null)
+      : { ok: true, message: null };
     if (!result.ok) {
-      setDraftError(result.message || "Je concept kon niet worden gewist.");
+      setCleanupPending(saved || cleanupPending);
+      setDraftError(
+        saved || cleanupPending
+          ? "Je moment is opgeslagen, maar het concept kon niet worden opgeruimd. Probeer het afronden opnieuw."
+          : result.message || "Je concept kon niet worden gewist.",
+      );
+      requestAnimationFrame(() => saveFeedback.current?.focus());
       return;
     }
     setEntry(empty());
     setHasDraft(false);
+    setCleanupPending(false);
     setDiscarding(false);
     setError("");
     setDraftError("");
@@ -1177,6 +1280,10 @@ export function GrowthView({
   };
   const save = (event: React.FormEvent) => {
     event.preventDefault();
+    if (cleanupPending) {
+      clear(true);
+      return;
+    }
     if (!entry.text.trim()) {
       setError(
         "Schrijf iets op dat je wilt bewaren. Een paar woorden is genoeg.",
@@ -1217,12 +1324,17 @@ export function GrowthView({
           ? "Je wijzigingen zijn opgeslagen."
           : "Je moment is opgeslagen.",
       )
-    )
-      clear();
-    else
+    ) {
+      setEntry(next);
+      setError("");
+      setDiscarding(false);
+      clear(true);
+    } else {
       setError(
         "Opslaan is niet gelukt. Je tekst blijft hier staan; probeer opnieuw.",
       );
+      requestAnimationFrame(() => saveFeedback.current?.focus());
+    }
   };
   return (
     <div className="dp-growth">
@@ -1280,17 +1392,19 @@ export function GrowthView({
           <span>Als favoriet markeren</span>
         </label>
         <p className="dp-muted">Je hoeft hierbij geen score in te vullen.</p>
-        {hasDraft && <DraftNotice error={draftError} />}
+        {hasDraft && <DraftNotice error={draftError} focusRef={saveFeedback} />}
         {error && (
-          <p className="dp-error" role="alert">
+          <p className="dp-error" role="alert" tabIndex={-1} ref={saveFeedback}>
             {error}
           </p>
         )}
         <div className="dp-row-actions">
           <button className="dp-button primary" type="submit">
-            {state.growth.some((item) => item.id === entry.id)
-              ? "Wijzigingen opslaan"
-              : "Moment opslaan"}
+            {cleanupPending
+              ? "Afronden opnieuw proberen"
+              : state.growth.some((item) => item.id === entry.id)
+                ? "Wijzigingen opslaan"
+                : "Moment opslaan"}
           </button>
           {hasDraft && (
             <button
@@ -1299,6 +1413,15 @@ export function GrowthView({
               onClick={() => setDiscarding(true)}
             >
               Concept wissen
+            </button>
+          )}
+          {!hasDraft && state.growth.some((item) => item.id === entry.id) && (
+            <button
+              type="button"
+              className="dp-button quiet"
+              onClick={() => clear()}
+            >
+              Bewerken sluiten
             </button>
           )}
         </div>
@@ -1312,7 +1435,11 @@ export function GrowthView({
               Je concept wissen? Eerder opgeslagen momenten blijven bestaan.
             </p>
             <div className="dp-row-actions">
-              <button type="button" className="dp-button" onClick={clear}>
+              <button
+                type="button"
+                className="dp-button"
+                onClick={() => clear()}
+              >
                 Ja, concept wissen
               </button>
               <button
@@ -1368,11 +1495,14 @@ export function GrowthView({
                               ? "Het moment is niet meer als favoriet gemarkeerd."
                               : "Het moment is als favoriet gemarkeerd.",
                           )
-                        )
+                        ) {
                           showActionError(
                             item.id,
                             "De wijziging in je favorieten kon niet worden opgeslagen. Probeer opnieuw.",
                           );
+                        } else if (!hasDraft && entry.id === item.id) {
+                          setEntry({ ...entry, favorite: !item.favorite });
+                        }
                       }}
                     >
                       <Heart
@@ -1386,10 +1516,14 @@ export function GrowthView({
                       disabled={hasDraft}
                       aria-label={`Moment bewerken: ${item.text.slice(0, 60)}`}
                       onClick={() => {
-                        update(item);
+                        setEntry(item);
+                        setHasDraft(false);
+                        setCleanupPending(false);
                         setError("");
+                        setDraftError("");
                         setActionError(null);
                         setRemoving(null);
+                        setDiscarding(false);
                         setDateError("");
                         textField.current?.focus();
                       }}
@@ -1432,6 +1566,11 @@ export function GrowthView({
                               )
                             ) {
                               setRemoving(null);
+                              if (!hasDraft && entry.id === item.id) {
+                                setEntry(empty());
+                                setError("");
+                                setDateError("");
+                              }
                               textField.current?.focus();
                             } else
                               showActionError(

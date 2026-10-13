@@ -50,7 +50,7 @@ test("alle vijf paletten blijven bewaard; weergavemodus, registraties en concept
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page).toHaveURL(/#\/craving\/(?!new)[^/]+$/);
+  await expect(page).toHaveURL(/#\/today$/);
   const savedCravings = (await stored(page)).data.cravings;
   await open(page, "/craving/new");
   await page

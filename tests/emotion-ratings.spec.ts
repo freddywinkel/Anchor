@@ -50,9 +50,16 @@ async function addEmotion(scope: Locator, label: string) {
 const intensity = (scope: Locator, label: string) =>
   scope.getByLabel(`Intensiteit van ${label}`, { exact: true });
 async function saveMoment(page: Page) {
+  const hasActivity = !!(await page
+    .locator(".dp-activity-section select")
+    .inputValue());
   await page
     .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
+  if (!hasActivity) {
+    await expect(page).toHaveURL(/#\/today$/);
+    await open(page, `/moment/${(await state(page)).moments.at(-1).id}`);
+  }
   await expect(
     page.getByRole("heading", { name: "Jouw check-in", exact: true }),
   ).toBeVisible();
@@ -755,13 +762,24 @@ test("nametingfouten staan bij het juiste formulier, krijgen telkens zichtbare f
   );
   await expect(after.getByRole("alert")).toHaveCount(0);
 
+  await page.evaluate((key) => {
+    const original = Storage.prototype.setItem;
+    (window as any).__restoreStorage = () => {
+      Storage.prototype.setItem = original;
+    };
+    Storage.prototype.setItem = function (name, value) {
+      if (name === key)
+        throw new DOMException("Test: opslag vol", "QuotaExceededError");
+      return original.call(this, name, value);
+    };
+  }, DATA_KEY);
   for (let attempt = 0; attempt < 2; attempt++) {
     await after
       .getByRole("button", { name: "Nameting opslaan", exact: true })
       .click();
     const error = after.getByRole("alert");
     await expect(error).toHaveText(
-      "Geef aan of je de activiteit hebt geprobeerd. Nee is ook een antwoord.",
+      "Opslaan is niet gelukt. Je ingevulde waarden staan hier nog. Probeer het opnieuw.",
     );
     await expect(error).toBeFocused();
     await expect(before.getByRole("alert")).toHaveCount(0);
@@ -783,8 +801,7 @@ test("nametingfouten staan bij het juiste formulier, krijgen telkens zichtbare f
   await page.screenshot({
     path: testInfo.outputPath("nameting-error-320-large-text.png"),
   });
-  await after.getByRole("button", { name: "Ja", exact: true }).click();
-  await expect(after.getByRole("alert")).toHaveCount(0);
+  await page.evaluate(() => (window as any).__restoreStorage());
   await after
     .getByRole("button", { name: "Nameting opslaan", exact: true })
     .click();
@@ -794,7 +811,9 @@ test("nametingfouten staan bij het juiste formulier, krijgen telkens zichtbare f
   expect(saved.after.emotionRatings).toEqual([
     { ...savedBefore.before.emotionRatings[0], intensity: 42 },
   ]);
-  expect(saved.attempted).toBe(true);
+  expect(saved.attempted).toBeNull();
+  await expect(page).toHaveURL(/#\/today$/);
+  await expect(page.locator(".dp-after-form")).toHaveCount(0);
   expect(await draft(page, `moment:${savedBefore.id}`)).toBeUndefined();
 });
 

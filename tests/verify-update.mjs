@@ -190,19 +190,27 @@ try {
     ? page.getByLabel(/^Situatie \(wie, wat, waar\)/)
     : page.getByLabel("Wie, wat en waar", { exact: true });
   await situation.fill("Updatecontrole: een fictief moment");
+  if (!baselineCommit)
+    await page
+      .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+      .selectOption("Cocaine");
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page).toHaveURL(/#\/craving\/(?!new)/);
-  await expect(
-    page.getByRole("heading", { name: "Je craving", exact: true }),
-  ).toBeVisible();
+  if (baselineCommit) {
+    await expect(page).toHaveURL(/#\/craving\/(?!new)/);
+    await expect(
+      page.getByRole("heading", { name: "Je craving", exact: true }),
+    ).toBeVisible();
+  } else await expect(page).toHaveURL(/#\/today$/);
   let saved = await page.evaluate(() =>
     localStorage.getItem("anchor.app.data.v1"),
   );
   expect(JSON.parse(saved).cravings[0].situation).toBe(
     "Updatecontrole: een fictief moment",
   );
+  if (!baselineCommit)
+    expect(JSON.parse(saved).cravings[0].substance).toBe("Cocaine");
   if (oldestBaseline)
     expect(Object.hasOwn(JSON.parse(saved), "palette")).toBe(false);
   if (baselineCommit) {
@@ -301,6 +309,10 @@ try {
   await page
     .getByLabel(/^Gedachte/)
     .fill("Concept blijft tijdens de update behouden.");
+  if (!baselineCommit)
+    await page
+      .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+      .selectOption("3-MMC");
   if (!baselineCommit) {
     await go("/plan");
     await page
@@ -477,14 +489,26 @@ try {
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page).toHaveURL(/#\/craving\/(?!new)/);
-  await expect(
-    page.getByRole("heading", { name: "Je craving", exact: true }),
-  ).toBeVisible();
+  if (baselineCommit) {
+    await expect(page).toHaveURL(/#\/craving\/(?!new)/);
+    await expect(
+      page.getByRole("heading", { name: "Je craving", exact: true }),
+    ).toBeVisible();
+  } else await expect(page).toHaveURL(/#\/today$/);
   const beforeUpdate = await page.evaluate(() =>
     localStorage.getItem("anchor.app.data.v1"),
   );
   expect(JSON.parse(beforeUpdate).cravings).toHaveLength(2);
+  if (baselineCommit)
+    expect(
+      JSON.parse(beforeUpdate).cravings.every(
+        (entry) => !Object.hasOwn(entry, "substance"),
+      ),
+    ).toBe(true);
+  else
+    expect(
+      JSON.parse(beforeUpdate).cravings.map((entry) => entry.substance),
+    ).toEqual(["Cocaine", "3-MMC"]);
   expect(
     JSON.parse(beforeUpdate).cravings.map((entry) => entry.thought),
   ).toContain("Concept blijft tijdens de update behouden.");

@@ -40,15 +40,42 @@ async function state(page: Page) {
   }, DATA_KEY);
 }
 
+async function expectToday(page: Page) {
+  await expect(page).toHaveURL(/#\/today$/);
+  await expect(
+    page.getByRole("heading", { name: "Vandaag, op jouw tempo.", exact: true }),
+  ).toBeVisible();
+}
+
+async function reopenSaved(page: Page, type: "craving" | "check-in") {
+  await open(page, "/history");
+  await page.getByLabel("Periode").selectOption("all");
+  await page
+    .getByLabel("Soort registratie")
+    .selectOption(type === "craving" ? "craving" : "checkin");
+  await page
+    .getByRole("button", { name: new RegExp(`^Bekijken: ${type} van`) })
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: type === "craving" ? "Je craving" : "Jouw check-in",
+      exact: true,
+    }),
+  ).toBeVisible();
+}
+
 async function createCraving(page: Page, situation = "Testmoment in de tuin") {
   await open(page, "/craving/new");
   await page.getByLabel("Wie, wat en waar", { exact: true }).fill(situation);
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page).toHaveURL(/#\/craving\/(?!new)[^/]+$/);
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
-  return new URL(page.url()).hash.split("/").at(-1)!;
+  await expectToday(page);
+  const saved = (await state(page)).cravings.find(
+    (entry: { situation: string }) => entry.situation === situation,
+  );
+  expect(saved).toBeDefined();
+  return saved.id as string;
 }
 
 test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en bevestigd verwijderen", async ({
@@ -59,9 +86,12 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   await expect(form.locator("input")).toHaveCount(2);
   await expect(form.locator("textarea")).toHaveCount(5);
   await expect(form.locator("input[type=number]")).toHaveCount(0);
-  await expect(form.locator("select")).toHaveCount(3);
+  await expect(form.locator("select")).toHaveCount(4);
   await expect(
-    form.getByText(/EIS|Stemming|intensiteit|Middel|Activiteit/),
+    form.getByRole("combobox", { name: "Middel of gedrag", exact: true }),
+  ).toHaveValue("");
+  await expect(
+    form.getByText(/EIS|Stemming|intensiteit|Activiteit/),
   ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
@@ -87,7 +117,7 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
   const first = await state(page);
   expect(first.cravings).toHaveLength(1);
   expect(first.cravings[0]).toMatchObject({
@@ -111,13 +141,15 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
       "behavior",
     ].sort(),
   );
+  await reopenSaved(page, "craving");
   await page
     .getByLabel(/^Gedrag \(wat deed je\?\)/)
     .fill("Ik belde iemand en ging wandelen.");
   await page.getByRole("button", { name: "Wijzigingen opslaan" }).click();
+  await expectToday(page);
   expect((await state(page)).cravings).toHaveLength(1);
   expect((await state(page)).cravings[0].id).toBe(first.cravings[0].id);
-  await page.getByRole("link", { name: "Naar Terugkijken" }).click();
+  await open(page, "/history");
   await page.getByLabel("Periode").selectOption("all");
   await page.getByLabel("Soort registratie").selectOption("craving");
   await expect(
@@ -139,7 +171,7 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   await page
     .getByRole("button", { name: "Ja, verwijderen", exact: true })
     .click();
-  await expect(page).toHaveURL(/#\/history$/);
+  await expectToday(page);
   expect((await state(page)).cravings).toHaveLength(0);
 });
 
@@ -158,7 +190,7 @@ test("een gedeeltelijke craving en een herladen concept behouden de eigen tekst"
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
   const saved = (await state(page)).cravings[0];
   expect(saved.thought).toBe("Dit is een nog niet opgeslagen gedachte.");
   expect([
@@ -174,6 +206,8 @@ test("een gedeeltelijke craving en een herladen concept behouden de eigen tekst"
     ),
   ).toEqual({});
   await page.reload();
+  await expectToday(page);
+  await reopenSaved(page, "craving");
   await expect(page.getByLabel(/^Gedachte/)).toHaveValue(saved.thought);
 });
 
@@ -212,7 +246,7 @@ test("cravingdatum en tijd mogen als concept leeg zijn; ongeldige invoer wordt n
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
   expect((await state(page)).cravings[0]).toMatchObject({
     date: "2024-02-29",
     time: "12:30",
@@ -322,9 +356,11 @@ test("interne voorbeelden vullen vrije tekst aan zonder verlies, duplicaten of o
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
   expect((await state(page)).cravings[0]).toMatchObject(expected);
   await page.reload();
+  await expectToday(page);
+  await reopenSaved(page, "craving");
   for (const field of fields)
     await expect(
       page.getByRole("textbox", { name: field.name, exact: true }),
@@ -405,8 +441,10 @@ test("datum en tijd vullen hun kolom en stapelen bij een smal scherm of grote te
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
   await page.reload();
+  await expectToday(page);
+  await reopenSaved(page, "craving");
   await expect(date).toHaveValue("2024-02-29");
   await expect(time).toHaveValue("23:59");
 });
@@ -534,6 +572,7 @@ test("een gecorrigeerde nameting behoudt de oorspronkelijke datum en tijd", asyn
   await page
     .getByRole("button", { name: "Nameting opslaan", exact: true })
     .click();
+  await expectToday(page);
   expect((await state(page)).moments[0]).toMatchObject({
     after: { mood: 1, eis: 25 },
     afterDate: "2026-10-10",
@@ -583,6 +622,7 @@ test("een onafgemaakte nameting blijft na herladen zichtbaar en invulbaar", asyn
   await after
     .getByRole("button", { name: "Nameting opslaan", exact: true })
     .click();
+  await expectToday(page);
   expect((await state(page)).moments[0]).toMatchObject({
     after: {
       mood: null,
@@ -623,7 +663,7 @@ test("een opslagfout laat de cravingtekst staan en een nieuwe poging slaagt", as
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
   expect((await state(page)).cravings[0].thought).toBe(
     "Deze tekst mag niet verdwijnen.",
   );
@@ -656,18 +696,17 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
   await page.getByRole("button", { name: "Check-in opslaan" }).click();
   expect((await state(page)).moments[0].after).toBeNull();
   await after.getByRole("button", { name: "Nameting opslaan" }).click();
+  await expectToday(page);
   await expect
     .poll(async () => (await state(page)).moments[0].after?.mood)
     .toBe(1);
-  await page.getByRole("button", { name: "Nieuwe check-in" }).click();
+  await page.getByRole("button", { name: "Check-in toevoegen" }).click();
   await page
     .getByLabel(/^In je eigen woorden/)
     .fill("Een tweede moment op dezelfde dag.");
   await page.getByRole("button", { name: "Check-in opslaan" }).click();
+  await expectToday(page);
   await expect.poll(async () => (await state(page)).moments.length).toBe(2);
-  await page
-    .getByRole("button", { name: "Terug naar Vandaag", exact: true })
-    .click();
   await page
     .getByRole("button", { name: "Dagoverzicht invullen", exact: true })
     .click();
@@ -677,6 +716,7 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
   await page.getByLabel("Uren slaap").fill("7");
   await page.getByLabel("Minuten slaap").fill("30");
   await page.getByRole("button", { name: "Dagoverzicht opslaan" }).click();
+  await expectToday(page);
   await expect.poll(async () => (await state(page)).days.length).toBe(1);
   const saved = await state(page);
   expect(saved.moments).toHaveLength(2);
@@ -973,8 +1013,11 @@ test("losse check-in- en cravingconcepten hervatten zonder opgeslagen record en 
   await after
     .getByRole("button", { name: "Nameting opslaan", exact: true })
     .click();
+  await expectToday(page);
   expect((await state(page)).moments).toEqual([moment]);
   await page.reload();
+  await expectToday(page);
+  await reopenSaved(page, "check-in");
   await expect(page.locator(".dp-after-form")).toContainText("00:20");
   expect((await state(page)).moments).toEqual([moment]);
   await resume("Craving", 1);
@@ -993,6 +1036,7 @@ test("losse check-in- en cravingconcepten hervatten zonder opgeslagen record en 
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
+  await expectToday(page);
   expect((await state(page)).cravings).toEqual([
     { ...craving, thought: revisedThought },
   ]);
@@ -1004,6 +1048,8 @@ test("losse check-in- en cravingconcepten hervatten zonder opgeslagen record en 
     ),
   ).toEqual({});
   await page.reload();
+  await expectToday(page);
+  await reopenSaved(page, "craving");
   await expect(page.getByLabel("Gedachte", { exact: true })).toHaveValue(
     revisedThought,
   );
@@ -1106,6 +1152,7 @@ test("een tweede tabblad kan gegevens niet overschrijven en kan na herladen bewe
   await second
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
+  await expectToday(second);
   await expect
     .poll(async () => (await state(second)).cravings.length)
     .toBe(original.cravings.length + 1);
@@ -1116,6 +1163,7 @@ test("beschadigde gegevens worden bewaard tot een back-up bewust is hersteld", a
   page,
 }) => {
   await createCraving(page, "Deze registratie komt terug uit de back-up.");
+  await reopenSaved(page, "craving");
   const original = await state(page);
   const backup = {
     format: "anchor.app.backup",
@@ -1390,7 +1438,7 @@ test("geïnstalleerde serviceworker opent offline en bewaart nieuwe registraties
   await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
   await expect(page.getByText(/^Je bent offline\./)).toBeVisible();
   const offlineDocument = await page.reload();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
   // Chromium 151 reports onLine=true after an offline SW reload, despite blocked
   // network requests. Prove offline delivery independently of that browser hint.
   const networkEvidence = await page.evaluate(async () => {
@@ -1419,12 +1467,16 @@ test("geïnstalleerde serviceworker opent offline en bewaart nieuwe registraties
   await expect(page.getByText(/^Je bent offline\./)).toHaveCount(
     networkEvidence.onlineHint ? 0 : 1,
   );
+  await reopenSaved(page, "craving");
   await page
     .getByLabel(/^Gedrag \(wat deed je\?\)/)
     .fill("Ook offline aangevuld.");
   await page.getByRole("button", { name: "Wijzigingen opslaan" }).click();
+  await expectToday(page);
   const savedDocument = await page.reload();
   expect(savedDocument?.fromServiceWorker()).toBe(true);
+  await expectToday(page);
+  await reopenSaved(page, "craving");
   await expect(page.getByLabel(/^Gedrag \(wat deed je\?\)/)).toHaveValue(
     "Ook offline aangevuld.",
   );
@@ -1512,7 +1564,8 @@ test("200 procent tekstgrootte, licht thema en lange invoer blijven bruikbaar", 
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "Je craving" })).toBeVisible();
+  await expectToday(page);
+  await reopenSaved(page, "craving");
   await page.screenshot({
     path: testInfo.outputPath("390-light-200-percent-craving.png"),
     fullPage: true,

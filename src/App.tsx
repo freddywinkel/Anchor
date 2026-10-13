@@ -223,6 +223,9 @@ export function App() {
   const [route, setRoute] = useState(() => location.hash.slice(1) || "/today");
   const [drafts, setDrafts] = useState(loadDrafts);
   const [draftError, setDraftError] = useState("");
+  const [pendingDraftCompletion, setPendingDraftCompletion] = useState<
+    string | null
+  >(null);
   const [draftWarning, setDraftWarning] = useState(draftStorageWarning);
   const [draftRecoveryRaw, setDraftRecoveryRaw] = useState<string | null>(null);
   const [draftRecoveryDownloaded, setDraftRecoveryDownloaded] = useState(false);
@@ -261,6 +264,7 @@ export function App() {
   const path = route.split("?")[0];
   const navigate = (to: string) => {
     importSequence.current++;
+    setPendingDraftCompletion(null);
     setModal(null);
     setRoute(to);
     location.hash = to;
@@ -339,6 +343,9 @@ export function App() {
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
   }, []);
+  useEffect(() => {
+    setPendingDraftCompletion(null);
+  }, [path]);
   useEffect(() => {
     const navigation = document.querySelector<HTMLElement>(".dp-bottom-nav");
     if (!navigation) return;
@@ -465,9 +472,10 @@ export function App() {
       setDraftError(
         hasUnpersistedDrafts()
           ? detail?.message ||
-              "Een concept is nog niet op dit apparaat opgeslagen. Houd dit tabblad open."
+              "Een wijziging in je concepten kon niet worden opgeslagen. Houd dit tabblad open en probeer het opnieuw."
           : "",
       );
+      if (hasUnpersistedDrafts()) setToast("");
     };
     window.addEventListener("anchor-draft-status", status);
     return () => window.removeEventListener("anchor-draft-status", status);
@@ -494,20 +502,27 @@ export function App() {
     return true;
   };
   function cacheDraft(key: string, value: unknown | null) {
-    if (!writer || blocked) return;
-    setDrafts((previous) => {
-      const next = { ...previous };
-      if (value === null) delete next[key];
-      else next[key] = value;
-      return next;
-    });
+    if (!writer || blocked) return false;
+    // A failed removal keeps the draft visible in loadDrafts for a later retry.
+    const currentDrafts = loadDrafts();
+    if (value === null && !draftStorageWarning() && !(key in currentDrafts)) {
+      setDrafts(currentDrafts);
+      setPendingDraftCompletion(null);
+      return true;
+    }
     const result = saveDraft(key, value);
+    if (value === null) setPendingDraftCompletion(result.ok ? null : key);
+    setDrafts(loadDrafts());
     setDraftError(
       hasUnpersistedDrafts()
-        ? result.message ||
+        ? value === null
+          ? "Het concept kon niet worden opgeruimd. Houd dit scherm open en probeer het afronden opnieuw."
+          : result.message ||
             "Een concept kon niet worden bewaard. Houd dit tabblad open."
         : "",
     );
+    if (!result.ok && value === null) setToast("");
+    return result.ok;
   }
   function download(text: string, name: string) {
     const url = URL.createObjectURL(
@@ -848,7 +863,10 @@ export function App() {
               />
             )}
             {momentId &&
-              (momentId === "new" || moment || drafts[`moment:${momentId}`] ? (
+              (momentId === "new" ||
+              moment ||
+              drafts[`moment:${momentId}`] ||
+              pendingDraftCompletion === `moment:${momentId}` ? (
                 <MomentView
                   key={momentId}
                   record={moment}
@@ -869,7 +887,8 @@ export function App() {
             {cravingId &&
               (cravingId === "new" ||
               craving ||
-              drafts[`craving:${cravingId}`] ? (
+              drafts[`craving:${cravingId}`] ||
+              pendingDraftCompletion === `craving:${cravingId}` ? (
                 <CravingView
                   key={cravingId}
                   record={craving}
@@ -1009,6 +1028,7 @@ export function App() {
                           setDrafts(loadDrafts());
                           setGeneration((value) => value + 1);
                           setDiscardKey(null);
+                          if (pendingDraftCompletion) navigate("/today");
                         } else
                           setDraftError(
                             result.message || "Verwijderen is niet gelukt.",
@@ -1079,6 +1099,7 @@ export function App() {
                   setDraftError("");
                   setGeneration((value) => value + 1);
                   setModal(null);
+                  if (pendingDraftCompletion) navigate("/today");
                   setToast(
                     "De open concepten zijn verwijderd. Je opgeslagen registraties zijn behouden.",
                   );
@@ -1325,6 +1346,12 @@ function Today({
                     </span>
                     {type === "craving" ? (
                       <>
+                        {(item as CravingRecord).substance && (
+                          <p className="dp-hint">
+                            Middel of gedrag:{" "}
+                            {(item as CravingRecord).substance}
+                          </p>
+                        )}
                         <p className="dp-row-note">
                           {(item as CravingRecord).situation ||
                             (item as CravingRecord).thought ||
@@ -1533,6 +1560,43 @@ function Missing({ navigate }: { navigate: (path: string) => void }) {
   );
 }
 
+function FinishSaved({
+  removed = false,
+  onRetry,
+}: {
+  removed?: boolean;
+  onRetry: () => void;
+}) {
+  const message = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    message.current?.focus({ preventScroll: true });
+    message.current?.scrollIntoView({ block: "center" });
+  }, [onRetry]);
+  return (
+    <section className="dp-card dp-form-page">
+      <h1 tabIndex={-1}>
+        {removed ? "Registratie verwijderd" : "Registratie opgeslagen"}
+      </h1>
+      <p className="dp-error" role="alert" tabIndex={-1} ref={message}>
+        {removed
+          ? "Je registratie is verwijderd"
+          : "Je registratie is opgeslagen"}
+        , maar het concept kon niet worden opgeruimd. Probeer het afronden
+        opnieuw.
+      </p>
+      <Button
+        primary
+        onClick={() => {
+          onRetry();
+          requestAnimationFrame(() => message.current?.focus());
+        }}
+      >
+        Afronden opnieuw proberen
+      </Button>
+    </section>
+  );
+}
+
 function MomentView({
   record,
   state,
@@ -1550,7 +1614,7 @@ function MomentView({
   navigate: (path: string) => void;
   onDraft: (value: Moment) => void;
   draft?: Moment;
-  onClear: () => void;
+  onClear: () => boolean;
   afterInitially: boolean;
   activityIntent: string | null;
 }) {
@@ -1571,6 +1635,7 @@ function MomentView({
   );
   const beforeFormRef = useRef<HTMLFormElement>(null);
   const afterHeadingRef = useRef<HTMLHeadingElement>(null);
+  const activityHeadingRef = useRef<HTMLHeadingElement>(null);
   const activitySelectRef = useRef<HTMLSelectElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
@@ -1586,11 +1651,15 @@ function MomentView({
   );
   const [error, setError] = useState<{
     message: string;
-    form: "before" | "after";
+    form: "before" | "after" | "delete";
     field?: "date" | "time";
   } | null>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingCompletion, setPendingCompletion] = useState<{
+    kind: "before" | "after" | "delete";
+    id: string;
+  } | null>(null);
   const activityLocked =
     !repairActivity && (!!value.after || value.attempted !== null);
   const changedSinceSave =
@@ -1638,7 +1707,7 @@ function MomentView({
   }, [error]);
   function showError(
     message: string,
-    form: "before" | "after" = "before",
+    form: "before" | "after" | "delete" = "before",
     field?: "date" | "time",
   ) {
     // A fresh object also reveals the same message after another save attempt.
@@ -1716,13 +1785,6 @@ function MomentView({
       );
       return;
     }
-    if (followup && value.attempted === null) {
-      showError(
-        "Geef aan of je de activiteit hebt geprobeerd. Nee is ook een antwoord.",
-        "after",
-      );
-      return;
-    }
     if (followup && !value.activity.trim()) {
       showError("Kies eerst een activiteit.", "after");
       return;
@@ -1759,8 +1821,7 @@ function MomentView({
     ) {
       setValue(saved);
       setRepairActivity(false);
-      onClear();
-      navigate(`/moment/${saved.id}`);
+      finish(followup ? "after" : "before", saved.id);
     } else {
       showError(
         "Opslaan is niet gelukt. Je ingevulde waarden staan hier nog. Probeer het opnieuw.",
@@ -1768,6 +1829,28 @@ function MomentView({
       );
     }
   }
+  function finish(kind: "before" | "after" | "delete", id: string) {
+    if (!onClear()) {
+      setError(null);
+      setPendingCompletion({ kind, id });
+      return;
+    }
+    setPendingCompletion(null);
+    setAfterOpen(false);
+    navigate(kind === "before" && value.activity ? `/moment/${id}` : "/today");
+    if (kind === "before" && value.activity)
+      requestAnimationFrame(() => {
+        activityHeadingRef.current?.focus({ preventScroll: true });
+        activityHeadingRef.current?.scrollIntoView({ block: "center" });
+      });
+  }
+  if (pendingCompletion)
+    return (
+      <FinishSaved
+        removed={pendingCompletion.kind === "delete"}
+        onRetry={() => finish(pendingCompletion.kind, pendingCompletion.id)}
+      />
+    );
   return (
     <div className="dp-form-page">
       <button
@@ -1805,7 +1888,9 @@ function MomentView({
       {record && value.activity && (
         <section className="dp-card dp-activity-next">
           <p className="dp-kicker">Activiteit bij deze check-in</p>
-          <h2>{value.activity}</h2>
+          <h2 ref={activityHeadingRef} tabIndex={-1}>
+            {value.activity}
+          </h2>
           <p>
             {record.after
               ? "Je check-in en je nameting zijn bewaard. Hieronder kun je ze bekijken of aanvullen."
@@ -1842,7 +1927,8 @@ function MomentView({
           </div>
           <p className="dp-hint">
             De nameting hoort bij dit moment. Je eerdere scores blijven bewaard.
-            Geef zelf aan of je de activiteit hebt geprobeerd; ook ‘Nee’ mag.
+            Je kunt aangeven of je de activiteit hebt geprobeerd. Dat is
+            optioneel.
           </p>
         </section>
       )}
@@ -2062,11 +2148,12 @@ function MomentView({
             </p>
           )}
           <fieldset>
-            <legend>Heb je de activiteit geprobeerd?</legend>
+            <legend>Heb je de activiteit geprobeerd? (optioneel)</legend>
             <div className="dp-chip-list">
               {[
                 { value: true, label: "Ja" },
                 { value: false, label: "Nee" },
+                { value: null, label: "Niet ingevuld" },
               ].map((item) => (
                 <button
                   type="button"
@@ -2101,6 +2188,11 @@ function MomentView({
       )}
       {record && (
         <div className="dp-delete-area">
+          {error?.form === "delete" && (
+            <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
+              {error.message}
+            </p>
+          )}
           {deleting ? (
             <>
               <p>Dit moment verwijderen?</p>
@@ -2118,9 +2210,12 @@ function MomentView({
                       "Moment verwijderd.",
                     )
                   ) {
-                    onClear();
-                    navigate("/today");
-                  }
+                    finish("delete", record.id);
+                  } else
+                    showError(
+                      "Verwijderen is niet gelukt. Je check-in blijft bewaard.",
+                      "delete",
+                    );
                 }}
               >
                 Verwijderen bevestigen
@@ -2155,7 +2250,7 @@ function DayView({
   navigate: (route: string) => void;
   draft?: Day;
   onDraft: (day: Day) => void;
-  onClear: () => void;
+  onClear: () => boolean;
 }) {
   const [value, setValue] = useState<Day>(
     () =>
@@ -2169,12 +2264,27 @@ function DayView({
       },
   );
   const [error, setError] = useState("");
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  const [pendingCompletion, setPendingCompletion] = useState(false);
+  const showError = (message: string) => {
+    setError(message);
+    requestAnimationFrame(() => {
+      errorRef.current?.focus({ preventScroll: true });
+      errorRef.current?.scrollIntoView({ block: "center" });
+    });
+  };
   const update = (patch: Partial<Day>) => {
     const next = { ...value, ...patch };
     setValue(next);
     onDraft(next);
+    setError("");
   };
+  function finish() {
+    if (onClear()) navigate("/today");
+    else setPendingCompletion(true);
+  }
   if (!validCalendarDate(date)) return <Missing navigate={navigate} />;
+  if (pendingCompletion) return <FinishSaved onRetry={finish} />;
   return (
     <div className="dp-form-page">
       <button
@@ -2190,6 +2300,7 @@ function DayView({
         description="Een terugblik op de dag als geheel. Je losse check-ins blijven aparte momenten."
       />
       <form
+        onInvalidCapture={revealInvalidField}
         onSubmit={(event) => {
           event.preventDefault();
           setError("");
@@ -2199,11 +2310,11 @@ function DayView({
             !value.sleepHours &&
             !value.sleepMinutes
           ) {
-            setError("Vul iets in om je dagoverzicht op te slaan.");
+            showError("Vul iets in om je dagoverzicht op te slaan.");
             return;
           }
           if (value.sleepHours === "24" && Number(value.sleepMinutes) > 0) {
-            setError("Een slaapduur kan maximaal 24 uur zijn.");
+            showError("Een slaapduur kan maximaal 24 uur zijn.");
             return;
           }
           if (
@@ -2218,9 +2329,12 @@ function DayView({
               "Je dagoverzicht is opgeslagen op dit apparaat.",
             )
           ) {
-            onClear();
-            navigate("/today");
-          }
+            setError("");
+            finish();
+          } else
+            showError(
+              "Opslaan is niet gelukt. Je dagoverzicht staat hier nog. Probeer het opnieuw.",
+            );
         }}
       >
         <section className="dp-card dp-form-section">
@@ -2279,7 +2393,7 @@ function DayView({
           </label>
         </section>
         {error && (
-          <p className="dp-error" role="alert">
+          <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
             {error}
           </p>
         )}

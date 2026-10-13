@@ -324,6 +324,9 @@ try {
   }
   const synthetic =
     "Synthetische releasecontrole: fictief moment, geen persoonlijke gegevens.";
+  await page
+    .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+    .selectOption("3-MMC");
   await page.getByLabel("Wie, wat en waar", { exact: true }).fill(synthetic);
   await page
     .getByLabel("Gedachte", { exact: true })
@@ -383,15 +386,23 @@ try {
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Je craving", exact: true }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/#\/today$/);
   const before = await stored();
   assert.equal(before.state.cravings.length, 1);
+  assert.equal(before.state.cravings[0].substance, "3-MMC");
+  await expect(page.locator(".dp-timeline")).toContainText(
+    "Middel of gedrag: 3-MMC",
+  );
   assert.equal(before.state.cravings[0].situation, synthetic);
   for (const [field, value] of Object.entries(internalValues))
     assert.equal(before.state.cravings[0][field], value);
+  await page.goto(
+    new URL(`#/craving/${before.state.cravings[0].id}`, base).href,
+  );
   await page.reload();
+  await expect(
+    page.getByRole("combobox", { name: "Middel of gedrag", exact: true }),
+  ).toHaveValue("3-MMC");
   await expect(
     page.getByLabel("Wie, wat en waar", { exact: true }),
   ).toHaveValue(synthetic);
@@ -458,7 +469,12 @@ try {
   assert.equal(after.state.cravings.length, 1);
   assert.equal(after.state.cravings[0].id, before.state.cravings[0].id);
   assert.equal(after.state.cravings[0].behavior, offlineBehavior);
+  assert.equal(after.state.cravings[0].substance, "3-MMC");
   assert.equal(after.state.revision, before.state.revision + 1);
+  await expect(page).toHaveURL(/#\/today$/);
+  await page.goto(
+    new URL(`#/craving/${before.state.cravings[0].id}`, base).href,
+  );
   await page.reload();
   await expect(page.getByLabel(/^Gedrag \(wat deed je\?\)/)).toHaveValue(
     offlineBehavior,
@@ -551,7 +567,9 @@ try {
     await expect(
       afterForm.getByLabel(`Intensiteit van ${label}`, { exact: true }),
     ).toHaveValue("");
-  await afterForm.getByRole("button", { name: "Ja", exact: true }).click();
+  await expect(
+    afterForm.getByRole("button", { name: "Niet ingevuld", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   await afterForm
     .getByLabel("Intensiteit van Onrustig", { exact: true })
     .fill("0");
@@ -562,6 +580,9 @@ try {
   await afterForm
     .getByRole("button", { name: "Nameting opslaan", exact: true })
     .click();
+  await expect(page).toHaveURL(/#\/today$/);
+  await expect(page.locator(".dp-after-form")).toHaveCount(0);
+  await page.goto(new URL(`#/moment/${savedBeforeMoment.id}`, base).href);
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Jouw check-in", exact: true }),
@@ -574,7 +595,7 @@ try {
   assert.equal(savedMoment.after.mood, 1);
   assert.equal(savedMoment.after.pans, 2);
   assert.equal(savedMoment.after.eis, null);
-  assert.equal(savedMoment.attempted, true);
+  assert.equal(savedMoment.attempted, null);
   assert.deepEqual(
     savedMoment.after.emotionRatings.map(({ label, intensity }) => ({
       label,
@@ -741,6 +762,8 @@ try {
       "check-in and craving actions have equal size and styling on the public mobile page",
       "Today groups the timeline, whole day and small positive moments in visible cards with fitting actions",
       "real craving UI save/reload",
+      "successful craving and follow-up saves close their forms; unanswered activity choice stays null",
+      "optional craving substance survives save, reload, offline editing and backup export",
       "manifest/icons and scoped worker",
       "local display and body fonts load and remain cached offline, including accented characters",
       "five decorative pan and mood illustrations retain their accessible controls offline",
