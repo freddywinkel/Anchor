@@ -3,6 +3,8 @@ import { App } from "./App";
 import { Component, type ReactNode } from "react";
 import "./app.css";
 import "./themes.css";
+import "./fonts.css";
+import "./premium.css";
 class ErrorBoundary extends Component<
   { children: ReactNode },
   { error: boolean }

@@ -96,6 +96,33 @@ async function stored() {
   return { raw, state: validateState(JSON.parse(raw)) };
 }
 
+async function verifyFonts() {
+  const fonts = await page.evaluate(async () => {
+    await document.fonts.ready;
+    const body = await document.fonts.load('500 16px "DM Sans"', "Anchor Ā ă");
+    const heading = await document.fonts.load(
+      '400 36px "Fraunces"',
+      "Anchor Ā ă",
+    );
+    return {
+      body: body.map((font) => ({ family: font.family, status: font.status })),
+      heading: heading.map((font) => ({
+        family: font.family,
+        status: font.status,
+      })),
+      bodyStyle: getComputedStyle(document.querySelector(".dp")).fontFamily,
+      headingStyle: getComputedStyle(document.querySelector("h1")).fontFamily,
+    };
+  });
+  for (const kind of ["body", "heading"]) {
+    assert.ok(fonts[kind].length >= 2, `${kind}: both local font subsets load`);
+    assert.ok(fonts[kind].every((font) => font.status === "loaded"));
+  }
+  assert.match(fonts.bodyStyle, /^"?DM Sans"?/);
+  assert.match(fonts.headingStyle, /^"?Fraunces"?/);
+  return fonts;
+}
+
 try {
   const response = await page.goto(base.href);
   assert.equal(response?.status(), 200);
@@ -130,6 +157,7 @@ try {
   assert.equal(worker.scope, base.href);
   assert.equal(worker.scriptURL, new URL("sw.js", base).href);
   assert.equal(worker.controlled, true);
+  const fonts = await verifyFonts();
   assert.equal(
     await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY),
     null,
@@ -293,7 +321,6 @@ try {
     page.getByLabel("Wie, wat en waar", { exact: true }),
   ).toHaveValue(synthetic);
   assert.equal((await stored()).raw, before.raw);
-
   await context.setOffline(true);
   const offlineProbe = await page.evaluate(
     async (target) => {
@@ -315,6 +342,38 @@ try {
     page.getByLabel("Wie, wat en waar", { exact: true }),
   ).toHaveValue(synthetic);
   assert.equal((await stored()).raw, before.raw);
+  const offlineFonts = await verifyFonts();
+  const fontCache = await page.evaluate(async (root) => {
+    const results = [];
+    for (const file of [
+      "dm-sans-latin.woff2",
+      "dm-sans-latin-ext.woff2",
+      ...[500, 600, 700].flatMap((weight) => [
+        `dm-sans-${weight}-latin.woff2`,
+        `dm-sans-${weight}-latin-ext.woff2`,
+      ]),
+      "fraunces-latin.woff2",
+      "fraunces-latin-ext.woff2",
+    ]) {
+      const response = await caches.match(new URL(`fonts/${file}`, root).href, {
+        ignoreSearch: true,
+      });
+      results.push({
+        file,
+        cached: !!response,
+        signature: response
+          ? String.fromCharCode(
+              ...new Uint8Array(await response.arrayBuffer()).slice(0, 4),
+            )
+          : null,
+      });
+    }
+    return results;
+  }, base.href);
+  assert.ok(
+    fontCache.every((font) => font.cached && font.signature === "wOF2"),
+  );
+
   const offlineBehavior = "Fictief gedrag: offline gewijzigd en opgeslagen.";
   await page.getByLabel(/^Gedrag \(wat deed je\?\)/).fill(offlineBehavior);
   await page
@@ -340,6 +399,12 @@ try {
     page.getByRole("heading", { name: "Hoe gaat het nu?", exact: true }),
   ).toBeVisible();
   const momentForm = page.locator("form").first();
+  await expect(
+    momentForm.locator(".dp-pan-illustration[aria-hidden='true']"),
+  ).toHaveCount(5);
+  await expect(
+    momentForm.locator(".dp-mood-illustration[aria-hidden='true']"),
+  ).toHaveCount(5);
   await momentForm
     .getByRole("button", { name: "-1 Laag", exact: true })
     .click();
@@ -536,11 +601,16 @@ try {
     release,
     worker,
     icons,
+    fonts,
+    offlineFonts,
+    fontCache,
     checks: [
       "exact live commit",
       "fresh empty profile",
       "real craving UI save/reload",
       "manifest/icons and scoped worker",
+      "local display and body fonts load and remain cached offline, including accented characters",
+      "five decorative pan and mood illustrations retain their accessible controls offline",
       "uncached request fails offline",
       "offline edit/save/reload retains record",
       "date/time controls fill their available width",

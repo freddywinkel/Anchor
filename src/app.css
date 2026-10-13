@@ -1,4 +1,4 @@
-/* Anchor's shared theme and layout. Fonts are supplied by the device. */
+/* Anchor's shared layout and system-font fallback; bundled typefaces load separately. */
 html:has(#anchor-root) {
   margin: 0;
   background: var(--anchor-page-bg, #171614);

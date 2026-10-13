@@ -1,0 +1,505 @@
+/* Appearance only. Layout, palette contrast tokens and form behaviour stay shared. */
+.dp {
+  --dp-font-body:
+    "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --dp-font-display: "Fraunces", Georgia, serif;
+  --dp-soft-shadow: 0 4px 16px #00000012, 0 1px 2px #00000014;
+  --dp-card-shadow: 0 14px 40px #0000001a, 0 2px 6px #0000000d;
+  --dp-inset-light: inset 0 1px 0 #ffffff08;
+  font-family: var(--dp-font-body);
+  font-optical-sizing: auto;
+  background-image: radial-gradient(
+    ellipse at 95% 0%,
+    color-mix(in srgb, var(--dp-accent-soft) 55%, transparent),
+    transparent 42rem
+  );
+  -webkit-font-smoothing: antialiased;
+}
+.dp[data-theme="light"] {
+  --dp-soft-shadow: 0 4px 18px #20313f06, 0 1px 3px #20313f05;
+  --dp-card-shadow: 0 16px 40px #20313f08, 0 3px 8px #20313f05;
+  --dp-inset-light: inset 0 1px 0 #ffffffcc;
+}
+.dp h1,
+.dp .dp-now-panel h2,
+.dp .dp-rail-note p,
+.dp .dp-growth-peek p,
+.dp .dp-date-seal {
+  font-family: var(--dp-font-display);
+  letter-spacing: -0.035em;
+  font-weight: 400;
+}
+.dp h1 {
+  line-height: 1.12;
+}
+.dp h2 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.dp .dp-kicker {
+  letter-spacing: 0.075em;
+  font-weight: 600;
+}
+.dp .dp-hint {
+  line-height: 1.65;
+}
+.dp .dp-page-title {
+  margin-bottom: 2rem;
+}
+.dp .dp-lead {
+  line-height: 1.7;
+}
+
+/* Quiet, opaque surfaces keep the text contrast independent of depth effects. */
+.dp .dp-topbar {
+  background: var(--dp-surface);
+  box-shadow: 0 3px 20px #00000003;
+}
+.dp .dp-brand {
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+.dp .dp-brand-mark,
+.dp .dp-mobile-brand > svg {
+  background: var(--dp-accent-soft);
+  color: var(--dp-accent);
+  border: 1px solid var(--dp-border);
+  border-radius: 14px;
+  box-shadow: var(--dp-inset-light);
+}
+.dp .dp-mobile-brand > svg {
+  width: 36px;
+  height: 36px;
+  padding: 6px;
+}
+.dp .dp-top-actions .dp-icon-button {
+  border-radius: 14px;
+}
+.dp .dp-rail {
+  background: var(--dp-surface);
+}
+.dp .dp-rail nav a {
+  border-radius: 14px;
+}
+.dp .dp-rail nav a[aria-current] {
+  box-shadow: var(--dp-inset-light);
+  font-weight: 600;
+}
+.dp .dp-rail-note {
+  padding-inline: 14px;
+}
+.dp .dp-help-rail {
+  border-radius: 16px;
+  box-shadow: var(--dp-soft-shadow);
+}
+.dp .dp-button {
+  border-radius: 14px;
+  min-height: 48px;
+  padding: 0.75rem 1.1rem;
+  letter-spacing: -0.01em;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+.dp .dp-button.primary {
+  box-shadow:
+    0 6px 14px color-mix(in srgb, var(--dp-accent) 15%, transparent),
+    inset 0 1px 0 #ffffff18;
+}
+.dp .dp-button.primary:hover {
+  filter: none;
+  box-shadow: 0 7px 18px color-mix(in srgb, var(--dp-accent) 24%, transparent);
+}
+.dp .dp-icon-button {
+  min-height: 44px;
+  padding: 0;
+}
+.dp .dp-button.quiet {
+  box-shadow: none;
+}
+.dp .dp-panel,
+.dp .dp-dialog,
+.dp .dp-after-form {
+  border-radius: 24px;
+  box-shadow: var(--dp-card-shadow), var(--dp-inset-light);
+}
+.dp .dp-dialog::backdrop {
+  background: #10192399;
+  backdrop-filter: blur(5px);
+}
+.dp .dp-menu-links a,
+.dp .dp-menu-links > button {
+  border-radius: 12px;
+}
+.dp .dp-tag {
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+.dp .dp-round-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: var(--dp-sage-soft);
+  box-shadow: var(--dp-inset-light);
+}
+
+/* The same hero and navigation retain their familiar place. */
+.dp .dp-now-panel {
+  border-radius: 28px;
+  box-shadow: var(--dp-card-shadow), var(--dp-inset-light);
+  background: linear-gradient(
+    115deg,
+    var(--dp-accent-soft),
+    color-mix(in srgb, var(--dp-accent-soft) 72%, var(--dp-surface))
+  );
+  padding: 2.3rem;
+}
+.dp .dp-now-panel h2 {
+  font-size: clamp(2rem, 3vw, 2.65rem);
+}
+.dp .dp-now-panel p:not(.dp-kicker) {
+  line-height: 1.7;
+}
+.dp .dp-now-panel .dp-actions {
+  gap: 0.65rem;
+}
+.dp .dp-now-panel .dp-button:not(.primary) {
+  background: var(--dp-surface);
+}
+.dp .dp-orbit > span {
+  opacity: 0.18;
+  border-width: 1.5px;
+}
+.dp .dp-orbit > span:first-child {
+  background: radial-gradient(
+    circle at 35% 30%,
+    var(--dp-surface),
+    transparent 68%
+  );
+  box-shadow: var(--dp-inset-light);
+}
+.dp .dp-orbit > svg {
+  position: absolute;
+  width: 44%;
+  height: 44%;
+  top: 28%;
+  left: 28%;
+  padding: 12%;
+  box-sizing: content-box;
+  transform: translate(-12%, -12%) rotate(-9deg);
+  color: var(--dp-accent);
+  background: var(--dp-surface);
+  border: 1px solid var(--dp-border);
+  border-radius: 28%;
+  box-shadow: var(--dp-card-shadow);
+}
+.dp .dp-empty {
+  border-radius: 20px;
+  padding: 1.5rem;
+  background: var(--dp-surface);
+  border: 1px dashed var(--dp-border);
+}
+.dp .dp-reflection {
+  border-radius: 24px;
+}
+.dp .dp-reflection,
+.dp .dp-featured-tool,
+.dp .dp-help-inset {
+  box-shadow: var(--dp-soft-shadow);
+}
+.dp .dp-featured-tool,
+.dp .dp-help-inset,
+.dp .dp-help-choices > div {
+  border-radius: 24px;
+}
+.dp .dp-moment-row {
+  border-radius: 0 16px 16px 0;
+}
+
+/* Illustrated choices have a visible selection that does not depend on colour. */
+.dp .dp-mood-options,
+.dp .dp-pans-options {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 3rem), 1fr));
+}
+.dp .dp-mood-options > button,
+.dp .dp-pans-options > button {
+  position: relative;
+  border-radius: 18px;
+  border: 1px solid var(--dp-control-border);
+  background: var(--dp-surface);
+  box-shadow: var(--dp-soft-shadow), var(--dp-inset-light);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+.dp .dp-mood-options > button {
+  padding: 15px 4px 12px;
+  gap: 8px;
+  min-height: 115px;
+}
+.dp .dp-mood-options .dp-mood-illustration {
+  width: 52px;
+  height: 52px;
+  max-width: 100%;
+  transform: none;
+}
+.dp .dp-pans-options > button {
+  padding: 10px 3px 9px;
+  gap: 3px;
+  min-height: 98px;
+}
+.dp .dp-pans-options .dp-pan-illustration {
+  width: 60px;
+  height: auto;
+  aspect-ratio: 1;
+  max-width: 100%;
+}
+.dp .dp-pans-options > button > span {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.dp .dp-mood-options > button[aria-pressed="true"],
+.dp .dp-pans-options > button[aria-pressed="true"] {
+  background: var(--dp-accent-soft);
+  border-color: var(--dp-accent);
+  color: var(--dp-accent);
+  box-shadow:
+    inset 0 0 0 1px var(--dp-accent),
+    var(--dp-soft-shadow);
+}
+.dp .dp-mood-options > button[aria-pressed="true"]::after,
+.dp .dp-pans-options > button[aria-pressed="true"]::after {
+  content: "✓";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  font: 700 11px/1 var(--dp-font-body);
+  border-radius: 50%;
+  background: var(--dp-accent);
+  color: var(--dp-accent-ink);
+}
+.dp .dp-pans-caption {
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  background: var(--dp-accent-soft);
+  margin-bottom: 0;
+}
+.dp .dp-emotion-row {
+  border-radius: 20px;
+  padding: 1.1rem;
+  box-shadow: var(--dp-soft-shadow), var(--dp-inset-light);
+}
+.dp .dp-emotion-row .dp-text-button {
+  font-size: 0.8rem;
+}
+.dp input:not([type="checkbox"]):not([type="radio"]),
+.dp select,
+.dp textarea {
+  border-radius: 13px;
+  background-color: var(--dp-surface);
+  border-color: var(--dp-control-border);
+  box-shadow: inset 0 2px 3px #00000003;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.dp :where(input, select, textarea):focus-visible {
+  border-color: var(--dp-accent);
+}
+.dp .dp-extra-fields > summary {
+  font-weight: 600;
+}
+.dp .dp-form-actions {
+  padding-top: 0.6rem;
+}
+
+/* Secondary pages share the same cards, without nesting every text block. */
+.dp .dp-settings-section {
+  container-type: inline-size;
+  background: var(--dp-surface);
+  border: 1px solid var(--dp-border);
+  border-radius: 24px;
+  padding: clamp(1rem, 2.5vw, 1.75rem);
+  margin-bottom: 1.25rem;
+  box-shadow: var(--dp-soft-shadow);
+}
+.dp .dp-theme-options > label {
+  border-radius: 18px;
+  background: var(--dp-bg);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.dp .dp-theme-options > label.dp-theme-selected {
+  background: var(--dp-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--dp-accent);
+}
+.dp .dp-palette-card .dp-palette-swatches {
+  border-radius: 8px;
+  height: 1.8rem;
+}
+.dp .dp-history-list > li,
+.dp .dp-goal-list > li,
+.dp .dp-growth-list > li {
+  margin-bottom: 0.85rem;
+  padding: 1.25rem;
+  border: 1px solid var(--dp-border);
+  border-radius: 20px;
+  background: var(--dp-surface);
+  box-shadow: var(--dp-soft-shadow);
+}
+.dp .dp-history-list {
+  container: history-list / inline-size;
+}
+.dp .dp-history-entry {
+  min-width: 0;
+  container: history-entry / inline-size;
+}
+@container history-list (max-width: 40rem) {
+  .dp .dp-history-list > li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+  .dp .dp-history-date {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .dp .dp-history-list > li > button {
+    justify-self: start;
+  }
+}
+@container history-entry (max-width: 22rem) {
+  .dp .dp-craving-summary > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+}
+.dp .dp-mood-plot {
+  border-radius: 20px;
+  background: var(--dp-surface);
+  padding: 1.25rem;
+  border: 1px solid var(--dp-border);
+}
+.dp .dp-history-state {
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  background: var(--dp-raised);
+}
+.dp .dp-page-footer {
+  line-height: 1.65;
+}
+
+/* Keep palette names intact when text grows inside a narrow settings card. */
+@container (max-width: 16rem) {
+  .dp .dp-theme-options > label {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+    padding: 0.65rem;
+  }
+  .dp .dp-theme-options input[type="radio"] {
+    align-self: flex-start;
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .dp .dp-mood-options > button:hover,
+  .dp .dp-pans-options > button:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--dp-card-shadow);
+  }
+  .dp .dp-button.primary:hover {
+    transform: translateY(-1px);
+  }
+}
+@media (max-width: 940px) {
+  .dp .dp-bottom-nav {
+    background: var(--dp-surface);
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -6px 28px #00000008;
+    padding-top: 8px;
+  }
+  .dp .dp-bottom-nav a {
+    border-radius: 15px;
+    font-weight: 500;
+  }
+  .dp .dp-bottom-nav a[aria-current] {
+    box-shadow: var(--dp-inset-light);
+    font-weight: 600;
+  }
+}
+@media (max-width: 600px) {
+  .dp h1 {
+    font-size: 2.3rem;
+  }
+  .dp .dp-brand {
+    font-size: 1.22rem;
+  }
+  .dp .dp-topbar {
+    padding-block: max(12px, env(safe-area-inset-top)) 12px;
+  }
+  .dp .dp-now-panel {
+    padding: 1.6rem 1.4rem;
+    border-radius: 24px;
+  }
+  .dp .dp-now-panel h2 {
+    font-size: 2rem;
+  }
+  .dp .dp-orbit {
+    right: -54px;
+    top: -55px;
+    opacity: 0.28;
+  }
+  .dp .dp-orbit > svg {
+    display: none;
+  }
+  .dp .dp-reflection {
+    padding: 1.4rem;
+  }
+  .dp .dp-mood-options > button {
+    font-size: 0.75rem;
+    padding: 12px 2px 9px;
+    min-height: 106px;
+    gap: 6px;
+  }
+  .dp .dp-mood-options .dp-mood-illustration {
+    width: 44px;
+    height: 44px;
+  }
+  .dp .dp-pans-options {
+    gap: 6px;
+  }
+  .dp .dp-pans-options > button {
+    border-radius: 16px;
+    min-height: 90px;
+  }
+  .dp .dp-emotion-row {
+    padding: 1rem;
+  }
+  .dp .dp-settings-section {
+    padding: 16px;
+  }
+  .dp .dp-history-list > li,
+  .dp .dp-goal-list > li,
+  .dp .dp-growth-list > li {
+    padding: 1rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dp *,
+  .dp *::before,
+  .dp *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

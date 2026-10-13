@@ -215,10 +215,37 @@ for (const entry of captured.entries) {
   }
 }
 const precached = new Set(captured.entries.map((entry) => entry.url));
+const fonts = [
+  "fonts/dm-sans-latin.woff2",
+  "fonts/dm-sans-latin-ext.woff2",
+  ...[500, 600, 700].flatMap((weight) => [
+    `fonts/dm-sans-${weight}-latin.woff2`,
+    `fonts/dm-sans-${weight}-latin-ext.woff2`,
+  ]),
+  "fonts/fraunces-latin.woff2",
+  "fonts/fraunces-latin-ext.woff2",
+];
+for (const font of fonts) {
+  const bytes = await readFile(localAsset(font).file);
+  assert.equal(
+    bytes.toString("ascii", 0, 4),
+    "wOF2",
+    `${font}: WOFF2 signature`,
+  );
+  assert.equal(bytes.readUInt32BE(8), bytes.length, `${font}: WOFF2 length`);
+}
+for (const license of ["fonts/OFL-DM-Sans.txt", "fonts/OFL-Fraunces.txt"])
+  assert.match(
+    await readFile(localAsset(license).file, "utf8"),
+    /SIL OPEN FONT LICENSE/,
+  );
 for (const required of [
   "index.html",
   "manifest.webmanifest",
   "release.json",
+  ...fonts,
+  "fonts/OFL-DM-Sans.txt",
+  "fonts/OFL-Fraunces.txt",
   ...manifest.icons.map((icon) => icon.src),
 ])
   assert.ok(precached.has(required), `${required} must be available offline`);
@@ -238,6 +265,7 @@ const result = {
   release,
   icons,
   appleSize,
+  fonts,
   precachedAssets: precached.size,
   cachePrefix: captured.cache.prefix,
   explicitActivation: true,

@@ -307,3 +307,73 @@ test("benoemde intensiteiten blijven volledig leesbaar bij 320 pixels en dubbele
     path: testInfo.outputPath("history-emotions-320-large-text.png"),
   });
 });
+
+test("craving-antwoorden blijven zichtbaar in de geschiedeniskaart bij grotere tekst op telefoon en tablet", async ({
+  page,
+}, testInfo) => {
+  const state = createEmptyState();
+  state.theme = "light";
+  state.palette = "ocean";
+  state.cravings = [
+    {
+      id: "history-craving-reflow",
+      date: testDate,
+      time: "12:00",
+      situation: "Een rustig testmoment",
+      thought: "Ik zoek rust.",
+      bodySensation: "Schouders gespannen.",
+      emotion: "Onrust.",
+      behavior: "Ik ging wandelen.",
+    },
+  ];
+  await openHistory(page, state);
+  await page.addStyleTag({
+    content: "html { font-size: 200% !important; }",
+  });
+  await page.evaluate(() => document.fonts.ready);
+
+  const record = page.locator("#anchor-history-records > li");
+  const values = record.locator(".dp-craving-summary dd");
+  await expect(values).toHaveText([
+    "Ik zoek rust.",
+    "Schouders gespannen.",
+    "Onrust.",
+    "Ik ging wandelen.",
+  ]);
+  for (const width of [390, 820]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const value of await values.all()) {
+      const geometry = await value.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        const textRects = [...range.getClientRects()];
+        return {
+          width: box.width,
+          textHasArea: textRects.some(
+            (rect) => rect.width > 0 && rect.height > 0,
+          ),
+          textFits: textRects.every(
+            (rect) =>
+              rect.left >= box.left - 1 &&
+              rect.right <= box.right + 1 &&
+              rect.top >= box.top - 1 &&
+              rect.bottom <= box.bottom + 1,
+          ),
+        };
+      });
+      // A zero-width, clipped answer can pass a page-level overflow check.
+      expect(
+        geometry.width,
+        `${width}px: answer has usable width`,
+      ).toBeGreaterThan(50);
+      expect(geometry.textHasArea, `${width}px: actual text is laid out`).toBe(
+        true,
+      );
+      expect(geometry.textFits, `${width}px: text is not clipped`).toBe(true);
+    }
+    await record.screenshot({
+      path: testInfo.outputPath(`history-craving-${width}-large-text.png`),
+    });
+  }
+});

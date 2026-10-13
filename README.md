@@ -13,8 +13,11 @@ Een rustig, Nederlandstalig dagboek om meerdere keren per dag in te checken, een
 - **Mijn plan en Mijn groei:** kies een middel of gedrag en daarna je doel: Minderen, Stoppen, Gecontroleerd gebruik of Eigen doel. Een bekend middel hoef je niet opnieuw te typen; bij een eigen middel of gedrag vul je zelf de naam in. Bestaande eigen namen en doelteksten blijven bewerkbaar. Er is ook ruimte voor een persoonlijk plan en fijne momenten.
 - **Hulpmiddelen:** een eenvoudige grondoefening en ruimte voor eigen activiteiten, zonder automatisch een effect of gebruik te registreren.
 - **Eigen kleuren:** kies in Instellingen uit Amber, Salie, Oceaan, Roos en Lavendel. Elk palet heeft een lichte en donkere stand; de knop bovenin wisselt de stand met behoud van je palet.
+- **Verzorgde vormgeving:** zachte kaarten, verfijnde typografie en geïllustreerde stemmingsgezichten en pannetjes. De pannetjes krijgen oplopende stoom en een eigen gezichtsuitdrukking; het geselecteerde antwoord heeft ook een vinkje. Bij grotere tekst verdelen de keuzes zich over meerdere regels.
 
 De app start leeg. Er zijn geen accounts, Fitbit-koppelingen, externe analytics, automatische synchronisatie of medische conclusies.
+
+Versie 1.5.0 vernieuwt de vormgeving zonder het gegevensformaat te wijzigen. DM Sans en Fraunces worden lokaal meegeleverd, inclusief hun SIL Open Font License in `public/fonts/`. Alle gebruikte lettertypen en illustraties zijn offline beschikbaar; de app haalt geen lettertypen bij een externe dienst op.
 
 ## Lokaal starten
 

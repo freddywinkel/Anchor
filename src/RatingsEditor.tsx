@@ -1,14 +1,8 @@
 import { useId, useState, type InvalidEvent } from "react";
 import type { EmotionRating, Ratings } from "./lib/storage";
+import { MoodIllustration, PanIllustration } from "./FeelingIllustrations";
 
 export const MOODS = ["Erg laag", "Laag", "Neutraal", "Goed", "Erg goed"];
-const MOUTHS = [
-  "M10 23 Q17 13 24 23",
-  "M11 22 Q17 17 23 22",
-  "M11 21 H23",
-  "M11 19 Q17 25 23 19",
-  "M9 18 Q17 29 25 18 Z",
-];
 const EMOTIONS = [
   "Bang",
   "Onrustig",
@@ -293,20 +287,7 @@ export function RatingsEditor({
                 })
               }
             >
-              <svg
-                aria-hidden="true"
-                className="dp-mood-face"
-                viewBox="0 0 34 34"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="17" cy="17" r="15.5" />
-                <path d="M11 12 V13 M23 12 V13" />
-                <path d={MOUTHS[index]} />
-              </svg>
+              <MoodIllustration mood={index - 2} />
               <span>{label}</span>
             </button>
           ))}
@@ -336,29 +317,7 @@ export function RatingsEditor({
                   })
                 }
               >
-                <svg
-                  viewBox="0 0 40 40"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  aria-hidden="true"
-                >
-                  <path d="M9 23 H31 V31 Q31 35 27 35 H13 Q9 35 9 31 Z M9 26 H4 M31 26 H36 M7 22 H33" />
-                  {level === 1 && <path d="M13 19 H27 M18 16 H22 V19" />}
-                  {level > 1 && (
-                    <path
-                      d={`M20 19 Q16 ${19 - level * 2} 20 ${18 - level * 3}`}
-                    />
-                  )}
-                  {level > 2 && (
-                    <path
-                      d={`M12 18 Q16 ${17 - level * 2} 12 ${18 - level * 3} M28 18 Q24 ${17 - level * 2} 28 ${18 - level * 3}`}
-                    />
-                  )}
-                  {level > 3 && <path d="M8 17 L5 13 M32 17 L35 13" />}
-                  {level === 5 && <path d="M9 8 L6 5 M31 8 L34 5" />}
-                </svg>
+                <PanIllustration level={level} />
                 <span>{level}</span>
               </button>
             ))}

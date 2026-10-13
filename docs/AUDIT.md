@@ -2,6 +2,20 @@
 
 Auditdatum: 12 oktober 2026, aangevuld op 13 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
 
+## Visuele verfijning — versie 1.5.0
+
+De bestaande schermen en navigatie krijgen een samenhangende afwerking: warme displaykoppen, rustige leestekst, afgeronde kaarten, subtiele diepte en heldere geselecteerde keuzes. De vijf pannetjes zijn eigen vectorillustraties met oplopende stoom en gezichtsuitdrukking; de stemming heeft afzonderlijke, herkenbare gezichten. Knopnamen, cijfers en `aria-pressed` blijven behouden. De illustraties zijn decoratief en vormen geen extra schermlezernamen. Een vinkje maakt de selectie ook zonder kleurverschil zichtbaar.
+
+De stemmings- en pannetjeskeuzes verdelen zich bij grote tekst over meerdere regels. Smalle instellingenkaarten stapelen de radioknop en tekst, zodat paletnamen niet in losse woorddelen uiteenvallen. Invoervelden blijven minimaal 16 px, met de bestaande contrastrijke randen en zichtbare focus. De vijf bestaande kleurpaletten en beide weergavestanden blijven beschikbaar. Animaties en overgangseffecten vervallen bij verminderde beweging.
+
+DM Sans (400/500/600/700) en Fraunces (400) worden met Latin- en Latin Extended-subsets lokaal meegeleverd, samen met hun SIL OFL-licenties. De eerste proef met variabele lettertypen gaf afwijkende gewichten in Windows-WebKit; statische bestanden voorkomen die inconsistentie. Het PWA-artifact controleert bestandsheaders, lokale paden en precaching van alle tien fontbestanden en beide licenties. De publieke verifier controleert de geladen lettertypen en hun offlinecache, naast het bestaande opslaan, herladen en exporteren.
+
+De wijziging raakt geen opslagcontract, opslagkeys, registratievelden of schemaversie. De expliciete updateknop en bescherming van open concepten blijven actief. Bestaande registratie- en back-uptests blijven de basis voor gegevensbehoud. De aanvullende visuele bewijzen staan onder `tmp/premium-qa/`; de 20 toegankelijkheidsmetingen voor alle tien kleurcombinaties op 390 px en 320 px/200% tekst staan onder `tmp/premium-accessibility/`. Dit zijn browserproeven, geen fysieke iPhone-controle.
+
+De extra kaartmarges maakten bij 820 px en 200% tekst de craving-antwoorden in de geschiedenis te smal. De geschiedenis reageert nu op haar werkelijke beschikbare breedte: datum, inhoud en knop stapelen eerder, evenals labels en antwoorden. Een regressietest meet echte tekstvlakken en afkappen; alleen controleren op horizontale scroll bleek hiervoor onvoldoende.
+
+Lokale verificatie: TypeScript, productiebuild/PWA-controle, 61 opslagtests, 46 unieke browsergevallen en 25 aanvullende controles geslaagd; dependency-audit zonder bekende kwetsbaarheden. De echte workerupdate slaagt met 11 controles en de overgang vanaf `a42fc3b` met 7 controles, inclusief ongewijzigde gegevens en offline herladen. De aanvullende Chromium/Windows-WebKit-matrix omvat 48 schermgevallen, waaronder desktopweergave, met geladen lokale fonts, ongewijzigde synthetische registraties en geen externe verzoeken. De publieke versie wordt na deployment afzonderlijk aan de exacte broncommit getoetst.
+
 ## Momentopname en benoemde emoties — versie 1.4.0
 
 De eerdere momentopname plaatste één algemene EIS onder stemming, terwijl meerdere emotiewoorden apart en ingeklapt stonden. De nameting had geen eigen emotienamen; het dagoverzicht gebruikte hetzelfde cijfer zonder emotiekeuze. Dit is vervangen door afzonderlijke stemming, optionele pannetjes (1–5) voor emotionele spanning, en benoemde emoties met elk een eigen optionele intensiteit (0–100). De pannetjes staan naast het stemmingsblok, zonder conversie of automatische koppeling aan stemming of emotiecijfers. Dit zijn persoonlijke inschattingen; er wordt geen klinische uitkomst berekend.

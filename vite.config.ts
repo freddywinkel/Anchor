@@ -62,7 +62,7 @@ export default defineConfig({
       workbox: {
         cacheId: "anchor-app",
         cleanupOutdatedCaches: true,
-        globPatterns: ["**/*.{js,css,html,svg,png,ico,json}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,json,woff2,txt}"],
         navigateFallback: "index.html",
         navigateFallbackAllowlist: [
           new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
