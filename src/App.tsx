@@ -254,7 +254,7 @@ export function App() {
     },
     onRegisterError() {
       setPwaWarning(
-        "Offline installeren is nu niet gelukt. Je opgeslagen gegevens blijven op dit apparaat.",
+        "De bestanden voor offline gebruik konden niet worden klaargezet. Je opgeslagen gegevens blijven in deze browser.",
       );
     },
   });
@@ -589,7 +589,7 @@ export function App() {
         <div className="dp-rail-extra">
           <a href="#/growth">
             <Leaf size={19} />
-            Mijn groei
+            Kleine momenten
           </a>
           <a href="#/settings">
             <Settings size={19} />
@@ -660,8 +660,7 @@ export function App() {
         <main id="anchor-main" tabIndex={-1} key={generation}>
           {!online && (
             <div className="dp-notice" role="status">
-              Je bent offline. Opgeslagen gegevens en deze app blijven op dit
-              apparaat beschikbaar.
+              Je bent offline. Je kunt verder werken in dit geopende scherm.
             </div>
           )}
           {lockChecked && !writer && (
@@ -738,9 +737,9 @@ export function App() {
               {draftCount > 0 && (
                 <p>
                   Je hebt {draftCount}{" "}
-                  {draftCount === 1 ? "bewaard concept" : "bewaarde concepten"}.{" "}
-                  Ook als het formulier niet in beeld is. Rond je concepten
-                  eerst af of verwijder wat je niet wilt bewaren.
+                  {draftCount === 1 ? "open concept" : "open concepten"}. Ook
+                  als het formulier niet in beeld is. Rond je concepten eerst af
+                  of verwijder wat je niet wilt bewaren.
                 </p>
               )}
               <div className="dp-actions">
@@ -797,8 +796,8 @@ export function App() {
               <>
                 <PageTitle
                   kicker="Ook dit hoort bij je dag"
-                  title="Mijn groei"
-                  description="Een fijn moment hoeft geen prestatie te zijn."
+                  title="Kleine momenten"
+                  description="Bewaar een fijn moment, een bewuste keuze of iets dat je wilt onthouden."
                 />
                 <GrowthView state={state} onSave={save} />
               </>
@@ -936,7 +935,7 @@ export function App() {
               <BookOpen size={20} />
             </Button>
             <a href="#/growth" onClick={() => setModal(null)}>
-              Mijn groei
+              Kleine momenten
               <Leaf size={20} />
             </a>
             <a href="#/settings" onClick={() => setModal(null)}>
@@ -949,9 +948,9 @@ export function App() {
       {modal === "drafts" && (
         <Dialog title="Open concepten" onClose={() => setModal(null)}>
           <p>
-            Concepten zijn bewaarde, onafgemaakte formulieren. Ze blijven hier
-            staan als je naar een ander scherm gaat. Je kunt verder schrijven of
-            een concept verwijderen. Opgeslagen registraties blijven behouden.
+            Concepten zijn onafgemaakte formulieren. Ze blijven hier staan als
+            je naar een ander scherm gaat. Je kunt verder schrijven of een
+            concept verwijderen. Opgeslagen registraties blijven behouden.
           </p>
           {needRefresh && draftCount > 0 && (
             <p>Rond deze concepten af of verwijder ze voordat je bijwerkt.</p>
@@ -979,7 +978,7 @@ export function App() {
                     : type === "goal"
                       ? "Doel"
                       : type === "growth"
-                        ? "Fijn moment"
+                        ? "Klein moment"
                         : "Mijn plan";
             const details = value as {
               date?: string;
@@ -1081,7 +1080,7 @@ export function App() {
                   setGeneration((value) => value + 1);
                   setModal(null);
                   setToast(
-                    "De conceptopslag is hersteld. Je opgeslagen registraties zijn behouden.",
+                    "De open concepten zijn verwijderd. Je opgeslagen registraties zijn behouden.",
                   );
                 } else
                   setDraftError(result.message || "Herstellen is niet gelukt.");
@@ -1127,7 +1126,7 @@ export function App() {
         >
           <p>
             Kies een back-up die met Anchor is gemaakt. Na bevestiging vervangt
-            deze de opgeslagen Anchor-gegevens op dit apparaat.
+            deze de opgeslagen Anchor-gegevens in deze browser.
           </p>
           <label className="dp-field">
             Back-upbestand
@@ -1168,12 +1167,12 @@ export function App() {
               <p>
                 {imported.cravings.length} cravingregistraties ·{" "}
                 {imported.moments.length} check-ins · {imported.days.length}{" "}
-                dagoverzichten · {imported.growth.length} fijne momenten ·{" "}
+                dagoverzichten · {imported.growth.length} kleine momenten ·{" "}
                 {imported.goals.length} doelen.
               </p>
               <p>
-                Bewaar eerst een kopie van de huidige opslag. Open concepten
-                moeten eerst opgeslagen of geannuleerd worden.
+                Download eerst een kopie van je huidige gegevens. Rond open
+                concepten af of verwijder ze via ‘Open concepten’.
               </p>
               <Button
                 onClick={() => {
@@ -1213,7 +1212,7 @@ export function App() {
                       draftError
                     ) {
                       setImportError(
-                        "Sla open concepten eerst op of annuleer ze. Je gegevens zijn niet vervangen.",
+                        "Rond open concepten eerst af of verwijder ze via ‘Open concepten’. Je gegevens zijn niet vervangen.",
                       );
                       return;
                     }
@@ -1272,21 +1271,20 @@ function Today({
       />
       <section className="dp-now-panel">
         <div>
-          <p className="dp-kicker">Even bij jezelf inchecken</p>
+          <p className="dp-kicker">Een moment voor jezelf</p>
           <h2>Hoe gaat het nu?</h2>
           <p>
-            Een paar woorden of een score is genoeg.
-            <br />
-            Je kunt later altijd weer inchecken.
+            Leg vast hoe je je voelt, of beschrijf een moment van drang. Je kunt
+            zo vaak inchecken als je wilt.
           </p>
-          <div className="dp-actions">
+          <div className="dp-actions dp-entry-actions">
             <Button primary onClick={() => navigate("/moment/new")}>
-              <Plus size={20} />
-              Check-in toevoegen
-              <ArrowRight size={18} />
+              <span>Check-in toevoegen</span>
+              <ArrowRight size={18} aria-hidden="true" />
             </Button>
-            <Button onClick={() => navigate("/craving/new")}>
-              Craving vastleggen
+            <Button primary onClick={() => navigate("/craving/new")}>
+              <span>Craving vastleggen</span>
+              <ArrowRight size={18} aria-hidden="true" />
             </Button>
           </div>
         </div>
@@ -1301,7 +1299,7 @@ function Today({
         <section className="dp-card dp-today-moments">
           <div className="dp-section-head">
             <div>
-              <p className="dp-kicker">Kleine momentopnamen</p>
+              <p className="dp-kicker">Check-ins en cravings</p>
               <h2>Jouw dag tot nu toe</h2>
             </div>
             <span className="dp-count">{current.length}</span>
@@ -1359,10 +1357,10 @@ function Today({
             </ol>
           ) : (
             <div className="dp-empty">
-              <h3>Je dag mag hier beginnen.</h3>
+              <h3>Nog niets vastgelegd vandaag</h3>
               <p>
-                Leg een moment vast wanneer dat voor jou helpt. Er hoeft nog
-                niets te staan.
+                Je check-ins en cravings verschijnen hier zodra je ze opslaat.
+                Leg iets vast wanneer dat voor jou helpt.
               </p>
             </div>
           )}
@@ -1395,7 +1393,7 @@ function Today({
               </p>
             )}
             <Button onClick={() => navigate(`/day/${today()}`)}>
-              Mijn hele dag
+              {day ? "Dagoverzicht bewerken" : "Dagoverzicht invullen"}
               <ArrowRight size={17} />
             </Button>
             <small>Een aparte terugblik, naast je losse momenten.</small>
@@ -1403,17 +1401,17 @@ function Today({
           {state.homeShowGrowth && (
             <section className="dp-card dp-growth-peek">
               <div className="dp-card-heading">
-                <h2>Ook de kleine dingen</h2>
+                <h2>Kleine momenten bewaren</h2>
                 <span className="dp-round-icon" aria-hidden="true">
                   <Leaf size={22} />
                 </span>
               </div>
               <p>
                 {favorite?.text ||
-                  "Een fijn moment, iets wat je koos, of iets dat je wilt onthouden."}
+                  "Een fijn moment, een bewuste keuze of iets anders dat je wilt onthouden."}
               </p>
               <Button onClick={() => navigate("/growth")}>
-                Mijn groei
+                Moment toevoegen
                 <ArrowRight size={16} />
               </Button>
             </section>
@@ -1458,7 +1456,7 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
           </div>
         </section>
         <section className="dp-card dp-plain-section">
-          <h2>Ook in je eigen leven</h2>
+          <h2>Een eigen activiteit</h2>
           <p>
             Wandelen, schilderen, iemand spreken of iets anders. Kies wat je
             wilt doen, leg eventueel vast hoe je je vooraf voelt en check later
@@ -1476,7 +1474,7 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
           <h3>Je eigen houvast</h3>
           <p>Lees wat je jezelf wilt meegeven wanneer het lastig wordt.</p>
         </div>
-        <Button onClick={() => navigate("/help")}>Mijn houvast</Button>
+        <Button onClick={() => navigate("/help")}>Mijn houvast openen</Button>
       </section>
     </>
   );
@@ -1528,11 +1526,9 @@ function Support({
 function Missing({ navigate }: { navigate: (path: string) => void }) {
   return (
     <div className="dp-empty">
-      <h1 tabIndex={-1}>Dit moment is er niet.</h1>
-      <p>Misschien is het verwijderd of heb je een andere back-up hersteld.</p>
-      <Button onClick={() => navigate("/history")}>
-        Terug naar het overzicht
-      </Button>
+      <h1 tabIndex={-1}>Deze pagina is niet gevonden</h1>
+      <p>Controleer de link of zoek je registratie in Terugkijken.</p>
+      <Button onClick={() => navigate("/history")}>Naar Terugkijken</Button>
     </div>
   );
 }
@@ -1758,7 +1754,7 @@ function MomentView({
         },
         followup
           ? "Je nameting is opgeslagen op dit apparaat."
-          : "Dit moment is opgeslagen op dit apparaat.",
+          : "Je check-in is opgeslagen op dit apparaat.",
       )
     ) {
       setValue(saved);
@@ -1779,12 +1775,10 @@ function MomentView({
         onClick={() => navigate("/today")}
       >
         <ArrowLeft size={17} />
-        Mijn dag
+        Terug naar Vandaag
       </button>
       <PageTitle
-        kicker={
-          record ? `${dateText(value.date)} · ${value.time}` : "Momentopname"
-        }
+        kicker={record ? `${dateText(value.date)} · ${value.time}` : "Check-in"}
         title={record ? "Jouw check-in" : "Hoe gaat het nu?"}
         description={
           record
@@ -1801,10 +1795,10 @@ function MomentView({
       {record && (
         <div className="dp-saved-strip">
           <CheckCheck size={19} />
-          Opgeslagen moment
+          Check-in opgeslagen
           <Button className="quiet" onClick={() => navigate("/moment/new")}>
             <Plus size={17} />
-            Nog een check-in
+            Nieuwe check-in
           </Button>
         </div>
       )}
@@ -2030,7 +2024,7 @@ function MomentView({
           )}
           {!record && value.activity && (
             <p className="dp-hint">
-              Kies hieronder ‘Dit moment opslaan’. Daarna zie je hoe je verder
+              Kies hieronder ‘Check-in opslaan’. Daarna zie je hoe je verder
               kunt met je activiteit en de nameting.
             </p>
           )}
@@ -2043,7 +2037,7 @@ function MomentView({
         <div className="dp-form-actions">
           <Button type="submit" primary>
             <Check size={18} />
-            Dit moment opslaan
+            Check-in opslaan
           </Button>
           <span>Op dit apparaat</span>
         </div>
@@ -2188,7 +2182,7 @@ function DayView({
         onClick={() => navigate("/today")}
       >
         <ArrowLeft size={17} />
-        Mijn dag
+        Terug naar Vandaag
       </button>
       <PageTitle
         kicker={dateText(date, true)}
@@ -2243,8 +2237,8 @@ function DayView({
           </span>
           <h2>Je slaap</h2>
           <p>
-            Hoeveel heb je afgelopen nacht geslapen? Laat leeg als je het niet
-            weet.
+            Hoeveel sliep je in de nacht vóór deze dag? Laat leeg als je het
+            niet weet.
           </p>
           <div className="dp-form-grid">
             <label className="dp-field">

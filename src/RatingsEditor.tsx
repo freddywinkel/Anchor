@@ -143,7 +143,7 @@ function EmotionEditor({
       <p className="dp-hint" id={hintId}>
         {day
           ? "Kies een emotie die vandaag opviel. Noteer hoe sterk die op het opvallendste moment was; dit is geen gemiddelde van je check-ins."
-          : "Geef iedere emotie een eigen cijfer. Ook een prettig gevoel kan sterk zijn."}{" "}
+          : "Je kunt iedere emotie een eigen cijfer geven. Ook een prettig gevoel kan sterk zijn."}{" "}
         0 = niet voelbaar · 100 = zeer sterk voor jou. Een leeg cijfer blijft
         onbekend.
       </p>
@@ -364,7 +364,7 @@ export function RatingsEditor({
           <label className="dp-field">
             Intensiteit — emotie niet gekoppeld
             <span className="dp-hint">
-              Dit eerdere cijfer heeft geen vastgelegde koppeling aan een
+              0–100. Dit eerdere cijfer heeft geen vastgelegde koppeling aan een
               emotie. Het blijft afzonderlijk bewaard.
             </span>
             <input

@@ -123,15 +123,15 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   await expect(
     page.getByText("Ik belde iemand en ging wandelen."),
   ).toBeVisible();
-  await page.getByRole("button", { name: /^Bekijk craving/ }).click();
+  await page.getByRole("button", { name: /^Bekijken: craving/ }).click();
   await page
     .getByRole("button", { name: "Craving verwijderen", exact: true })
     .click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Bewaren", exact: true }),
+    page.getByRole("button", { name: "Behouden", exact: true }),
   ).toBeFocused();
-  await page.getByRole("button", { name: "Bewaren", exact: true }).click();
+  await page.getByRole("button", { name: "Behouden", exact: true }).click();
   expect((await state(page)).cravings).toHaveLength(1);
   await page
     .getByRole("button", { name: "Craving verwijderen", exact: true })
@@ -484,7 +484,7 @@ test("ongeldige dagroutes maken geen misleidend dagformulier aan", async ({
   for (const date of ["2026-02-31", "2026-13-01", "1899-12-31", "2200-01-01"]) {
     await open(page, `/day/${date}`);
     await expect(
-      page.getByRole("heading", { name: "Dit moment is er niet." }),
+      page.getByRole("heading", { name: "Deze pagina is niet gevonden" }),
     ).toBeVisible();
     await expect(page.locator("main form")).toHaveCount(0);
   }
@@ -553,7 +553,7 @@ test("een onafgemaakte nameting blijft na herladen zichtbaar en invulbaar", asyn
     .getByRole("combobox", { name: "Activiteit", exact: true })
     .selectOption("Schilderen");
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Nameting invullen", exact: true })
@@ -642,7 +642,7 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
   await page
     .getByRole("combobox", { name: "Activiteit", exact: true })
     .selectOption("Buiten wandelen");
-  await page.getByRole("button", { name: "Dit moment opslaan" }).click();
+  await page.getByRole("button", { name: "Check-in opslaan" }).click();
   await expect(
     page.getByRole("heading", { name: "Jouw check-in" }),
   ).toBeVisible();
@@ -653,21 +653,23 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
   await after
     .getByLabel("Intensiteit van Onrustig", { exact: true })
     .fill("30");
-  await page.getByRole("button", { name: "Dit moment opslaan" }).click();
+  await page.getByRole("button", { name: "Check-in opslaan" }).click();
   expect((await state(page)).moments[0].after).toBeNull();
   await after.getByRole("button", { name: "Nameting opslaan" }).click();
   await expect
     .poll(async () => (await state(page)).moments[0].after?.mood)
     .toBe(1);
-  await page.getByRole("button", { name: "Nog een check-in" }).click();
+  await page.getByRole("button", { name: "Nieuwe check-in" }).click();
   await page
     .getByLabel(/^In je eigen woorden/)
     .fill("Een tweede moment op dezelfde dag.");
-  await page.getByRole("button", { name: "Dit moment opslaan" }).click();
+  await page.getByRole("button", { name: "Check-in opslaan" }).click();
   await expect.poll(async () => (await state(page)).moments.length).toBe(2);
-  await page.getByRole("button", { name: "Mijn dag", exact: true }).click();
   await page
-    .getByRole("button", { name: "Mijn hele dag", exact: true })
+    .getByRole("button", { name: "Terug naar Vandaag", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Dagoverzicht invullen", exact: true })
     .click();
   await page
     .getByLabel("Wat wil je onthouden van vandaag?")
@@ -702,14 +704,14 @@ test("back-up downloaden, ongeldige import weigeren en geldige vervanging bevest
   await createCraving(page, "Oorspronkelijke aantekening");
   await open(page, "/settings");
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Back-up exporteren" }).click();
+  await page.getByRole("button", { name: "Back-up downloaden" }).click();
   const download = await downloadPromise;
   const backup = JSON.parse(await readFile((await download.path())!, "utf8"));
   expect(backup.format).toBe("anchor.app.backup");
   expect(backup.state.cravings).toHaveLength(1);
   const before = await state(page);
   await page
-    .getByRole("button", { name: "Back-up importeren", exact: true })
+    .getByRole("button", { name: "Back-up herstellen", exact: true })
     .click();
   await page.getByLabel("Back-upbestand").setInputFiles({
     name: "invalid.json",
@@ -1021,7 +1023,7 @@ test("een back-up kan een open concept niet ongemerkt vervangen", async ({
   await createCraving(page, "Een opgeslagen craving.");
   await open(page, "/settings");
   const downloadPromise = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Back-up exporteren" }).click();
+  await page.getByRole("button", { name: "Back-up downloaden" }).click();
   const download = await downloadPromise;
   const backup = await readFile((await download.path())!);
   await open(page, "/craving/new");
@@ -1031,7 +1033,7 @@ test("een back-up kan een open concept niet ongemerkt vervangen", async ({
   await open(page, "/settings");
   const before = await state(page);
   await page
-    .getByRole("button", { name: "Back-up importeren", exact: true })
+    .getByRole("button", { name: "Back-up herstellen", exact: true })
     .click();
   await page.getByLabel("Back-upbestand").setInputFiles({
     name: "Anchor-backup.json",
@@ -1080,17 +1082,17 @@ test("een tweede tabblad kan gegevens niet overschrijven en kan na herladen bewe
   await second
     .getByRole("combobox", { name: "Soort registratie", exact: true })
     .selectOption("craving");
-  await second.getByRole("button", { name: /^Bekijk craving/ }).click();
+  await second.getByRole("button", { name: /^Bekijken: craving/ }).click();
   await expect(second.getByLabel("Gedachte", { exact: true })).toBeDisabled();
   await second.goto("./#/settings");
   await expect(
     second.getByRole("radio", { name: "Licht", exact: true }),
   ).toBeDisabled();
   await expect(
-    second.getByRole("button", { name: "Back-up importeren" }),
+    second.getByRole("button", { name: "Back-up herstellen" }),
   ).toBeDisabled();
   const downloadPromise = second.waitForEvent("download");
-  await second.getByRole("button", { name: "Back-up exporteren" }).click();
+  await second.getByRole("button", { name: "Back-up downloaden" }).click();
   const download = await downloadPromise;
   const snapshot = JSON.parse(await readFile((await download.path())!, "utf8"));
   expect(snapshot.state.cravings).toEqual(original.cravings);

@@ -216,10 +216,39 @@ try {
     icons.push({ url: iconUrl.href, size });
   }
 
+  const entryActions = await page
+    .locator(".dp-entry-actions > button")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => {
+        const box = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        return {
+          name: button.textContent.trim(),
+          width: box.width,
+          height: box.height,
+          background: style.backgroundColor,
+          color: style.color,
+          border: style.borderRadius,
+        };
+      }),
+    );
+  assert.deepEqual(
+    entryActions.map((action) => action.name),
+    ["Check-in toevoegen", "Craving vastleggen"],
+  );
+  assert.ok(Math.abs(entryActions[0].width - entryActions[1].width) <= 1);
+  assert.ok(Math.abs(entryActions[0].height - entryActions[1].height) <= 1);
+  assert.ok(entryActions.every((action) => action.height >= 44));
+  for (const property of ["background", "color", "border"])
+    assert.equal(entryActions[0][property], entryActions[1][property]);
+  await page.screenshot({
+    path: path.join(directory, "phone-today-actions.png"),
+  });
+
   const growthCard = page.locator(".dp-growth-peek");
   await expect(
     growthCard.getByRole("heading", {
-      name: "Ook de kleine dingen",
+      name: "Kleine momenten bewaren",
       exact: true,
     }),
   ).toBeVisible();
@@ -490,7 +519,7 @@ try {
     .getByRole("combobox", { name: "Activiteit", exact: true })
     .selectOption("Buiten wandelen");
   await momentForm
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Jouw check-in", exact: true }),
@@ -611,7 +640,7 @@ try {
   const [download] = await Promise.all([
     page.waitForEvent("download"),
     page
-      .getByRole("button", { name: "Back-up exporteren", exact: true })
+      .getByRole("button", { name: "Back-up downloaden", exact: true })
       .click(),
   ]);
   const backupPath = path.join(directory, "synthetic-anchor-backup.json");
@@ -702,12 +731,14 @@ try {
     worker,
     icons,
     todayCards,
+    entryActions,
     fonts,
     offlineFonts,
     fontCache,
     checks: [
       "exact live commit",
       "fresh empty profile",
+      "check-in and craving actions have equal size and styling on the public mobile page",
       "Today groups the timeline, whole day and small positive moments in visible cards with fitting actions",
       "real craving UI save/reload",
       "manifest/icons and scoped worker",

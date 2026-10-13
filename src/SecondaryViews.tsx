@@ -248,7 +248,7 @@ export function HistoryView({
                 date: m.date,
                 time: m.time,
                 mood: m.before.mood,
-                label: "Moment",
+                label: "Check-in",
               },
             ]
           : []),
@@ -279,7 +279,7 @@ export function HistoryView({
         <label className="dp-field">
           Periode
           <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-            <option value="week">7 dagen</option>
+            <option value="week">Afgelopen 7 dagen</option>
             <option value="all">Alle dagen</option>
           </select>
         </label>
@@ -379,7 +379,7 @@ export function HistoryView({
               </div>
               <p className="dp-plot-key">
                 <span>
-                  <i aria-hidden="true" /> Moment
+                  <i aria-hidden="true" /> Check-in
                 </span>
                 <span>
                   <i className="dp-key-after" aria-hidden="true" /> Nameting
@@ -387,7 +387,7 @@ export function HistoryView({
               </p>
               <details className="dp-observation-details">
                 <summary>
-                  Meetwaarden van de grafiek als tekst ({graphPoints.length})
+                  Scores bekijken als tekst ({graphPoints.length})
                 </summary>
                 <ul>
                   {graphPoints.map((point) => (
@@ -414,8 +414,8 @@ export function HistoryView({
             </>
           ) : (
             <p className="dp-empty-inline">
-              Nog geen stemmingsmetingen binnen deze selectie. Notities en
-              dagsamenvattingen blijven hieronder zichtbaar.
+              Geen stemmingsscores gevonden binnen deze selectie. Hieronder
+              staan de registraties die bij je filters passen.
             </p>
           )}
         </section>
@@ -451,14 +451,14 @@ export function HistoryView({
                       ? "Mijn hele dag"
                       : entry.type === "craving"
                         ? "Craving / drang"
-                        : entry.item.activity || "Momentcheck-in"}
+                        : entry.item.activity || "Check-in"}
                   </h3>
                   <p className="dp-muted">
                     {entry.type === "day"
                       ? `Dagsamenvatting · stemming ${moodLabel(entry.item.ratings.mood)}`
                       : entry.type === "craving"
                         ? entry.item.situation || "Situatie niet ingevuld"
-                        : `Momentcheck-in · stemming ${moodLabel(entry.item.before.mood)}${entry.item.after ? ` → ${moodLabel(entry.item.after.mood)}` : ""}`}
+                        : `Check-in · stemming ${moodLabel(entry.item.before.mood)}${entry.item.after ? ` → ${moodLabel(entry.item.after.mood)}` : ""}`}
                   </p>
                   {entry.type === "moment" && (
                     <>
@@ -516,7 +516,7 @@ export function HistoryView({
                 <button
                   type="button"
                   className="dp-button quiet"
-                  aria-label={`Bekijk ${entry.type === "day" ? "hele dag" : entry.type === "craving" ? "craving" : "momentcheck-in"} van ${dateLabel(entry.date)}${entry.type !== "day" ? ` om ${entry.time}` : ""}`}
+                  aria-label={`Bekijken: ${entry.type === "day" ? "hele dag" : entry.type === "craving" ? "craving" : "check-in"} van ${dateLabel(entry.date)}${entry.type !== "day" ? ` om ${entry.time}` : ""}`}
                   onClick={() =>
                     entry.type === "day"
                       ? onOpenDay(entry.date)
@@ -525,7 +525,7 @@ export function HistoryView({
                         : onOpenMoment(entry.item.id)
                   }
                 >
-                  Bekijk <ArrowUpRight size={17} aria-hidden="true" />
+                  Bekijken <ArrowUpRight size={17} aria-hidden="true" />
                 </button>
               </li>
             ))}
@@ -688,7 +688,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
             ? state.goals.map((item) => (item.id === entry.id ? entry : item))
             : [...state.goals, entry],
         },
-        existing ? "Je doel is aangepast." : "Je doel is toegevoegd.",
+        "Je doel is opgeslagen.",
       )
     )
       clearGoal();
@@ -739,14 +739,14 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
     <div className="dp-plan">
       <section aria-labelledby="dp-goals-title">
         <div className="dp-section-head">
-          <h2 id="dp-goals-title">Doelen en middelen</h2>
+          <h2 id="dp-goals-title">Mijn doelen</h2>
           <button
             ref={addButton}
             className="dp-button quiet"
             onClick={() => openGoal()}
           >
             <Plus size={17} aria-hidden="true" />
-            {goal ? "Naar je concept" : "Doel toevoegen"}
+            {goal ? "Naar het formulier" : "Doel toevoegen"}
           </button>
         </div>
         {!state.goals.length && (
@@ -773,10 +773,10 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                   className="dp-button quiet"
                   disabled={!!goal}
                   onClick={() => openGoal(item)}
-                  aria-label={`Bewerk doel ${goalLabel(item)}`}
+                  aria-label={`Bewerken: doel ${goalLabel(item)}`}
                 >
                   <Pencil size={16} aria-hidden="true" />
-                  Aanpassen
+                  Bewerken
                 </button>
                 <button
                   className="dp-button quiet"
@@ -847,7 +847,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
           <form className="dp-goal-editor dp-panel dp-card" onSubmit={saveGoal}>
             <h3>
               {state.goals.some((item) => item.id === goal.id)
-                ? "Doel aanpassen"
+                ? "Doel bewerken"
                 : "Nieuw doel"}
             </h3>
             <label className="dp-field">
@@ -959,25 +959,32 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
             <div className="dp-row-actions">
               <button className="dp-button primary" type="submit">
                 <Check size={17} aria-hidden="true" />
-                Doel opslaan
+                {state.goals.some((item) => item.id === goal.id)
+                  ? "Wijzigingen opslaan"
+                  : "Doel opslaan"}
               </button>
               <button
                 className="dp-button quiet"
                 type="button"
                 onClick={() => setDiscarding(true)}
               >
-                Concept wissen
+                {goalHasDraft ? "Concept wissen" : "Formulier sluiten"}
               </button>
             </div>
             {discarding && (
               <div
                 className="dp-inline-confirm"
                 role="group"
-                aria-label="Concept van doel wissen"
+                aria-label={
+                  goalHasDraft
+                    ? "Concept van doel wissen"
+                    : "Doelformulier sluiten"
+                }
               >
                 <p>
-                  De wijzigingen in dit formulier wissen? Een eerder opgeslagen
-                  doel blijft bestaan.
+                  {goalHasDraft
+                    ? "Je concept wissen en het formulier sluiten? Een eerder opgeslagen doel blijft bewaard."
+                    : "Dit formulier sluiten? Een eerder opgeslagen doel blijft bewaard."}
                 </p>
                 <div className="dp-row-actions">
                   <button
@@ -985,7 +992,9 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                     className="dp-button"
                     onClick={clearGoal}
                   >
-                    Ja, concept wissen
+                    {goalHasDraft
+                      ? "Ja, concept wissen"
+                      : "Ja, formulier sluiten"}
                   </button>
                   <button
                     type="button"
@@ -1061,7 +1070,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
               type="button"
               onClick={() => setDiscardingPlan(true)}
             >
-              Wijzigingen verwerpen
+              Concept wissen
             </button>
           )}
         </div>
@@ -1071,10 +1080,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
             role="group"
             aria-label="Concept van persoonlijk plan wissen"
           >
-            <p>
-              Je onopgeslagen wijzigingen wissen en je bewaarde plan
-              terugzetten?
-            </p>
+            <p>Je concept wissen en je opgeslagen plan terugzetten?</p>
             <div className="dp-row-actions">
               <button
                 type="button"
@@ -1095,7 +1101,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                   requestAnimationFrame(() => planStart.current?.focus());
                 }}
               >
-                Ja, wijzigingen verwerpen
+                Ja, concept wissen
               </button>
               <button
                 type="button"
@@ -1208,8 +1214,8 @@ export function GrowthView({
             : [next, ...state.growth],
         },
         existing
-          ? "Je fijne moment is aangepast."
-          : "Je fijne moment is bewaard.",
+          ? "Je wijzigingen zijn opgeslagen."
+          : "Je moment is opgeslagen.",
       )
     )
       clear();
@@ -1227,7 +1233,7 @@ export function GrowthView({
       <form className="dp-growth-compose dp-card" onSubmit={save}>
         <label className="dp-field">
           {state.growth.some((item) => item.id === entry.id)
-            ? "Je fijne moment aanpassen"
+            ? "Moment bewerken"
             : "Wat wil je onthouden?"}
           <textarea
             ref={textField}
@@ -1271,7 +1277,7 @@ export function GrowthView({
               update({ ...entry, favorite: event.target.checked })
             }
           />
-          <span>Als favoriet bewaren</span>
+          <span>Als favoriet markeren</span>
         </label>
         <p className="dp-muted">Je hoeft hierbij geen score in te vullen.</p>
         {hasDraft && <DraftNotice error={draftError} />}
@@ -1283,8 +1289,8 @@ export function GrowthView({
         <div className="dp-row-actions">
           <button className="dp-button primary" type="submit">
             {state.growth.some((item) => item.id === entry.id)
-              ? "Wijzigingen bewaren"
-              : "Moment bewaren"}
+              ? "Wijzigingen opslaan"
+              : "Moment opslaan"}
           </button>
           {hasDraft && (
             <button
@@ -1300,11 +1306,10 @@ export function GrowthView({
           <div
             className="dp-inline-confirm"
             role="group"
-            aria-label="Concept van fijn moment wissen"
+            aria-label="Concept van klein moment wissen"
           >
             <p>
-              De wijzigingen in dit formulier wissen? Eerder bewaarde momenten
-              blijven bestaan.
+              Je concept wissen? Eerder opgeslagen momenten blijven bestaan.
             </p>
             <div className="dp-row-actions">
               <button type="button" className="dp-button" onClick={clear}>
@@ -1323,7 +1328,7 @@ export function GrowthView({
       </form>
       <section aria-labelledby="dp-growth-list-title">
         <div className="dp-section-head">
-          <h2 id="dp-growth-list-title">Wat je hebt bewaard</h2>
+          <h2 id="dp-growth-list-title">Opgeslagen momenten</h2>
           <span className="dp-count">{state.growth.length}</span>
         </div>
         {!state.growth.length ? (
@@ -1346,7 +1351,7 @@ export function GrowthView({
                       className={`dp-button quiet ${item.favorite ? "dp-is-favorite" : ""}`}
                       disabled={hasDraft && entry.id === item.id}
                       aria-pressed={item.favorite}
-                      aria-label={`${item.favorite ? "Verwijder favoriet" : "Maak favoriet"}: ${item.text.slice(0, 60)}`}
+                      aria-label={`${item.favorite ? "Uit favorieten halen" : "Als favoriet markeren"}: ${item.text.slice(0, 60)}`}
                       onClick={() => {
                         setActionError(null);
                         if (
@@ -1360,13 +1365,13 @@ export function GrowthView({
                               ),
                             },
                             item.favorite
-                              ? "Favoriet verwijderd."
-                              : "Als favoriet bewaard.",
+                              ? "Het moment is niet meer als favoriet gemarkeerd."
+                              : "Het moment is als favoriet gemarkeerd.",
                           )
                         )
                           showActionError(
                             item.id,
-                            "De favoriet kon niet worden aangepast. Probeer opnieuw.",
+                            "De wijziging in je favorieten kon niet worden opgeslagen. Probeer opnieuw.",
                           );
                       }}
                     >
@@ -1379,7 +1384,7 @@ export function GrowthView({
                     <button
                       className="dp-button quiet"
                       disabled={hasDraft}
-                      aria-label={`Bewerk fijn moment: ${item.text.slice(0, 60)}`}
+                      aria-label={`Moment bewerken: ${item.text.slice(0, 60)}`}
                       onClick={() => {
                         update(item);
                         setError("");
@@ -1394,7 +1399,7 @@ export function GrowthView({
                     <button
                       className="dp-button quiet"
                       disabled={hasDraft && entry.id === item.id}
-                      aria-label={`Verwijder fijn moment: ${item.text.slice(0, 60)}`}
+                      aria-label={`Moment verwijderen: ${item.text.slice(0, 60)}`}
                       onClick={() => {
                         setRemoving(item.id);
                         setError("");
@@ -1408,9 +1413,9 @@ export function GrowthView({
                     <div
                       className="dp-inline-confirm"
                       role="group"
-                      aria-label="Verwijderen van fijn moment bevestigen"
+                      aria-label="Moment verwijderen bevestigen"
                     >
-                      <p>Dit fijne moment verwijderen?</p>
+                      <p>Dit moment verwijderen?</p>
                       <div className="dp-row-actions">
                         <button
                           className="dp-button"
@@ -1423,7 +1428,7 @@ export function GrowthView({
                                     (value) => value.id !== item.id,
                                   ),
                                 },
-                                "Het fijne moment is verwijderd.",
+                                "Je moment is verwijderd.",
                               )
                             ) {
                               setRemoving(null);
@@ -1490,7 +1495,7 @@ export function SettingsView({
   const save = (next: AppState, message: string) => {
     const saved = onSave(next, message);
     setError(
-      saved ? "" : "De instelling kon niet worden bewaard. Probeer opnieuw.",
+      saved ? "" : "De instelling kon niet worden opgeslagen. Probeer opnieuw.",
     );
     if (!saved) requestAnimationFrame(() => errorField.current?.focus());
   };
@@ -1500,9 +1505,9 @@ export function SettingsView({
         className="dp-settings-section dp-card"
         aria-labelledby="dp-appearance"
       >
-        <h2 id="dp-appearance">Weergave</h2>
+        <h2 id="dp-appearance">Uiterlijk</h2>
         <fieldset className="dp-theme-options">
-          <legend>Kleurthema</legend>
+          <legend>Weergave</legend>
           {(
             [
               ["light", "Licht", "Lichte achtergrond"],
@@ -1584,9 +1589,9 @@ export function SettingsView({
         </fieldset>
         <label className="dp-setting-toggle">
           <span>
-            <strong>Fijne momenten op Vandaag</strong>
+            <strong>Kleine momenten op Vandaag</strong>
             <span className="dp-muted">
-              Een bewaard moment en een link naar je verzameling.
+              Toon een opgeslagen moment en een link naar je verzameling.
             </span>
           </span>
           <input
@@ -1597,8 +1602,8 @@ export function SettingsView({
               save(
                 { ...state, homeShowGrowth: event.target.checked },
                 event.target.checked
-                  ? "Fijne momenten staan op Vandaag."
-                  : "Fijne momenten zijn verborgen op Vandaag.",
+                  ? "Kleine momenten staan op Vandaag."
+                  : "Kleine momenten zijn verborgen op Vandaag.",
               )
             }
           />
@@ -1613,7 +1618,7 @@ export function SettingsView({
         className="dp-settings-section dp-card"
         aria-labelledby="dp-backup"
       >
-        <h2 id="dp-backup">Je gegevens bewaren</h2>
+        <h2 id="dp-backup">Back-up van je gegevens</h2>
         <p>
           Anchor bewaart je registraties op dit apparaat, in deze browser. Maak
           zelf een back-up om ze naar een ander apparaat mee te nemen of later
@@ -1633,14 +1638,14 @@ export function SettingsView({
             onClick={onExport}
             disabled={blocked}
           >
-            Back-up exporteren
+            Back-up downloaden
           </button>
           <button
             className="dp-button quiet"
             onClick={onImport}
             disabled={readOnly || blocked}
           >
-            Back-up importeren
+            Back-up herstellen
           </button>
         </div>
       </section>
@@ -1670,7 +1675,7 @@ export function SettingsView({
           </div>
         </dl>
         <button className="dp-button quiet" onClick={onPrivacy}>
-          Privacy en opslag <ArrowUpRight size={17} aria-hidden="true" />
+          Over je gegevens <ArrowUpRight size={17} aria-hidden="true" />
         </button>
       </section>
     </div>

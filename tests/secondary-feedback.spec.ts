@@ -20,7 +20,7 @@ const stored = (page: Page) =>
 async function open(page: Page, route: "growth" | "settings") {
   await page.goto(`./#/${route}`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    route === "growth" ? "Mijn groei" : "Instellingen",
+    route === "growth" ? "Kleine momenten" : "Instellingen",
   );
   await expect(
     page.getByText("Je gegevens worden geopend…", { exact: true }),
@@ -75,7 +75,7 @@ test("de datumgrens bij een fijn moment wordt in het veld herkend en bewaart het
   const date = page.getByLabel("Datum", { exact: true });
   await date.fill("0026-10-12");
   await page
-    .getByRole("button", { name: "Moment bewaren", exact: true })
+    .getByRole("button", { name: "Moment opslaan", exact: true })
     .click();
   await expect(date).toBeFocused();
   expect(
@@ -97,7 +97,7 @@ test("de datumgrens bij een fijn moment wordt in het veld herkend en bewaart het
     form.noValidate = true;
   });
   await page
-    .getByRole("button", { name: "Moment bewaren", exact: true })
+    .getByRole("button", { name: "Moment opslaan", exact: true })
     .click();
   await expect(date).toBeFocused();
   await expect(date).toHaveAttribute("aria-invalid", "true");
@@ -109,7 +109,7 @@ test("de datumgrens bij een fijn moment wordt in het veld herkend en bewaart het
   expect(await stored(page)).toBe(saved);
   await date.fill("1900-01-01");
   await page
-    .getByRole("button", { name: "Moment bewaren", exact: true })
+    .getByRole("button", { name: "Moment opslaan", exact: true })
     .click();
   const after = JSON.parse((await stored(page))!);
   expect(after.growth).toHaveLength(11);
@@ -127,22 +127,25 @@ test("een mislukte favorietwijziging geeft zichtbare feedback bij het moment en 
   await failWrites(page);
   await page
     .getByRole("button", {
-      name: "Maak favoriet: Een fijn testmoment 9",
+      name: "Als favoriet markeren: Een fijn testmoment 9",
       exact: true,
     })
     .click();
-  await visibleFeedback(page, "De favoriet kon niet worden aangepast.");
+  await visibleFeedback(
+    page,
+    "De wijziging in je favorieten kon niet worden opgeslagen.",
+  );
   expect(await stored(page)).toBe(saved);
   await restoreWrites(page);
   await page
     .getByRole("button", {
-      name: "Maak favoriet: Een fijn testmoment 9",
+      name: "Als favoriet markeren: Een fijn testmoment 9",
       exact: true,
     })
     .click();
   await expect(
     page.getByRole("button", {
-      name: "Verwijder favoriet: Een fijn testmoment 9",
+      name: "Uit favorieten halen: Een fijn testmoment 9",
       exact: true,
     }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -152,9 +155,12 @@ test("een mislukte favorietwijziging geeft zichtbare feedback bij het moment en 
     ).favorite,
   ).toBe(true);
   await expect(
-    page.getByText("De favoriet kon niet worden aangepast. Probeer opnieuw.", {
-      exact: true,
-    }),
+    page.getByText(
+      "De wijziging in je favorieten kon niet worden opgeslagen. Probeer opnieuw.",
+      {
+        exact: true,
+      },
+    ),
   ).toHaveCount(0);
 });
 
@@ -165,7 +171,7 @@ test("een mislukte verwijdering blijft bij de bevestiging zichtbaar en verwijder
   const saved = await stored(page);
   await page
     .getByRole("button", {
-      name: "Verwijder fijn moment: Een fijn testmoment 9",
+      name: "Moment verwijderen: Een fijn testmoment 9",
       exact: true,
     })
     .click();
@@ -196,7 +202,7 @@ test("een mislukte instellingwijziging brengt de fout in beeld en behoudt het ge
   const saved = await stored(page);
   await failWrites(page);
   await page.getByRole("radio", { name: "Salie", exact: true }).click();
-  await visibleFeedback(page, "De instelling kon niet worden bewaard.");
+  await visibleFeedback(page, "De instelling kon niet worden opgeslagen.");
   expect(await stored(page)).toBe(saved);
   await expect(
     page.getByRole("radio", { name: "Amber", exact: true }),
@@ -215,37 +221,37 @@ test("het openen van een bewerking sluit een eerdere verwijderbevestiging voor d
   const saved = await stored(page);
   await page
     .getByRole("button", {
-      name: "Verwijder fijn moment: Een fijn testmoment 9",
+      name: "Moment verwijderen: Een fijn testmoment 9",
       exact: true,
     })
     .click();
   await expect(
     page.getByRole("group", {
-      name: "Verwijderen van fijn moment bevestigen",
+      name: "Moment verwijderen bevestigen",
       exact: true,
     }),
   ).toBeVisible();
   await page
     .getByRole("button", {
-      name: "Bewerk fijn moment: Een fijn testmoment 9",
+      name: "Moment bewerken: Een fijn testmoment 9",
       exact: true,
     })
     .click();
   await expect(
     page.getByRole("group", {
-      name: "Verwijderen van fijn moment bevestigen",
+      name: "Moment verwijderen bevestigen",
       exact: true,
     }),
   ).toHaveCount(0);
   const text = page.getByRole("textbox", {
-    name: "Je fijne moment aanpassen",
+    name: "Moment bewerken",
     exact: true,
   });
   await expect(text).toHaveValue("Een fijn testmoment 9");
   expect(await stored(page)).toBe(saved);
   await text.fill("Hetzelfde fijne moment, nu aangevuld.");
   await page
-    .getByRole("button", { name: "Wijzigingen bewaren", exact: true })
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
     .click();
   const after = JSON.parse((await stored(page))!);
   expect(after.growth).toHaveLength(10);

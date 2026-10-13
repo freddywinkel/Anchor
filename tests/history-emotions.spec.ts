@@ -217,7 +217,7 @@ test("zoeken vindt emoties uit beide metingen en de dag, zonder intensiteit als 
   ).toBeVisible();
   await expect(page.locator(".dp-mood-plot circle")).toHaveCount(0);
   await expect(
-    page.getByText(/Nog geen stemmingsmetingen binnen deze selectie/),
+    page.getByText(/Geen stemmingsscores gevonden binnen deze selectie/),
   ).toBeVisible();
   await search.fill("pannetjes 2/5");
   await expect(page.locator("#anchor-history-records > li")).toHaveCount(1);

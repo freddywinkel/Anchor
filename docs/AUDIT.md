@@ -2,6 +2,16 @@
 
 Auditdatum: 12 oktober 2026, aangevuld op 13 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
 
+## Taal en knoppen — versie 1.7.1
+
+De audit omvat Vandaag, check-ins en nametingen, cravingregistratie, dagoverzicht, hulpmiddelen en oefening, houvast, geschiedenis, doelen, kleine momenten, instellingen en de concept-/back-upvensters. De twee ingangen op Vandaag, ‘Check-in toevoegen’ en ‘Craving vastleggen’, krijgen dezelfde kleur, hoogte, breedte, pijl en focusbehandeling. Ze staan naast elkaar wanneer de beschikbare ruimte dat toelaat en onder elkaar op mobiel of bij grote tekst. De tekst ervoor benoemt het verschil tussen gevoel vastleggen en een situatie met drang beschrijven.
+
+‘Mijn groei’ heet voortaan ‘Kleine momenten’. De kaart op Vandaag heet ‘Kleine momenten bewaren’, met ‘Moment toevoegen’ als ingang. Opslagknoppen gebruiken ‘opslaan’; bestaande items zijn te bekijken of te bewerken. ‘Behouden’ bij een verwijderbevestiging annuleert alleen de verwijdering en suggereert geen opslag van onopgeslagen bewerkingen. Een leeg doelformulier heet geen concept. Het dagoverzicht biedt ‘invullen’ of ‘bewerken’ afhankelijk van de bestaande registratie; de slaapvraag verwijst naar de nacht vóór de gekozen dag.
+
+Overige verbeteringen: optionele emotiecijfers zijn expliciet optioneel, de oude ongekoppelde intensiteit vermeldt ook 0–100, cravingregistratie legt bovenaan uit dat één tekstonderdeel volstaat, en grafiek- en schermlezernamen gebruiken ‘check-in’. Back-upknoppen heten downloaden en herstellen. Meldingen verwijzen naar concepten afronden of verwijderen, niet naar annuleren als vermeende verwijderactie. Offline- en conceptmeldingen beloven geen geslaagde opslag of installatie wanneer die niet is aangetoond. Geen wijzigingen aan opslagkeys, gegevensformaat, scores, registraties of updateactivering.
+
+Verificatie: 61 opslagtests, 68 unieke browsergevallen en 25 aanvullende controles geslaagd. Eén bestaande tekstverwachting is bijgewerkt naar de nieuwe lege-grafiektekst en gericht opnieuw gecontroleerd. Nieuwe proeven meten gelijke knopafmetingen en opmaak, tekstgrenzen, toetsenbordbediening en beide routes op 390 en 1440 px en bij 320 px/200% tekst, in licht en donker. Ze controleren ook consistente navigatienamen en dat ‘Behouden’ een onopgeslagen cravingbewerking niet ongemerkt opslaat of weggooit. TypeScript, productiebuild/PWA-controle en dependency-audit geslaagd. De echte workerupdate slaagt met 11 controles, de historische overgang vanaf `a42fc3b` met 7. Beide oude apps behouden hun bestanden, HEAD en volledige bestaande Git-status (457/457 en 494/494 hashes gelijk). Lokale bewijzen staan in `tmp/copy-audit/`, `tmp/copy-actions-tests/`, `tmp/copy-agent-visual/` en de reguliere testuitvoer. De publieke verifier controleert de exacte release en de gelijke mobiele hoofdknoppen na deployment.
+
 ## Hulpmiddelen en activiteiten — versie 1.7.0
 
 De UX-audit omvat alle bestaande hulpmiddelen: de vijf stappen van de begeleide 5-4-3-2-1-oefening, activiteiten uit het dagelijks leven en het persoonlijke houvast uit Mijn plan. Dit is een controle van de gebruiksroute en gegevensbetekenis, geen klinische effectbeoordeling.

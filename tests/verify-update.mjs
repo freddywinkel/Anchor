@@ -266,13 +266,19 @@ try {
       .getByRole("button", { name: "Doel opslaan", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+      page.getByRole("button", {
+        name: baselineCommit ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
+        exact: true,
+      }),
     ).toBeVisible();
     const goalBeforeOpening = await page.evaluate(() =>
       localStorage.getItem("anchor.app.data.v1"),
     );
     await page
-      .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+      .getByRole("button", {
+        name: baselineCommit ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
+        exact: true,
+      })
       .click();
     await expect(
       page.getByRole("combobox", { name: "Mijn doel", exact: true }),
@@ -298,7 +304,10 @@ try {
   if (!baselineCommit) {
     await go("/plan");
     await page
-      .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+      .getByRole("button", {
+        name: baselineCommit ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
+        exact: true,
+      })
       .click();
     await page
       .getByRole("combobox", { name: "Mijn doel", exact: true })
@@ -346,7 +355,7 @@ try {
     );
     for (const title of baselineCommit
       ? ["Craving"]
-      : ["Craving", "Doel", "Fijn moment", "Mijn plan"])
+      : ["Craving", "Doel", "Klein moment", "Mijn plan"])
       await expect(draftRow(title)).toHaveCount(1);
   }
   expect(
@@ -372,7 +381,7 @@ try {
       "Een fictieve wandeling voor de updatecontrole.",
     );
     await page
-      .getByRole("button", { name: "Doel opslaan", exact: true })
+      .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
       .click();
     expect(Object.keys(await draftRecords()).sort()).toEqual([
       "craving:new",
@@ -399,7 +408,7 @@ try {
     ]);
     await go("/today");
     await page.getByRole("button", { name: "Bijwerken", exact: true }).click();
-    await draftRow("Fijn moment")
+    await draftRow("Klein moment")
       .getByRole("button", { name: "Verder schrijven", exact: true })
       .click();
     await expect(page).toHaveURL(/#\/growth$/);
@@ -407,7 +416,7 @@ try {
       "Fictief fijn moment voor de updatecontrole.",
     );
     await page
-      .getByRole("button", { name: "Moment bewaren", exact: true })
+      .getByRole("button", { name: "Moment opslaan", exact: true })
       .click();
     expect(Object.keys(await draftRecords())).toEqual(["craving:new"]);
     currentGuardChecks.push(

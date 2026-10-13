@@ -145,7 +145,7 @@ try {
   const id = (await data()).goals[0].id;
   await page
     .getByRole("button", {
-      name: "Bewerk doel Eigen doel met een aanpasbare middelnaam",
+      name: "Bewerken: doel Eigen doel met een aanpasbare middelnaam",
     })
     .click();
   await page
@@ -154,7 +154,9 @@ try {
   await page
     .getByRole("combobox", { name: "Middel of gedrag", exact: true })
     .selectOption("Other substance");
-  await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
+    .click();
   expect((await data()).goals[0].id).toBe(id);
   expect((await data()).goals[0].name).toBe("Ketamine");
   saveCheck("Custom goal name edits without replacing stable record ID");
@@ -175,10 +177,15 @@ try {
     .getByLabel("Dit kan ik doen")
     .fill("Een wijziging die ik wil verwerpen.");
   await page
-    .getByRole("button", { name: "Wijzigingen verwerpen", exact: true })
+    .locator(".dp-personal-plan")
+    .getByRole("button", { name: "Concept wissen", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Ja, wijzigingen verwerpen", exact: true })
+    .getByRole("group", {
+      name: "Concept van persoonlijk plan wissen",
+      exact: true,
+    })
+    .getByRole("button", { name: "Ja, concept wissen", exact: true })
     .click();
   await expect(page.getByLabel("Dit kan ik doen")).toHaveValue(
     "Naar buiten wandelen.",
@@ -194,7 +201,7 @@ try {
   await page
     .getByLabel("Wat wil je onthouden?")
     .fill("Fietsen met de zon op mijn gezicht.");
-  await page.getByLabel("Als favoriet bewaren", { exact: true }).check();
+  await page.getByLabel("Als favoriet markeren", { exact: true }).check();
   await navigate("#/settings");
   await navigate("#/growth");
   await expect(page.getByLabel("Datum", { exact: true })).toHaveValue("");
@@ -207,7 +214,7 @@ try {
   );
   await expect(page.getByLabel("Datum", { exact: true })).toHaveValue("");
   await page
-    .getByRole("button", { name: "Moment bewaren", exact: true })
+    .getByRole("button", { name: "Moment opslaan", exact: true })
     .click();
   expect((await data()).growth).toHaveLength(0);
   expect(
@@ -225,7 +232,7 @@ try {
     "Growth text edited after clearing its date survives navigation and reload; an incomplete date cannot be saved",
   );
   await page
-    .getByRole("button", { name: "Moment bewaren", exact: true })
+    .getByRole("button", { name: "Moment opslaan", exact: true })
     .click();
   expect((await data()).growth).toHaveLength(1);
   expect((await data()).growth[0].favorite).toBe(true);
@@ -233,20 +240,20 @@ try {
   saveCheck("Growth draft, date and favorite survive reload and save");
   await page
     .getByRole("button", {
-      name: "Bewerk fijn moment: Fietsen met de zon op mijn gezicht.",
+      name: "Moment bewerken: Fietsen met de zon op mijn gezicht.",
     })
     .click();
   await page
-    .getByLabel("Je fijne moment aanpassen")
+    .getByRole("textbox", { name: "Moment bewerken", exact: true })
     .fill("Fietsen en daarna een mooi schilderij gemaakt.");
   await page
-    .getByRole("button", { name: "Wijzigingen bewaren", exact: true })
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
     .click();
   expect((await data()).growth).toHaveLength(1);
   expect((await data()).growth[0].text).toContain("schilderij");
   await page
     .getByRole("button", {
-      name: "Verwijder favoriet: Fietsen en daarna een mooi schilderij gemaakt.",
+      name: "Uit favorieten halen: Fietsen en daarna een mooi schilderij gemaakt.",
     })
     .click();
   expect((await data()).growth[0].favorite).toBe(false);
@@ -272,10 +279,10 @@ try {
   await page.getByRole("radio", { name: "Licht", exact: true }).check();
   await page.reload();
   expect((await data()).theme).toBe("light");
-  await page.getByLabel("Fijne momenten op Vandaag").uncheck();
+  await page.getByLabel("Kleine momenten op Vandaag").uncheck();
   expect((await data()).homeShowGrowth).toBe(false);
   const dl = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Back-up exporteren" }).click();
+  await page.getByRole("button", { name: "Back-up downloaden" }).click();
   const download = await dl;
   expect(download.suggestedFilename()).toMatch(/anchor.*json/i);
   const customBackup = JSON.parse(
@@ -287,7 +294,10 @@ try {
     name: "Ketamine",
     direction: "Minder gebruiken",
   });
-  await page.getByRole("button", { name: "Privacy en opslag" }).click();
+  await page
+    .locator(".dp-settings")
+    .getByRole("button", { name: "Over je gegevens" })
+    .click();
   await expect(page.getByRole("dialog")).toContainText("Anchor");
   await page.getByRole("button", { name: "Begrepen", exact: true }).click();
   saveCheck(
@@ -350,26 +360,30 @@ try {
   }, DRAFT_STORAGE_KEY);
   await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
   expect((await data()).goals).toHaveLength(1);
-  await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
+    .click();
   expect((await data()).goals).toHaveLength(1);
   await page.evaluate(
     () => (Storage.prototype.setItem = window.qaOriginalSetItem),
   );
-  await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
+    .click();
   expect((await data()).goals).toHaveLength(1);
   expect((await drafts()).goal).toBeUndefined();
   saveCheck("Draft cleanup failure cannot duplicate a successfully saved goal");
   await navigate("#/growth");
   await page
     .getByRole("button", {
-      name: "Verwijder fijn moment: Fietsen en daarna een mooi schilderij gemaakt.",
+      name: "Moment verwijderen: Fietsen en daarna een mooi schilderij gemaakt.",
     })
     .click();
   await page.getByRole("button", { name: "Behouden", exact: true }).click();
   expect((await data()).growth).toHaveLength(1);
   await page
     .getByRole("button", {
-      name: "Verwijder fijn moment: Fietsen en daarna een mooi schilderij gemaakt.",
+      name: "Moment verwijderen: Fietsen en daarna een mooi schilderij gemaakt.",
     })
     .click();
   await page
@@ -457,7 +471,7 @@ try {
   for (const legacyGoal of legacyGoalState.goals) {
     await goalsPage
       .getByRole("button", {
-        name: `Bewerk doel ${legacyGoal.name}`,
+        name: `Bewerken: doel ${legacyGoal.name}`,
         exact: true,
       })
       .click();
@@ -470,11 +484,11 @@ try {
       goalsPage.getByLabel("Omschrijf je doel", { exact: true }),
     ).toHaveValue(legacyGoal.direction);
     await goalsPage
-      .getByRole("button", { name: "Doel opslaan", exact: true })
+      .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
       .click();
     await expect(
       goalsPage.getByRole("button", {
-        name: `Bewerk doel ${legacyGoal.name}`,
+        name: `Bewerken: doel ${legacyGoal.name}`,
         exact: true,
       }),
     ).toBeEnabled();
@@ -530,7 +544,10 @@ try {
     .getByRole("button", { name: "Doel opslaan", exact: true })
     .click();
   await expect(
-    goalsPage.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+    goalsPage.getByRole("button", {
+      name: "Bewerken: doel Cocaine",
+      exact: true,
+    }),
   ).toBeVisible();
   const standardGoal = (await savedGoals()).find(
     (goal) => goal.target === "Cocaine",
@@ -542,16 +559,19 @@ try {
   });
   await goalsPage.reload();
   await goalsPage
-    .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+    .getByRole("button", { name: "Bewerken: doel Cocaine", exact: true })
     .click();
   await expect(targetChoice).toHaveValue("Cocaine");
   await expect(directionChoice).toHaveValue("Stoppen");
   await directionChoice.selectOption("Minderen");
   await goalsPage
-    .getByRole("button", { name: "Doel opslaan", exact: true })
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
     .click();
   await expect(
-    goalsPage.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+    goalsPage.getByRole("button", {
+      name: "Bewerken: doel Cocaine",
+      exact: true,
+    }),
   ).toBeEnabled();
   expect(
     (await savedGoals()).find((goal) => goal.id === standardGoal.id),
@@ -569,7 +589,7 @@ try {
   await goalsPage.goto(base + "#/settings");
   const goalBackupDownload = goalsPage.waitForEvent("download");
   await goalsPage
-    .getByRole("button", { name: "Back-up exporteren", exact: true })
+    .getByRole("button", { name: "Back-up downloaden", exact: true })
     .click();
   const goalBackup = await readFile(await (await goalBackupDownload).path());
   expect(JSON.parse(goalBackup.toString()).state.goals).toEqual(
@@ -577,21 +597,24 @@ try {
   );
   await goalsPage.goto(base + "#/plan");
   await goalsPage
-    .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+    .getByRole("button", { name: "Bewerken: doel Cocaine", exact: true })
     .click();
   await directionChoice.selectOption("Gecontroleerd gebruik");
   await goalsPage
-    .getByRole("button", { name: "Doel opslaan", exact: true })
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
     .click();
   await expect(
-    goalsPage.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+    goalsPage.getByRole("button", {
+      name: "Bewerken: doel Cocaine",
+      exact: true,
+    }),
   ).toBeEnabled();
   expect(
     (await savedGoals()).find((goal) => goal.id === standardGoal.id).direction,
   ).toBe("Gecontroleerd gebruik");
   await goalsPage.goto(base + "#/settings");
   await goalsPage
-    .getByRole("button", { name: "Back-up importeren", exact: true })
+    .getByRole("button", { name: "Back-up herstellen", exact: true })
     .click();
   await goalsPage.locator('input[type="file"]').setInputFiles({
     name: "anchor-goals.json",
@@ -669,9 +692,7 @@ try {
   await expect(
     hp.getByRole("img", { name: /1 stemmingsmetingen/ }),
   ).toBeVisible();
-  await hp
-    .getByText("Meetwaarden van de grafiek als tekst (1)", { exact: true })
-    .click();
+  await hp.getByText("Scores bekijken als tekst (1)", { exact: true }).click();
   await expect(hp.locator(".dp-observation-details")).toContainText(
     "Stemming +1",
   );
@@ -680,7 +701,7 @@ try {
     "Na activiteit",
   );
   await expect(
-    hp.getByRole("button", { name: /^Bekijk momentcheck-in/ }),
+    hp.getByRole("button", { name: /^Bekijken: check-in/ }),
   ).toBeEnabled();
   await expect(hp.locator(".dp-history-list")).toContainText(
     "Activiteit niet geprobeerd",
@@ -715,7 +736,7 @@ try {
     fullPage: true,
   });
   report.screenshots.push("phone-history-craving-light.png");
-  await hp.getByRole("button", { name: /Bekijk craving/ }).click();
+  await hp.getByRole("button", { name: /Bekijken: craving/ }).click();
   await expect(hp.getByRole("textbox", { name: /^Gedachte/ })).toHaveValue(
     "Ik wil iets nemen",
   );
@@ -727,7 +748,9 @@ try {
   ).toBeVisible();
   await readOnlyPage.getByLabel("Soort registratie").selectOption("craving");
   await readOnlyPage.getByRole("searchbox").fill("keuken");
-  await readOnlyPage.getByRole("button", { name: /^Bekijk craving/ }).click();
+  await readOnlyPage
+    .getByRole("button", { name: /^Bekijken: craving/ })
+    .click();
   await expect(
     readOnlyPage.getByRole("textbox", { name: /^Gedachte/ }),
   ).toHaveValue("Ik wil iets nemen");
@@ -739,10 +762,10 @@ try {
     readOnlyPage.getByRole("radio", { name: "Licht", exact: true }),
   ).toBeDisabled();
   await expect(
-    readOnlyPage.getByLabel("Fijne momenten op Vandaag"),
+    readOnlyPage.getByLabel("Kleine momenten op Vandaag"),
   ).toBeDisabled();
   await expect(
-    readOnlyPage.getByRole("button", { name: "Back-up importeren" }),
+    readOnlyPage.getByRole("button", { name: "Back-up herstellen" }),
   ).toBeDisabled();
   await expect(
     readOnlyPage.getByText(
@@ -752,10 +775,13 @@ try {
   ).toBeVisible();
   const readOnlyDownload = readOnlyPage.waitForEvent("download");
   await readOnlyPage
-    .getByRole("button", { name: "Back-up exporteren" })
+    .getByRole("button", { name: "Back-up downloaden" })
     .click();
   expect((await readOnlyDownload).suggestedFilename()).toMatch(/anchor.*json/i);
-  await readOnlyPage.getByRole("button", { name: "Privacy en opslag" }).click();
+  await readOnlyPage
+    .locator(".dp-settings")
+    .getByRole("button", { name: "Over je gegevens" })
+    .click();
   await expect(readOnlyPage.getByRole("dialog")).toContainText("Anchor");
   await readOnlyPage.close();
   saveCheck(

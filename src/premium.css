@@ -166,6 +166,37 @@
 .dp .dp-now-panel .dp-actions {
   gap: 0.65rem;
 }
+.dp .dp-now-panel > div:first-child {
+  container: entry-actions / inline-size;
+  flex: 1;
+  min-width: 0;
+}
+.dp .dp-now-panel .dp-entry-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: stretch;
+}
+.dp .dp-entry-actions > .dp-button {
+  width: 100%;
+  min-height: 3.5rem;
+  margin: 0;
+  justify-content: space-between;
+  text-align: left;
+  padding-inline: 18px;
+  gap: 12px;
+}
+.dp .dp-entry-actions > .dp-button > span {
+  min-width: 0;
+}
+.dp .dp-entry-actions > .dp-button > svg {
+  flex-shrink: 0;
+}
+@container entry-actions (max-width: 30rem) {
+  .dp .dp-now-panel .dp-entry-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .dp .dp-now-panel .dp-button:not(.primary) {
   background: var(--dp-surface);
 }
@@ -459,7 +490,7 @@
     padding-block: max(12px, env(safe-area-inset-top)) 12px;
   }
   .dp .dp-now-panel {
-    padding: 1.6rem 1.4rem;
+    padding: 1.6rem clamp(16px, 4vw, 22px);
     border-radius: 24px;
   }
   .dp .dp-now-panel h2 {

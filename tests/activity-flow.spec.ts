@@ -39,7 +39,7 @@ const intensity = (scope: Locator, label: string) =>
 
 async function saveMoment(page: Page) {
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Jouw check-in", exact: true }),
@@ -449,7 +449,7 @@ for (const hasSavedRecord of [true, false]) {
     const repaired = { ...pending, activity: repairedActivity };
     expect(await draft(page, `moment:${original.id}`)).toEqual(repaired);
     await beforeForm(page)
-      .getByRole("button", { name: "Dit moment opslaan", exact: true })
+      .getByRole("button", { name: "Check-in opslaan", exact: true })
       .click();
     await expect(beforeForm(page).getByRole("alert")).toContainText(
       "Gebruik Nameting opslaan",

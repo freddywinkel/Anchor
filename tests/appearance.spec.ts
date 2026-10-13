@@ -93,7 +93,7 @@ test("een Anchor-back-up herstelt het gekozen palet en de weergavemodus", async 
   await page.getByRole("radio", { name: "Licht", exact: true }).check();
   const backupDownload = page.waitForEvent("download");
   await page
-    .getByRole("button", { name: "Back-up exporteren", exact: true })
+    .getByRole("button", { name: "Back-up downloaden", exact: true })
     .click();
   const backup = await backupDownload;
   const buffer = await readFile((await backup.path())!);
@@ -104,15 +104,13 @@ test("een Anchor-back-up herstelt het gekozen palet en de weergavemodus", async 
   await paletteControl(page, "Oceaan").check();
   await page.getByRole("radio", { name: "Donker", exact: true }).check();
   await page
-    .getByRole("button", { name: "Back-up importeren", exact: true })
+    .getByRole("button", { name: "Back-up herstellen", exact: true })
     .click();
-  await page
-    .locator('input[type="file"]')
-    .setInputFiles({
-      name: "Anchor-paletten.json",
-      mimeType: "application/json",
-      buffer,
-    });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "Anchor-paletten.json",
+    mimeType: "application/json",
+    buffer,
+  });
   const safetyDownload = page.waitForEvent("download");
   await page
     .getByRole("button", { name: "Huidige opslag downloaden", exact: true })

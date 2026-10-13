@@ -233,14 +233,14 @@ export function CravingView({
           navigate("/today");
         }}
       >
-        <span aria-hidden="true">←</span> Vandaag
+        <span aria-hidden="true">←</span> Terug naar Vandaag
       </a>
       <header className="anchor-craving-intro">
         <p className="dp-kicker">Een moment van drang</p>
         <h1 tabIndex={-1}>{record ? "Je craving" : "Craving vastleggen"}</h1>
         <p className="dp-muted">
-          Wat speelde er, wat merkte je bij jezelf en wat deed je? Een paar
-          woorden zijn genoeg. Je kunt later aanvullen.
+          Datum en tijd zijn nodig. Vul verder alleen in wat je wilt; één
+          onderdeel is genoeg. Je kunt later aanvullen.
         </p>
       </header>
 
@@ -452,7 +452,7 @@ export function CravingView({
                   ref={cancelDeleteRef}
                   onClick={cancelDelete}
                 >
-                  Bewaren
+                  Behouden
                 </button>
                 <button
                   type="button"

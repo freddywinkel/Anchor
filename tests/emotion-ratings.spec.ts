@@ -51,7 +51,7 @@ const intensity = (scope: Locator, label: string) =>
   scope.getByLabel(`Intensiteit van ${label}`, { exact: true });
 async function saveMoment(page: Page) {
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Jouw check-in", exact: true }),
@@ -177,7 +177,7 @@ test("een nameting neemt alleen emotienamen over, bewaart eigen ontbrekende scor
   await open(page, "/settings");
   const backupDownload = page.waitForEvent("download");
   await page
-    .getByRole("button", { name: "Back-up exporteren", exact: true })
+    .getByRole("button", { name: "Back-up downloaden", exact: true })
     .click();
   const buffer = await readFile((await (await backupDownload).path())!);
   expect(JSON.parse(buffer.toString()).state.moments).toEqual([saved]);
@@ -191,7 +191,7 @@ test("een nameting neemt alleen emotienamen over, bewaart eigen ontbrekende scor
   );
   await open(page, "/settings");
   await page
-    .getByRole("button", { name: "Back-up importeren", exact: true })
+    .getByRole("button", { name: "Back-up herstellen", exact: true })
     .click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "anchor-emoties.json",
@@ -357,7 +357,7 @@ test("een intensiteit buiten 0 tot 100 wordt niet opgeslagen en nul kan daarna w
   const input = intensity(form, "Boos");
   await input.fill("101");
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   expect(
     await input.evaluate(
@@ -368,7 +368,7 @@ test("een intensiteit buiten 0 tot 100 wordt niet opgeslagen en nul kan daarna w
   await expect(input).toHaveValue("101");
   await input.fill("-1");
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   expect(
     await input.evaluate(
@@ -394,7 +394,7 @@ test("een gewiste eigen emotienaam verliest het ingevulde cijfer niet bij beware
   await form.getByLabel("Eigen emotie", { exact: true }).fill("");
   await expect(intensity(form, "deze emotie")).toHaveValue("42");
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   expect(await state(page)).toBeNull();
   expect(
@@ -466,7 +466,7 @@ test("een ongeldig oud intensiteitsconcept opent het verborgen veld en houdt de 
   });
   await expect(details).not.toHaveAttribute("open", "");
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(details).toHaveAttribute("open", "");
   await expect(invalid).toBeFocused();
@@ -498,7 +498,7 @@ test("een lege datum in een gesloten onderdeel wordt bij opslaan zichtbaar zonde
   const details = form.locator(".dp-moment-time");
   await expect(details).not.toHaveAttribute("open", "");
   await page
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(details).toHaveAttribute("open", "");
   await expect(date).toBeFocused();
@@ -544,7 +544,7 @@ test("datum en tijd als tekstvelden worden lokaal gevalideerd en openen het juis
     await date.fill(invalidDate);
     await summary.click();
     await form
-      .getByRole("button", { name: "Dit moment opslaan", exact: true })
+      .getByRole("button", { name: "Check-in opslaan", exact: true })
       .click();
     await expect(date).toBeFocused();
     await expect(date).toHaveAttribute("aria-invalid", "true");
@@ -566,7 +566,7 @@ test("datum en tijd als tekstvelden worden lokaal gevalideerd en openen het juis
   await time.fill("24:15");
   await summary.click();
   await form
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(time).toBeFocused();
   await expect(time).toHaveAttribute("aria-invalid", "true");
@@ -619,7 +619,7 @@ test("een opslagfout blijft zichtbaar bij moment of nameting en bewaart alle ing
   const pendingBefore = await draft(page, "moment:new");
   await failWrites();
   await before
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(before.getByRole("alert")).toBeFocused();
   await expect(before.getByRole("alert")).toContainText(
@@ -747,7 +747,7 @@ test("nametingfouten staan bij het juiste formulier, krijgen telkens zichtbare f
   await expect(intensity(after, "Boos")).toHaveValue("42");
 
   await before
-    .getByRole("button", { name: "Dit moment opslaan", exact: true })
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
   await expect(before.getByRole("alert")).toBeFocused();
   await expect(before.getByRole("alert")).toContainText(
