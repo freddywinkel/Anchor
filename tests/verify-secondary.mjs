@@ -1,5 +1,5 @@
 import { chromium, expect } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -103,23 +103,41 @@ try {
   await page
     .getByRole("button", { name: "Doel toevoegen", exact: true })
     .click();
-  await page.getByLabel("Soort doel").selectOption("Other substance");
   await page
-    .getByLabel("Naam van het middel of doel")
+    .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+    .selectOption("Other substance");
+  await page
+    .getByLabel("Naam van middel of gedrag", { exact: true })
     .fill("Eigen doel met een aanpasbare middelnaam");
   await page
-    .getByLabel("Mijn richting", { exact: true })
+    .getByRole("combobox", { name: "Mijn doel", exact: true })
+    .selectOption("__custom__");
+  await page.getByLabel("Omschrijf je doel", { exact: true }).fill("Stoppen");
+  await expect(
+    page.getByLabel("Omschrijf je doel", { exact: true }),
+  ).toBeFocused();
+  await expect(
+    page.getByRole("combobox", { name: "Mijn doel", exact: true }),
+  ).toHaveValue("__custom__");
+  await page
+    .getByLabel("Omschrijf je doel", { exact: true })
     .fill("Minder gebruiken");
   await navigate("#/settings");
   await navigate("#/plan");
-  await expect(page.getByLabel("Naam van het middel of doel")).toHaveValue(
-    "Eigen doel met een aanpasbare middelnaam",
-  );
+  await expect(
+    page.getByLabel("Naam van middel of gedrag", { exact: true }),
+  ).toHaveValue("Eigen doel met een aanpasbare middelnaam");
   saveCheck("Goal draft survives route navigation");
   await page.reload();
-  await expect(page.getByLabel("Naam van het middel of doel")).toHaveValue(
-    "Eigen doel met een aanpasbare middelnaam",
-  );
+  await expect(
+    page.getByLabel("Naam van middel of gedrag", { exact: true }),
+  ).toHaveValue("Eigen doel met een aanpasbare middelnaam");
+  await expect(
+    page.getByRole("combobox", { name: "Mijn doel", exact: true }),
+  ).toHaveValue("__custom__");
+  await expect(
+    page.getByLabel("Omschrijf je doel", { exact: true }),
+  ).toHaveValue("Minder gebruiken");
   await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
   expect((await data()).goals).toHaveLength(1);
   expect((await drafts()).goal).toBeUndefined();
@@ -130,8 +148,12 @@ try {
       name: "Bewerk doel Eigen doel met een aanpasbare middelnaam",
     })
     .click();
-  await page.getByLabel("Naam van het middel of doel").fill("Ketamine");
-  await page.getByLabel("Soort doel").selectOption("Other substance");
+  await page
+    .getByLabel("Naam van middel of gedrag", { exact: true })
+    .fill("Ketamine");
+  await page
+    .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+    .selectOption("Other substance");
   await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
   expect((await data()).goals[0].id).toBe(id);
   expect((await data()).goals[0].name).toBe("Ketamine");
@@ -256,6 +278,15 @@ try {
   await page.getByRole("button", { name: "Back-up exporteren" }).click();
   const download = await dl;
   expect(download.suggestedFilename()).toMatch(/anchor.*json/i);
+  const customBackup = JSON.parse(
+    await readFile(await download.path(), "utf8"),
+  );
+  expect(customBackup.state.goals[0]).toMatchObject({
+    id,
+    target: "Other substance",
+    name: "Ketamine",
+    direction: "Minder gebruiken",
+  });
   await page.getByRole("button", { name: "Privacy en opslag" }).click();
   await expect(page.getByRole("dialog")).toContainText("Anchor");
   await page.getByRole("button", { name: "Begrepen", exact: true }).click();
@@ -277,7 +308,18 @@ try {
   await page
     .getByRole("button", { name: "Doel toevoegen", exact: true })
     .click();
-  await page.getByLabel("Naam van het middel of doel").fill("Opslagtest");
+  await page
+    .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+    .selectOption("Other substance");
+  await page
+    .getByLabel("Naam van middel of gedrag", { exact: true })
+    .fill("Opslagtest");
+  await page
+    .getByRole("combobox", { name: "Mijn doel", exact: true })
+    .selectOption("__custom__");
+  await page
+    .getByLabel("Omschrijf je doel", { exact: true })
+    .fill("Een eigen opslagtestdoel");
   await page.evaluate((key) => {
     window.qaOriginalSetItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (k, v) {
@@ -287,9 +329,9 @@ try {
     };
   }, STORAGE_KEY);
   await page.getByRole("button", { name: "Doel opslaan", exact: true }).click();
-  await expect(page.getByLabel("Naam van het middel of doel")).toHaveValue(
-    "Opslagtest",
-  );
+  await expect(
+    page.getByLabel("Naam van middel of gedrag", { exact: true }),
+  ).toHaveValue("Opslagtest");
   expect((await data()).goals).toHaveLength(0);
   expect((await drafts()).goal.name).toBe("Opslagtest");
   await page.evaluate(
@@ -365,6 +407,213 @@ try {
   }
   saveCheck("All four secondary screens reflow at 320px and 200 percent text");
   await context.close();
+
+  const legacyGoalState = createEmptyState();
+  legacyGoalState.goals = [
+    {
+      id: "legacy-named-alcohol",
+      target: "Alcohol",
+      name: "Mijn eigen weekendafspraak",
+      direction: "Minder gebruiken",
+      note: "Een eerder opgeslagen eigen naam en richting.",
+    },
+    {
+      id: "legacy-other-target",
+      target: "Mijn eerder gekozen gedrag",
+      name: "Een eigen bewaarde naam",
+      direction: "Iedere donderdag tijd voor mezelf maken",
+      note: "Dit doel bestond voor de nieuwe keuzelijsten.",
+    },
+  ];
+  const goalsContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    locale: "nl-NL",
+    reducedMotion: "reduce",
+    acceptDownloads: true,
+  });
+  await goalsContext.addInitScript(
+    ({ key, state }) => {
+      if (!localStorage.getItem(key))
+        localStorage.setItem(key, JSON.stringify(state));
+    },
+    { key: STORAGE_KEY, state: legacyGoalState },
+  );
+  const goalsPage = await goalsContext.newPage();
+  goalsPage.on("pageerror", (error) => report.errors.push(error.message));
+  const savedGoals = () =>
+    goalsPage.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)).goals,
+      STORAGE_KEY,
+    );
+  const targetChoice = goalsPage.getByRole("combobox", {
+    name: "Middel of gedrag",
+    exact: true,
+  });
+  const directionChoice = goalsPage.getByRole("combobox", {
+    name: "Mijn doel",
+    exact: true,
+  });
+  await goalsPage.goto(base + "#/plan");
+  for (const legacyGoal of legacyGoalState.goals) {
+    await goalsPage
+      .getByRole("button", {
+        name: `Bewerk doel ${legacyGoal.name}`,
+        exact: true,
+      })
+      .click();
+    await expect(targetChoice).toHaveValue(legacyGoal.target);
+    await expect(
+      goalsPage.getByLabel("Naam van middel of gedrag", { exact: true }),
+    ).toHaveValue(legacyGoal.name);
+    await expect(directionChoice).toHaveValue("__custom__");
+    await expect(
+      goalsPage.getByLabel("Omschrijf je doel", { exact: true }),
+    ).toHaveValue(legacyGoal.direction);
+    await goalsPage
+      .getByRole("button", { name: "Doel opslaan", exact: true })
+      .click();
+    await expect(
+      goalsPage.getByRole("button", {
+        name: `Bewerk doel ${legacyGoal.name}`,
+        exact: true,
+      }),
+    ).toBeEnabled();
+  }
+  expect(await savedGoals()).toEqual(legacyGoalState.goals);
+  saveCheck(
+    "Previously saved custom names, unknown targets and free directions survive opening and saving unchanged",
+  );
+
+  await goalsPage
+    .getByRole("button", { name: "Doel toevoegen", exact: true })
+    .click();
+  await expect(targetChoice).toHaveValue("");
+  await expect(directionChoice).toHaveValue("");
+  await expect(
+    goalsPage.getByLabel("Naam van middel of gedrag", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    goalsPage.getByLabel("Omschrijf je doel", { exact: true }),
+  ).toHaveCount(0);
+  await goalsPage
+    .getByRole("button", { name: "Doel opslaan", exact: true })
+    .click();
+  expect(await savedGoals()).toEqual(legacyGoalState.goals);
+  expect(
+    await targetChoice.evaluate((select) => select.validity.valueMissing),
+  ).toBe(true);
+  await expect(targetChoice.locator("option")).toHaveText([
+    "Kies een middel of gedrag",
+    "Alcohol",
+    "Nicotine",
+    "Cannabis",
+    "Cocaine",
+    "3-MMC",
+    "Ander middel",
+    "Ander gedrag",
+  ]);
+  await targetChoice.selectOption("Cocaine");
+  await directionChoice.selectOption("Stoppen");
+  await expect(
+    goalsPage.locator(".dp-goal-editor").getByRole("combobox"),
+  ).toHaveCount(2);
+  await expect(
+    goalsPage.getByLabel("Naam van middel of gedrag", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    goalsPage.getByLabel("Omschrijf je doel", { exact: true }),
+  ).toHaveCount(0);
+  await goalsPage
+    .getByLabel("Waarom dit bij mij past (optioneel)", { exact: true })
+    .fill("Een eigen toelichting bij mijn gekozen doel.");
+  await goalsPage
+    .getByRole("button", { name: "Doel opslaan", exact: true })
+    .click();
+  await expect(
+    goalsPage.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+  ).toBeVisible();
+  const standardGoal = (await savedGoals()).find(
+    (goal) => goal.target === "Cocaine",
+  );
+  expect(standardGoal).toMatchObject({
+    name: "Cocaine",
+    direction: "Stoppen",
+    note: "Een eigen toelichting bij mijn gekozen doel.",
+  });
+  await goalsPage.reload();
+  await goalsPage
+    .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+    .click();
+  await expect(targetChoice).toHaveValue("Cocaine");
+  await expect(directionChoice).toHaveValue("Stoppen");
+  await directionChoice.selectOption("Minderen");
+  await goalsPage
+    .getByRole("button", { name: "Doel opslaan", exact: true })
+    .click();
+  await expect(
+    goalsPage.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+  ).toBeEnabled();
+  expect(
+    (await savedGoals()).find((goal) => goal.id === standardGoal.id),
+  ).toMatchObject({
+    id: standardGoal.id,
+    name: "Cocaine",
+    direction: "Minderen",
+  });
+  expect((await savedGoals()).slice(0, 2)).toEqual(legacyGoalState.goals);
+  saveCheck(
+    "New goals start unselected; Cocaine and Stoppen require only two choices and retain their ID on edit",
+  );
+
+  const goalsBeforeBackup = await savedGoals();
+  await goalsPage.goto(base + "#/settings");
+  const goalBackupDownload = goalsPage.waitForEvent("download");
+  await goalsPage
+    .getByRole("button", { name: "Back-up exporteren", exact: true })
+    .click();
+  const goalBackup = await readFile(await (await goalBackupDownload).path());
+  expect(JSON.parse(goalBackup.toString()).state.goals).toEqual(
+    goalsBeforeBackup,
+  );
+  await goalsPage.goto(base + "#/plan");
+  await goalsPage
+    .getByRole("button", { name: "Bewerk doel Cocaine", exact: true })
+    .click();
+  await directionChoice.selectOption("Gecontroleerd gebruik");
+  await goalsPage
+    .getByRole("button", { name: "Doel opslaan", exact: true })
+    .click();
+  await expect(
+    goalsPage.getByRole("button", { name: "Bewerk doel Cocaine", exact: true }),
+  ).toBeEnabled();
+  expect(
+    (await savedGoals()).find((goal) => goal.id === standardGoal.id).direction,
+  ).toBe("Gecontroleerd gebruik");
+  await goalsPage.goto(base + "#/settings");
+  await goalsPage
+    .getByRole("button", { name: "Back-up importeren", exact: true })
+    .click();
+  await goalsPage.locator('input[type="file"]').setInputFiles({
+    name: "anchor-goals.json",
+    mimeType: "application/json",
+    buffer: goalBackup,
+  });
+  const safetyBackup = goalsPage.waitForEvent("download");
+  await goalsPage
+    .getByRole("button", { name: "Huidige opslag downloaden", exact: true })
+    .click();
+  await safetyBackup;
+  await goalsPage
+    .getByRole("button", { name: "Gegevens vervangen", exact: true })
+    .click();
+  await expect(goalsPage.getByRole("dialog")).toHaveCount(0);
+  await goalsPage.reload();
+  expect(await savedGoals()).toEqual(goalsBeforeBackup);
+  await goalsContext.close();
+  saveCheck(
+    "Backup restoration preserves both standard goal choices and existing arbitrary goal names and directions",
+  );
+
   const historyState = createEmptyState();
   historyState.theme = "light";
   historyState.cravings = [

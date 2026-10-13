@@ -255,6 +255,10 @@
 .dp .dp-goal-editor h3 {
   margin: 0;
 }
+.dp .dp-goal-editor select {
+  /* Keep WebKit's native option text from expanding the page at large text sizes. */
+  contain: paint;
+}
 .dp .dp-personal-plan {
   display: grid;
   gap: 1rem;
@@ -448,6 +452,9 @@
   border: 0;
 }
 @media (max-width: 700px) {
+  .dp .dp-goal-editor {
+    padding: 16px;
+  }
   .dp .dp-history .dp-section-head,
   .dp .dp-plan .dp-section-head,
   .dp .dp-growth .dp-section-head {

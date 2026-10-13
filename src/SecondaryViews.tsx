@@ -29,8 +29,24 @@ const targetNames: Record<string, string> = {
   Cocaine: "Cocaine",
   "3-MMC": "3-MMC",
   "Other substance": "Ander middel",
-  Other: "Ander doel",
+  Other: "Ander gedrag",
 };
+const goalDirections = ["Minderen", "Stoppen", "Gecontroleerd gebruik"];
+function targetLabel(target: string) {
+  return Object.hasOwn(targetNames, target) ? targetNames[target] : target;
+}
+function isStandardTarget(target: string) {
+  return (
+    Object.hasOwn(targetNames, target) &&
+    target !== "Other substance" &&
+    target !== "Other"
+  );
+}
+function hasCustomName(goal: Goal | null) {
+  return (
+    !!goal && (!isStandardTarget(goal.target) || goal.name !== goal.target)
+  );
+}
 function dateLabel(value: string) {
   const [year, month, day] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("nl-NL", {
@@ -52,7 +68,7 @@ function moodLabel(value: number | null) {
       : String(value);
 }
 function goalLabel(goal: Goal) {
-  return goal.name.trim() || targetNames[goal.target] || goal.target;
+  return goal.name.trim() || targetLabel(goal.target);
 }
 
 export function HistoryView({
@@ -470,6 +486,10 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   const [goal, setGoal] = useState<Goal | null>(
     () => (loadDrafts().goal as Goal | undefined) || null,
   );
+  const [customName, setCustomName] = useState(() => hasCustomName(goal));
+  const [customDirection, setCustomDirection] = useState(
+    () => !!goal?.direction && !goalDirections.includes(goal.direction),
+  );
   const [goalError, setGoalError] = useState("");
   const [draftError, setDraftError] = useState("");
   const [discarding, setDiscarding] = useState(false);
@@ -481,6 +501,9 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   const [planDraftError, setPlanDraftError] = useState("");
   const [discardingPlan, setDiscardingPlan] = useState(false);
   const goalName = useRef<HTMLInputElement>(null);
+  const goalTarget = useRef<HTMLSelectElement>(null);
+  const goalDirection = useRef<HTMLSelectElement>(null);
+  const goalDescription = useRef<HTMLInputElement>(null);
   const planStart = useRef<HTMLTextAreaElement>(null);
   const planDirty = useRef(!!loadDrafts().plan);
   const addButton = useRef<HTMLButtonElement>(null);
@@ -488,7 +511,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
     if (!planDirty.current) setPlan(state.plan);
   }, [state.plan]);
   useEffect(() => {
-    if (goal) goalName.current?.focus();
+    if (goal) goalTarget.current?.focus();
   }, [goal?.id]);
   function updateGoal(next: Goal) {
     setGoal(next);
@@ -499,15 +522,19 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   }
   function openGoal(existing?: Goal) {
     if (goal) {
-      goalName.current?.focus();
+      goalTarget.current?.focus();
       return;
     }
+    setCustomName(hasCustomName(existing || null));
+    setCustomDirection(
+      !!existing?.direction && !goalDirections.includes(existing.direction),
+    );
     updateGoal(
       existing || {
         id: crypto.randomUUID(),
-        target: "Other substance",
+        target: "",
         name: "",
-        direction: "Minder gebruiken",
+        direction: "",
         note: "",
       },
     );
@@ -530,18 +557,18 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   function saveGoal(event: React.FormEvent) {
     event.preventDefault();
     if (!goal) return;
-    if (!goal.name.trim() || !goal.direction.trim()) {
-      setGoalError("Vul een naam en richting in voor je doel.");
-      goalName.current?.focus();
+    if (!goal.target.trim() || !goal.name.trim() || !goal.direction.trim()) {
+      setGoalError("Kies een middel of gedrag en vul je doel in.");
+      if (!goal.target.trim()) goalTarget.current?.focus();
+      else if (!goal.name.trim()) goalName.current?.focus();
+      else if (customDirection) goalDescription.current?.focus();
+      else goalDirection.current?.focus();
       return;
     }
     const existing = state.goals.find((item) => item.id === goal.id);
     const entry = {
       ...goal,
       id: goal.id === "new" ? crypto.randomUUID() : goal.id,
-      name: goal.name.trim(),
-      direction: goal.direction.trim(),
-      note: goal.note.trim(),
     };
     if (
       onSave(
@@ -622,9 +649,9 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
           {state.goals.map((item) => (
             <li key={item.id}>
               <div>
-                <p className="dp-kicker">
-                  {targetNames[item.target] || item.target}
-                </p>
+                {targetLabel(item.target) !== goalLabel(item) && (
+                  <p className="dp-kicker">{targetLabel(item.target)}</p>
+                )}
                 <h3>{goalLabel(item)}</h3>
                 <p>{item.direction}</p>
                 {item.note && (
@@ -714,49 +741,94 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
                 : "Nieuw doel"}
             </h3>
             <label className="dp-field">
-              Soort doel
+              Middel of gedrag
               <select
+                ref={goalTarget}
                 value={goal.target}
-                onChange={(event) =>
-                  updateGoal({ ...goal, target: event.target.value })
-                }
+                onChange={(event) => {
+                  const target = event.target.value;
+                  const standard = isStandardTarget(target);
+                  setCustomName(!standard);
+                  updateGoal({
+                    ...goal,
+                    target,
+                    name: standard ? target : customName ? goal.name : "",
+                  });
+                }}
+                required
               >
+                <option value="" disabled>
+                  Kies een middel of gedrag
+                </option>
                 {Object.entries(targetNames).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
                 ))}
-                {!targetNames[goal.target] && (
+                {goal.target && !Object.hasOwn(targetNames, goal.target) && (
                   <option value={goal.target}>{goal.target}</option>
                 )}
               </select>
             </label>
+            {goal.target && customName && (
+              <label className="dp-field">
+                Naam van middel of gedrag
+                <input
+                  ref={goalName}
+                  value={goal.name}
+                  maxLength={200}
+                  onChange={(event) =>
+                    updateGoal({ ...goal, name: event.target.value })
+                  }
+                  aria-invalid={!!goalError && !goal.name.trim()}
+                  placeholder="Bijvoorbeeld ketamine of dagelijks wandelen"
+                  required
+                />
+              </label>
+            )}
             <label className="dp-field">
-              Naam van het middel of doel
-              <input
-                ref={goalName}
-                value={goal.name}
-                maxLength={200}
-                onChange={(event) =>
-                  updateGoal({ ...goal, name: event.target.value })
-                }
-                aria-invalid={!!goalError && !goal.name.trim()}
-                placeholder="Bijvoorbeeld ketamine of dagelijks wandelen"
+              Mijn doel
+              <select
+                ref={goalDirection}
+                value={customDirection ? "__custom__" : goal.direction}
+                onChange={(event) => {
+                  const direction = event.target.value;
+                  setCustomDirection(direction === "__custom__");
+                  updateGoal({
+                    ...goal,
+                    direction:
+                      direction === "__custom__" ? goal.direction : direction,
+                  });
+                }}
                 required
-              />
+              >
+                <option value="" disabled>
+                  Kies je doel
+                </option>
+                {goalDirections.map((direction) => (
+                  <option key={direction} value={direction}>
+                    {direction}
+                  </option>
+                ))}
+                <option value="__custom__">Eigen doel</option>
+              </select>
             </label>
-            <label className="dp-field">
-              Mijn richting
-              <input
-                value={goal.direction}
-                maxLength={200}
-                onChange={(event) =>
-                  updateGoal({ ...goal, direction: event.target.value })
-                }
-                placeholder="Bijvoorbeeld minder gebruiken"
-                required
-              />
-            </label>
+            {customDirection && (
+              <label className="dp-field">
+                Omschrijf je doel
+                <input
+                  ref={goalDescription}
+                  value={goal.direction}
+                  maxLength={200}
+                  onChange={(event) =>
+                    updateGoal({ ...goal, direction: event.target.value })
+                  }
+                  placeholder="Bijvoorbeeld elke dag even naar buiten"
+                  aria-invalid={!!goalError && !goal.direction.trim()}
+                  required
+                />
+              </label>
+            )}
             <label className="dp-field">
               Waarom dit bij mij past (optioneel)
               <textarea
