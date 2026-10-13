@@ -3,6 +3,8 @@ html:has(#anchor-root) {
   margin: 0;
   background: var(--anchor-page-bg, #171614);
   color-scheme: dark;
+  /* Keep the page inside its bounds without replacing native document scrolling. */
+  overscroll-behavior-y: none;
   scroll-padding-block: 1rem var(--anchor-nav-clearance, 8rem);
 }
 .dp main :where(a, button, input, select, textarea, summary, [tabindex]) {
@@ -14,6 +16,12 @@ html[data-anchor-theme="light"]:has(#anchor-root) {
 }
 body:has(#anchor-root) {
   margin: 0;
+  overscroll-behavior-y: none;
+}
+html:has(#anchor-root .dp-dialog[open]),
+body:has(#anchor-root .dp-dialog[open]) {
+  /* The dialog keeps its own scroller; the page behind it stays in place. */
+  overflow-y: hidden;
 }
 .dp {
   color: var(--dp-ink);
@@ -1261,6 +1269,7 @@ body:has(#anchor-root) {
   max-width: min(640px, calc(100vw - 32px));
   max-height: calc(100dvh - 40px);
   overflow: auto;
+  overscroll-behavior-y: contain;
   box-shadow: 0 25px 70px #0005;
 }
 .dp .dp-dialog::backdrop {
@@ -1376,6 +1385,8 @@ body:has(#anchor-root) {
   }
   .dp .dp-workspace {
     margin-left: 0;
+    /* Includes the measured navigation height, text enlargement and safe area. */
+    padding-bottom: var(--anchor-nav-clearance, 8rem);
   }
   .dp .dp-mobile-brand {
     display: flex;
@@ -1388,7 +1399,8 @@ body:has(#anchor-root) {
   }
   .dp .dp-bottom-nav {
     display: block;
-    position: sticky;
+    position: fixed;
+    inset-inline: 0;
     bottom: 0;
     z-index: 25;
     border-top: 1px solid var(--dp-border);

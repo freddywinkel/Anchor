@@ -291,6 +291,52 @@ try {
     path: path.join(directory, "phone-today-cards.png"),
   });
 
+  const scrollBounds = [];
+  for (const edge of ["bottom", "top"]) {
+    await page.evaluate((edge) => {
+      window.scrollTo(
+        0,
+        edge === "bottom" ? document.documentElement.scrollHeight : 0,
+      );
+      return new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      );
+    }, edge);
+    const geometry = await page.evaluate(() => {
+      const nav = document
+        .querySelector(".dp-bottom-nav")
+        .getBoundingClientRect();
+      const footer = document
+        .querySelector(".dp-page-footer")
+        .getBoundingClientRect();
+      return {
+        scroll: scrollY,
+        maxScroll: document.documentElement.scrollHeight - innerHeight,
+        navBottom: nav.bottom,
+        navTop: nav.top,
+        footerBottom: footer.bottom,
+        headerTop: document.querySelector(".dp-topbar").getBoundingClientRect()
+          .top,
+        viewportHeight: innerHeight,
+        overscrollY: getComputedStyle(document.documentElement)
+          .overscrollBehaviorY,
+      };
+    });
+    assert.equal(geometry.overscrollY, "none");
+    assert.ok(Math.abs(geometry.navBottom - geometry.viewportHeight) <= 1);
+    if (edge === "bottom") {
+      assert.ok(Math.abs(geometry.scroll - geometry.maxScroll) <= 1);
+      assert.ok(geometry.footerBottom <= geometry.navTop - 8);
+    } else {
+      assert.equal(geometry.scroll, 0);
+      assert.ok(Math.abs(geometry.headerTop) <= 1);
+    }
+    scrollBounds.push({ edge, ...geometry });
+    await page.screenshot({
+      path: path.join(directory, `phone-scroll-${edge}.png`),
+    });
+  }
+
   await page
     .getByRole("button", { name: "Craving vastleggen", exact: true })
     .click();
@@ -804,6 +850,7 @@ try {
     icons,
     todayCards,
     entryActions,
+    scrollBounds,
     fonts,
     offlineFonts,
     fontCache,
@@ -812,6 +859,7 @@ try {
       "fresh empty profile",
       "check-in and craving actions have equal size and styling on the public mobile page",
       "Today groups the timeline, whole day and small positive moments in visible cards with fitting actions",
+      "mobile page has bounded vertical overscroll, anchored bottom navigation and reachable footer at both scroll endpoints",
       "real craving UI save/reload",
       "successful craving and follow-up saves close their forms; unanswered activity choice stays null",
       "optional craving substance survives save, reload, offline editing and backup export",
