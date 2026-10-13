@@ -667,6 +667,7 @@ try {
   await page
     .getByRole("button", { name: "Check-in na de oefening", exact: true })
     .click();
+  await page.getByText("Activiteit toevoegen", { exact: true }).click();
   await expect(activityChoice).toHaveValue("");
   await expect(page.locator(".dp-after-form")).toHaveCount(0);
   await expect(
