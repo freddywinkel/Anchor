@@ -62,6 +62,12 @@ import {
 } from "./RatingsEditor";
 
 const KINDS: Record<Moment["kind"], string> = { checkin: "Check-in" };
+const ACTIVITIES = [
+  "Buiten wandelen",
+  "Schilderen",
+  "Iemand spreken",
+  "5-4-3-2-1",
+];
 const blankRatings = (): Ratings => ({ mood: null, eis: null });
 const uid = () => crypto.randomUUID();
 const hasAnchorWorker = () =>
@@ -830,6 +836,8 @@ export function App() {
             {path === "/help" && <Support state={state} navigate={navigate} />}
             {path === "/exercise" && (
               <ExerciseView
+                key={route}
+                navigate={navigate}
                 moment={state.moments.find(
                   (m) =>
                     m.id ===
@@ -851,7 +859,10 @@ export function App() {
                   draft={drafts[`moment:${momentId}`] as Moment | undefined}
                   onDraft={(value) => cacheDraft(`moment:${momentId}`, value)}
                   onClear={() => cacheDraft(`moment:${momentId}`, null)}
-                  afterInitially={route.includes("after=1")}
+                  afterInitially={!!moment && route.includes("after=1")}
+                  activityIntent={new URLSearchParams(route.split("?")[1]).get(
+                    "activity",
+                  )}
                 />
               ) : (
                 <Missing navigate={navigate} />
@@ -1421,10 +1432,7 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
         description="Kies iets dat bij dit moment past. Stoppen of overslaan mag."
       />
       <div className="dp-tools-layout">
-        <button
-          className="dp-card dp-featured-tool"
-          onClick={() => navigate("/exercise")}
-        >
+        <section className="dp-card dp-featured-tool">
           <span className="dp-round-icon">
             <Compass size={27} />
           </span>
@@ -1432,20 +1440,32 @@ function Tools({ navigate }: { navigate: (path: string) => void }) {
             <p className="dp-kicker">Aandacht voor je omgeving</p>
             <h2>5-4-3-2-1</h2>
             <p>Sta even stil bij wat je om je heen opmerkt.</p>
-            <span className="dp-tool-cta">
-              Oefening openen
-              <ArrowRight size={19} />
-            </span>
+            <p>
+              Je kunt meteen beginnen, of eerst inchecken en na afloop opnieuw
+              vastleggen hoe het gaat.
+            </p>
+            <div className="dp-actions">
+              <Button primary onClick={() => navigate("/exercise")}>
+                Start de oefening
+                <ArrowRight size={19} />
+              </Button>
+              <Button
+                onClick={() => navigate("/moment/new?activity=grounding")}
+              >
+                Eerst inchecken
+              </Button>
+            </div>
           </div>
-        </button>
+        </section>
         <section className="dp-card dp-plain-section">
           <h2>Ook in je eigen leven</h2>
           <p>
-            Een wandeling, schilderen of iemand spreken. Koppel een eigen
-            activiteit aan een check-in en leg later vast hoe het gaat.
+            Wandelen, schilderen, iemand spreken of iets anders. Kies wat je
+            wilt doen, leg eventueel vast hoe je je vooraf voelt en check later
+            opnieuw in.
           </p>
-          <Button onClick={() => navigate("/moment/new")}>
-            Activiteit bij een check-in
+          <Button onClick={() => navigate("/moment/new?activity=choose")}>
+            Activiteit kiezen
             <ArrowRight size={17} />
           </Button>
         </section>
@@ -1488,6 +1508,7 @@ function Support({
             {state.plan.support ||
               "Schrijf in Mijn plan op wie of wat jou kan steunen."}
           </p>
+          <Button onClick={() => navigate("/plan")}>Mijn plan openen</Button>
         </div>
       </section>
       <section className="dp-card dp-plain-section">
@@ -1525,6 +1546,7 @@ function MomentView({
   draft,
   onClear,
   afterInitially,
+  activityIntent,
 }: {
   record?: Moment;
   state: AppState;
@@ -1534,20 +1556,31 @@ function MomentView({
   draft?: Moment;
   onClear: () => void;
   afterInitially: boolean;
+  activityIntent: string | null;
 }) {
   const [value, setValue] = useState<Moment>(
-    () => draft ?? record ?? emptyMoment(),
+    () =>
+      draft ??
+      record ?? {
+        ...emptyMoment(),
+        activity: activityIntent === "grounding" ? "5-4-3-2-1" : "",
+      },
+  );
+  const [resumedDraft] = useState(() => !!draft);
+  const [repairActivity, setRepairActivity] = useState(
+    () =>
+      (!!value.after || value.attempted !== null) &&
+      (!value.activity.trim() ||
+        (!!draft && (!record || draft.activity !== record.activity))),
   );
   const beforeFormRef = useRef<HTMLFormElement>(null);
   const afterHeadingRef = useRef<HTMLHeadingElement>(null);
+  const activitySelectRef = useRef<HTMLSelectElement>(null);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const timeInputRef = useRef<HTMLInputElement>(null);
   const fieldErrorId = useId();
   const [customActivity, setCustomActivity] = useState(
-    () =>
-      !["", "Buiten wandelen", "Schilderen", "5-4-3-2-1"].includes(
-        value.activity,
-      ),
+    () => !["", ...ACTIVITIES].includes(value.activity),
   );
   const [afterOpen, setAfterOpen] = useState(
     afterInitially ||
@@ -1562,6 +1595,38 @@ function MomentView({
   } | null>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const [deleting, setDeleting] = useState(false);
+  const activityLocked =
+    !repairActivity && (!!value.after || value.attempted !== null);
+  const changedSinceSave =
+    !!record && JSON.stringify(value) !== JSON.stringify(record);
+  const activityEntry =
+    activityIntent === "choose" || activityIntent === "grounding";
+  const differentDraft =
+    resumedDraft &&
+    activityIntent === "grounding" &&
+    value.activity !== "5-4-3-2-1";
+  useEffect(() => {
+    if (!activityEntry || afterInitially) return;
+    const frame = requestAnimationFrame(() => {
+      const select = activitySelectRef.current;
+      const details = select?.closest("details");
+      if (details) details.open = true;
+      const target = select?.disabled
+        ? details?.querySelector("summary")
+        : select;
+      target?.focus({ preventScroll: true });
+      details?.scrollIntoView({ block: "start", behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activityIntent, activityEntry, afterInitially]);
+  useEffect(() => {
+    if (!afterInitially) return;
+    const frame = requestAnimationFrame(() => {
+      afterHeadingRef.current?.focus({ preventScroll: true });
+      afterHeadingRef.current?.scrollIntoView({ block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [afterInitially]);
   useEffect(() => {
     if (!error) return;
     const target =
@@ -1593,6 +1658,12 @@ function MomentView({
     });
   }
   function openAfter() {
+    if (!repairActivity && record && record.activity !== value.activity) {
+      showError(
+        "Bewaar eerst je gekozen activiteit bij deze check-in. Daarna kun je de nameting invullen.",
+      );
+      return;
+    }
     setAfterOpen(true);
     requestAnimationFrame(() => {
       afterHeadingRef.current?.focus({ preventScroll: true });
@@ -1640,7 +1711,8 @@ function MomentView({
     }
     if (
       !followup &&
-      (JSON.stringify(value.after) !== JSON.stringify(record?.after ?? null) ||
+      (repairActivity ||
+        JSON.stringify(value.after) !== JSON.stringify(record?.after ?? null) ||
         value.attempted !== (record?.attempted ?? null))
     ) {
       showError(
@@ -1690,6 +1762,7 @@ function MomentView({
       )
     ) {
       setValue(saved);
+      setRepairActivity(false);
       onClear();
       navigate(`/moment/${saved.id}`);
     } else {
@@ -1719,6 +1792,12 @@ function MomentView({
             : "Vul alleen in wat je wilt vastleggen."
         }
       />
+      {resumedDraft && (
+        <p className="dp-notice" role="status">
+          Je werkt verder aan een bewaard concept. Je eerdere invoer is
+          teruggezet, inclusief de datum en tijd van dat moment.
+        </p>
+      )}
       {record && (
         <div className="dp-saved-strip">
           <CheckCheck size={19} />
@@ -1728,6 +1807,50 @@ function MomentView({
             Nog een check-in
           </Button>
         </div>
+      )}
+      {record && value.activity && (
+        <section className="dp-card dp-activity-next">
+          <p className="dp-kicker">Activiteit bij deze check-in</p>
+          <h2>{value.activity}</h2>
+          <p>
+            {record.after
+              ? "Je check-in en je nameting zijn bewaard. Hieronder kun je ze bekijken of aanvullen."
+              : activityLocked
+                ? "Je nameting is nog een concept. Ga verder waar je was gebleven en bewaar je terugblik."
+                : changedSinceSave
+                  ? "Je hebt wijzigingen in je check-in. Bewaar die voordat je aan je activiteit begint."
+                  : "Je check-in is bewaard. Probeer je activiteit wanneer het uitkomt. Kom daarna terug om vast te leggen hoe het nu gaat."}
+          </p>
+          <div className="dp-actions">
+            {value.activity === "5-4-3-2-1" &&
+              !activityLocked &&
+              !repairActivity && (
+                <Button
+                  primary
+                  onClick={() => {
+                    if (changedSinceSave) {
+                      showError(
+                        "Sla je moment eerst op voordat je de oefening opent.",
+                      );
+                      return;
+                    }
+                    navigate(`/exercise?moment=${record.id}`);
+                  }}
+                >
+                  <Compass size={19} />
+                  Open de oefening
+                </Button>
+              )}
+            <Button onClick={openAfter}>
+              {record.after ? "Nameting bekijken" : "Nameting invullen"}
+              <ArrowRight size={17} />
+            </Button>
+          </div>
+          <p className="dp-hint">
+            De nameting hoort bij dit moment. Je eerdere scores blijven bewaard.
+            Geef zelf aan of je de activiteit hebt geprobeerd; ook ‘Nee’ mag.
+          </p>
+        </section>
       )}
       <form
         ref={beforeFormRef}
@@ -1829,16 +1952,49 @@ function MomentView({
         </section>
         <details
           className="dp-card dp-form-section dp-activity-section dp-extra-fields"
-          open={!!value.activity || customActivity}
+          open={
+            activityEntry ||
+            repairActivity ||
+            !!value.activity ||
+            customActivity
+          }
         >
           <summary>Activiteit toevoegen</summary>
           <span className="dp-kicker">Optioneel</span>
-          <h2>Wat zou je willen proberen?</h2>
-          <p>Een activiteit uit je eigen leven telt net zo goed mee.</p>
+          <h2>Wat wil je doen?</h2>
+          <p>
+            Een activiteit is iets wat je probeert, zoals wandelen, schilderen
+            of iemand spreken. Je doet dit in je eigen tijd; 5-4-3-2-1 kun je
+            hier in de app volgen.
+          </p>
+          {!record && (
+            <ol className="dp-activity-steps">
+              <li>Kies een activiteit en vul hierboven in hoe het nu gaat.</li>
+              <li>Bewaar je check-in en probeer je activiteit.</li>
+              <li>
+                Open later deze check-in voor je nameting: hoe gaat het nu?
+              </li>
+            </ol>
+          )}
+          {differentDraft && (
+            <p className="dp-notice">
+              Je hebt al een open check-in. Je invoer en gekozen activiteit zijn
+              behouden. Rond dit concept eerst af, of kies hieronder zelf een
+              andere activiteit als er nog geen nameting is ingevuld.
+            </p>
+          )}
+          {repairActivity && (
+            <p className="dp-notice">
+              Controleer de activiteit bij deze bewaarde nameting. Kies
+              hieronder de activiteit die erbij hoort en gebruik ‘Nameting
+              opslaan’. Je eerder ingevulde scores blijven behouden.
+            </p>
+          )}
           <label className="dp-field">
             Activiteit
             <select
-              disabled={!!record?.after}
+              ref={activitySelectRef}
+              disabled={activityLocked}
               value={customActivity ? "custom" : value.activity}
               onChange={(e) => {
                 setCustomActivity(e.target.value === "custom");
@@ -1848,9 +2004,9 @@ function MomentView({
               }}
             >
               <option value="">Alleen deze check-in</option>
-              <option>Buiten wandelen</option>
-              <option>Schilderen</option>
-              <option>5-4-3-2-1</option>
+              {ACTIVITIES.map((activity) => (
+                <option key={activity}>{activity}</option>
+              ))}
               <option value="custom">Eigen activiteit</option>
             </select>
           </label>
@@ -1858,40 +2014,25 @@ function MomentView({
             <label className="dp-field">
               Naam van de activiteit
               <input
-                disabled={!!record?.after}
+                disabled={activityLocked}
                 maxLength={200}
                 value={value.activity}
                 onChange={(e) => update({ activity: e.target.value })}
               />
             </label>
           )}
-          {record?.after && (
+          {activityLocked && (
             <p className="dp-hint">
-              Deze activiteit hoort bij de opgeslagen nameting. Maak voor een
-              andere activiteit een nieuwe check-in.
+              Deze activiteit hoort bij je ingevulde nameting en blijft eraan
+              gekoppeld. Bewaar je nameting; gebruik voor een andere activiteit
+              een nieuwe check-in.
             </p>
           )}
-          {record && value.activity === "5-4-3-2-1" && (
-            <Button
-              onClick={() => {
-                if (JSON.stringify(value) !== JSON.stringify(record)) {
-                  showError(
-                    "Sla je moment eerst op voordat je de oefening opent.",
-                  );
-                  return;
-                }
-                navigate(`/exercise?moment=${record.id}`);
-              }}
-            >
-              <Compass size={19} />
-              Open de oefening
-            </Button>
-          )}
-          {record && record.activity && (
-            <Button className="quiet" onClick={openAfter}>
-              Nameting invullen
-              <ArrowRight size={17} />
-            </Button>
+          {!record && value.activity && (
+            <p className="dp-hint">
+              Kies hieronder ‘Dit moment opslaan’. Daarna zie je hoe je verder
+              kunt met je activiteit en de nameting.
+            </p>
           )}
         </details>
         {error?.form === "before" && !error.field && (
@@ -1916,6 +2057,10 @@ function MomentView({
           <h2 ref={afterHeadingRef} tabIndex={-1}>
             {value.after ? "Je nameting" : "Hoe is het nu?"}
           </h2>
+          <p>
+            Vul opnieuw in hoe het nu gaat: je stemming, spanning of emoties. De
+            eerdere check-in blijft apart bewaard. Je mag waarden leeg laten.
+          </p>
           {value.afterDate && value.afterTime && (
             <p className="dp-hint">
               Tijdstip nameting: {dateText(value.afterDate, true)} om{" "}
@@ -2156,12 +2301,23 @@ function DayView({
 function ExerciseView({
   moment,
   onBack,
+  navigate,
 }: {
   moment?: Moment;
   onBack: (id?: string) => void;
+  navigate: (path: string) => void;
 }) {
   const [step, setStep] = useState(0);
   const [answer, setAnswer] = useState("");
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (step === 0) return;
+    stepHeadingRef.current?.focus({ preventScroll: true });
+    stepHeadingRef.current?.scrollIntoView({
+      block: "center",
+      behavior: "auto",
+    });
+  }, [step]);
   const steps = [
     {
       number: 5,
@@ -2206,25 +2362,24 @@ function ExerciseView({
       />
       {current ? (
         <section className="dp-card dp-exercise-card">
-          <div
-            className="dp-exercise-progress"
-            aria-label={`Stap ${step + 1} van 5`}
-          >
+          <div className="dp-exercise-progress" aria-hidden="true">
             {steps.map((item, i) => (
               <span key={item.number} className={i <= step ? "active" : ""} />
             ))}
           </div>
+          <p className="dp-hint">Stap {step + 1} van 5</p>
           <div className="dp-exercise-number" aria-hidden="true">
             {current.number}
           </div>
-          <h2>
+          <h2 ref={stepHeadingRef} tabIndex={-1}>
             Noem {current.number} {current.sense}
           </h2>
           <p>{current.prompt}</p>
           <label className="dp-field">
             Wat merk je op?{" "}
             <span className="dp-hint">
-              Optioneel. Deze oefennotitie wordt niet opgeslagen.
+              Optioneel. Alleen voor deze stap; bij doorgaan of overslaan wordt
+              deze tekst gewist. De notitie komt niet in je dagboek.
             </span>
             <textarea
               rows={3}
@@ -2258,15 +2413,37 @@ function ExerciseView({
           <span className="dp-round-icon">
             <Leaf size={27} />
           </span>
-          <h2>Neem even de tijd.</h2>
+          <h2 ref={stepHeadingRef} tabIndex={-1}>
+            Neem even de tijd.
+          </h2>
           <p>
             Je hoeft je niet anders te voelen. Als je wilt, kun je nu vastleggen
             hoe het met je gaat.
           </p>
-          <Button primary onClick={() => onBack(moment?.id)}>
-            {moment ? "Terug naar mijn nameting" : "Terug naar hulpmiddelen"}
-            <ArrowRight size={17} />
-          </Button>
+          <div className="dp-actions">
+            {moment ? (
+              <Button primary onClick={() => onBack(moment.id)}>
+                Terug naar mijn nameting
+                <ArrowRight size={17} />
+              </Button>
+            ) : (
+              <>
+                <Button primary onClick={() => navigate("/moment/new")}>
+                  Check-in na de oefening
+                  <ArrowRight size={17} />
+                </Button>
+                <Button onClick={() => onBack()}>
+                  Terug naar hulpmiddelen
+                </Button>
+              </>
+            )}
+          </div>
+          {!moment && (
+            <p className="dp-hint">
+              Je legt dan alleen vast hoe het nu gaat. Er wordt geen gevoel van
+              vóór de oefening ingevuld.
+            </p>
+          )}
           <p className="dp-hint">
             Het openen of afronden van de oefening registreert niet automatisch
             dat je deze hebt geprobeerd.

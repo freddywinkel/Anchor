@@ -608,6 +608,21 @@
   margin-top: var(--dp-card-gap);
   background: var(--dp-sage-soft);
 }
+.dp .dp-activity-next {
+  margin-bottom: var(--dp-card-gap);
+  background: var(--dp-sage-soft);
+}
+.dp .dp-activity-next > .dp-hint {
+  margin-top: 1rem;
+}
+.dp .dp-activity-steps {
+  padding-left: 1.4em;
+  line-height: 1.6;
+  margin-bottom: 1.25rem;
+}
+.dp .dp-activity-steps li + li {
+  margin-top: 0.5rem;
+}
 .dp .dp-card.dp-extra-fields[open] > summary {
   margin-bottom: 1.25rem;
 }
@@ -691,6 +706,12 @@
 @media (max-width: 600px) {
   .dp .dp-today-grid {
     padding-top: var(--dp-card-gap);
+  }
+  .dp .dp-featured-tool {
+    flex-direction: column;
+  }
+  .dp .dp-featured-tool > div {
+    width: 100%;
   }
   .dp .dp-card-heading {
     gap: 12px;

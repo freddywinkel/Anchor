@@ -624,6 +624,59 @@ try {
     path: path.join(directory, "phone-settings-offline.png"),
     fullPage: true,
   });
+  const draftBeforeTools = await page.evaluate(() =>
+    localStorage.getItem("anchor.app.drafts.v1"),
+  );
+  const openTools = () =>
+    page
+      .locator(".dp-bottom-nav")
+      .getByRole("link", {
+        name: "Hulpmiddelen",
+        exact: true,
+      })
+      .click();
+  await openTools();
+  await page
+    .getByRole("button", { name: "Activiteit kiezen", exact: true })
+    .click();
+  const activityChoice = page.getByRole("combobox", {
+    name: "Activiteit",
+    exact: true,
+  });
+  await expect(activityChoice).toBeFocused();
+  await expect(activityChoice).toHaveValue("");
+  await openTools();
+  await page
+    .getByRole("button", { name: "Eerst inchecken", exact: true })
+    .click();
+  await expect(activityChoice).toHaveValue("5-4-3-2-1");
+  await expect(page.locator(".dp-after-form")).toHaveCount(0);
+  await openTools();
+  await page.screenshot({
+    path: path.join(directory, "phone-tools-offline.png"),
+  });
+  await page
+    .getByRole("button", { name: "Start de oefening", exact: true })
+    .click();
+  for (let step = 0; step < 5; step++) {
+    await page
+      .getByRole("button", { name: "Stap overslaan", exact: true })
+      .click();
+  }
+  await expect(page.locator(".dp-exercise-done h2")).toBeFocused();
+  await page
+    .getByRole("button", { name: "Check-in na de oefening", exact: true })
+    .click();
+  await expect(activityChoice).toHaveValue("");
+  await expect(page.locator(".dp-after-form")).toHaveCount(0);
+  await expect(
+    page.locator(".dp-mood-options [aria-pressed=true]"),
+  ).toHaveCount(0);
+  assert.equal((await stored()).raw, themed.raw);
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
+    draftBeforeTools,
+  );
   const caches = await page.evaluate(() => window.caches.keys());
   assert.ok(caches.length > 0);
   assert.ok(
@@ -669,6 +722,8 @@ try {
       "follow-up leaves original emotion ratings unchanged and is included in the validated backup",
       "five palettes and mode persist offline without changing records",
       "downloaded backup validates and matches saved data",
+      "offline tools open the intended activity choice and grounding preselection without replacing data or drafts",
+      "finishing a standalone exercise opens an unanswered current check-in without invented before ratings or automatic use",
       "no external or data-bearing requests",
       "no page errors",
     ],
