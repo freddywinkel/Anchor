@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { applyHistoryFilters } from "./history-filters";
 import {
   createEmptyState,
   validateState,
@@ -101,11 +102,9 @@ test("elk gekozen middel is doorzoekbaar en de uitgeklapte registratie toont de 
 }) => {
   await open(page, "history");
   const before = await snapshot(page);
-  await page
-    .getByRole("combobox", { name: "Soort registratie", exact: true })
-    .selectOption("craving");
+  await applyHistoryFilters(page, { kind: "craving" });
   for (const query of ["alcohol", "COCAINE", "3-mmc", "onerror"]) {
-    await page.getByRole("searchbox").fill(query);
+    await applyHistoryFilters(page, { query });
     await expect(page.locator(".dp-history-record")).toHaveCount(1);
     await expect(record(page, "multiple").locator("summary")).toContainText(
       `Middelen of gedrag: ${selected.join(", ")}`,
@@ -125,12 +124,12 @@ test("elk gekozen middel is doorzoekbaar en de uitgeklapte registratie toont de 
   ]) {
     await expect(multi.locator(".dp-history-body")).toContainText(answer);
   }
-  await page.getByRole("searchbox").fill("Cannabis");
+  await applyHistoryFilters(page, { query: "Cannabis" });
   await expect(page.locator(".dp-history-record")).toHaveCount(1);
   await expect(record(page, "legacy").locator("summary")).toContainText(
     "Middel of gedrag: Cannabis",
   );
-  await page.getByRole("searchbox").fill("");
+  await applyHistoryFilters(page, { query: "" });
   await expect(record(page, "unknown").locator("summary")).toContainText(
     "Middel of gedrag: Niet ingevuld",
   );
@@ -145,9 +144,7 @@ test("weekoverzicht toont meerdere en historische middelen en opent dezelfde vol
 }) => {
   await open(page, "history");
   const before = await snapshot(page);
-  await page
-    .getByRole("combobox", { name: "Periode", exact: true })
-    .selectOption("week");
+  await applyHistoryFilters(page, { period: "week" });
   const week = page.getByRole("region", {
     name: "Rustig terugkijken op je week",
   });

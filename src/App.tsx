@@ -50,6 +50,7 @@ import {
   SettingsView,
   createHistorySession,
 } from "./SecondaryViews";
+import { Dialog } from "./Dialog";
 import { CravingView } from "./CravingView";
 import { cravingSubstances } from "./lib/substances";
 import "./secondary.css";
@@ -127,88 +128,6 @@ function Button({
     >
       {children}
     </button>
-  );
-}
-function Dialog({
-  title,
-  children,
-  onClose,
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const dialog = ref.current!;
-    const previous = document.activeElement;
-    const previousRoute = location.hash;
-    dialog.showModal();
-    return () => {
-      dialog.close();
-      requestAnimationFrame(() => {
-        const activeDialog =
-          document.querySelector<HTMLDialogElement>("dialog[open]");
-        if (activeDialog) {
-          if (!activeDialog.contains(document.activeElement))
-            activeDialog.querySelector<HTMLElement>("button")?.focus();
-          return;
-        }
-        if (location.hash !== previousRoute) return;
-        if (
-          previous instanceof HTMLElement &&
-          previous.isConnected &&
-          previous !== document.body &&
-          previous !== document.documentElement
-        ) {
-          previous.focus({ preventScroll: true });
-          if (document.activeElement === previous) return;
-        }
-        // Switching dialogs can leave BODY as the captured opener. A draft
-        // deletion can also replace the original button with a new page.
-        const menu = document.querySelector<HTMLElement>(
-          '[aria-label="Meer opties"]',
-        );
-        const fallback = menu?.getClientRects().length
-          ? menu
-          : document.querySelector<HTMLElement>("main h1");
-        fallback?.focus({ preventScroll: true });
-      });
-    };
-  }, []);
-  return (
-    <dialog
-      className="dp-dialog"
-      ref={ref}
-      aria-labelledby="dp-dialog-title"
-      onKeyDown={(event) => {
-        if (event.key !== "Tab") return;
-        const controls = [
-          ...ref.current!.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
-          ),
-        ].filter((element) => element.getClientRects().length);
-        const first = controls[0];
-        const last = controls.at(-1);
-        if (event.shiftKey && document.activeElement === first) {
-          event.preventDefault();
-          last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-          event.preventDefault();
-          first?.focus();
-        }
-      }}
-      onCancel={onClose}
-      onClose={onClose}
-    >
-      <div className="dp-section-head">
-        <h2 id="dp-dialog-title">{title}</h2>
-        <Button aria-label="Venster sluiten" onClick={onClose}>
-          <X size={20} />
-        </Button>
-      </div>
-      {children}
-    </dialog>
   );
 }
 function PageTitle({
@@ -504,6 +423,7 @@ export function App() {
         if (
           !(target instanceof HTMLElement) ||
           !target.closest("main") ||
+          target.closest("dialog") ||
           !target.matches("a, button, input, select, textarea, summary")
         )
           return;
@@ -514,28 +434,8 @@ export function App() {
         const nav = document
           .querySelector(".dp-bottom-nav")
           ?.getBoundingClientRect();
-        const saveTop = [
-          ...document.querySelectorAll<HTMLElement>(
-            "main .dp-form-actions, main .anchor-save-bar",
-          ),
-        ]
-          .filter(
-            (bar) =>
-              !bar.contains(target) &&
-              getComputedStyle(bar).position === "sticky",
-          )
-          .map((bar) => bar.getBoundingClientRect())
-          .filter(
-            (rect) =>
-              rect.height && rect.top > top && rect.bottom <= viewportBottom,
-          )
-          .map((rect) => rect.top);
         const bottom =
-          Math.min(
-            viewportBottom,
-            nav?.height ? nav.top : viewportBottom,
-            ...saveTop,
-          ) - 16;
+          Math.min(viewportBottom, nav?.height ? nav.top : viewportBottom) - 16;
         const rect = target.getBoundingClientRect();
         const movement =
           rect.height > bottom - top || rect.top < top
@@ -552,30 +452,6 @@ export function App() {
       cancelAnimationFrame(frame);
       document.removeEventListener("focusin", revealFocus);
       window.visualViewport?.removeEventListener("resize", revealFocus);
-    };
-  }, []);
-  useEffect(() => {
-    const resize = () => {
-      const available = window.visualViewport?.height ?? window.innerHeight;
-      const fontSize = parseFloat(
-        getComputedStyle(document.documentElement).fontSize,
-      );
-      document.documentElement.dataset.anchorCompactActions = String(
-        available >= 600 && fontSize <= 24,
-      );
-    };
-    resize();
-    const observer = new MutationObserver(resize);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["style"],
-    });
-    window.visualViewport?.addEventListener("resize", resize);
-    window.addEventListener("resize", resize);
-    return () => {
-      observer.disconnect();
-      window.visualViewport?.removeEventListener("resize", resize);
-      window.removeEventListener("resize", resize);
     };
   }, []);
   useEffect(() => {
@@ -975,11 +851,6 @@ export function App() {
             )}
             {path === "/history" && (
               <>
-                <PageTitle
-                  kicker="Jouw aantekeningen"
-                  title="Terugkijken"
-                  description="Klap een registratie open om alles terug te lezen."
-                />
                 <HistoryView
                   state={state}
                   currentDate={currentDate}

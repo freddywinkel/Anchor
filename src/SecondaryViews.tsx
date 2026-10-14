@@ -30,6 +30,9 @@ import type { Palette } from "./lib/palettes";
 import { cravingSubstances, SUBSTANCE_OPTIONS } from "./lib/substances";
 import { WeekOverview, type WeekRecordTarget } from "./WeekOverview";
 import { MOODS } from "./RatingsEditor";
+import { Dialog } from "./Dialog";
+import { MoodPlot } from "./MoodPlot";
+import "./history.css";
 import "./secondary.css";
 
 const palettes: { id: Palette; name: string; description: string }[] = [
@@ -513,6 +516,14 @@ export function HistoryView({
 }) {
   const { period, kind, query } = session;
   const [reveal, setReveal] = useState<WeekRecordTarget | null>(null);
+  const [searchDraft, setSearchDraft] = useState<Pick<
+    HistorySession,
+    "period" | "kind" | "query"
+  > | null>(null);
+  const activeFilters =
+    Number(period !== "all") +
+    Number(kind !== "all") +
+    Number(Boolean(query.trim()));
   const returnPosition = useRef({
     scrollY: session.scrollY,
     record: session.returnRecord,
@@ -687,52 +698,149 @@ export function HistoryView({
         (point.date >= recentStart(currentDate) && point.date <= currentDate),
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
-  const graphPoints = observations.slice(-40);
   const hasRecords =
     state.moments.length + state.cravings.length + state.days.length > 0;
   return (
     <div className="dp-history">
-      <div className="dp-history-filters dp-card">
-        <label className="dp-field">
-          Periode
-          <select
-            value={period}
-            onChange={(e) =>
-              changeFilter({
-                period: e.target.value as HistorySession["period"],
-              })
-            }
-          >
-            <option value="week">Afgelopen 7 dagen</option>
-            <option value="all">Alle dagen</option>
-          </select>
-        </label>
-        <label className="dp-field">
-          Soort registratie
-          <select
-            value={kind}
-            onChange={(e) =>
-              changeFilter({ kind: e.target.value as HistorySession["kind"] })
-            }
-          >
-            <option value="all">Alles</option>
-            <option value="checkin">Check-ins</option>
-            <option value="craving">Cravings</option>
-            <option value="day">Mijn hele dag</option>
-          </select>
-        </label>
-        <label className="dp-field dp-history-search">
+      <header className="dp-page-title dp-history-title">
+        <div>
+          <p className="dp-kicker">Jouw aantekeningen</p>
+          <h1 tabIndex={-1}>Terugkijken</h1>
+          <p className="dp-lead">
+            Klap een registratie open om alles terug te lezen.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="dp-button dp-history-search-trigger"
+          aria-label="Zoeken en filteren"
+          aria-haspopup="dialog"
+          aria-describedby="dp-history-selection"
+          onClick={(event) => {
+            // Safari does not focus a button on pointer activation. Capture a
+            // reliable opener so cancelling returns to this search control.
+            event.currentTarget.focus({ preventScroll: true });
+            setSearchDraft({ period, kind, query });
+          }}
+        >
+          <Search size={22} aria-hidden="true" />
+          {activeFilters > 0 && (
+            <span className="dp-search-badge" aria-hidden="true">
+              {activeFilters}
+            </span>
+          )}
+        </button>
+      </header>
+      <div className="dp-history-selection">
+        <p id="dp-history-selection">
+          <span>{period === "week" ? "Afgelopen 7 dagen" : "Alle dagen"}</span>
           <span>
-            <Search size={16} aria-hidden="true" /> Zoeken
+            {
+              {
+                all: "Alle soorten",
+                checkin: "Check-ins",
+                craving: "Cravings",
+                day: "Dagoverzichten",
+              }[kind]
+            }
           </span>
-          <input
-            type="search"
-            placeholder="Middel, situatie, emotie of activiteit"
-            value={query}
-            onChange={(e) => changeFilter({ query: e.target.value })}
-          />
-        </label>
+          {query.trim() && <span>Zoekterm: ‘{query.trim()}’</span>}
+        </p>
+        {activeFilters > 0 && (
+          <button
+            type="button"
+            className="dp-button quiet"
+            onClick={() =>
+              changeFilter({ period: "all", kind: "all", query: "" })
+            }
+          >
+            Filters wissen
+          </button>
+        )}
       </div>
+      {searchDraft && (
+        <Dialog
+          title="Zoeken in registraties"
+          onClose={() => setSearchDraft(null)}
+        >
+          <form
+            className="dp-history-search-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              changeFilter({ ...searchDraft, query: searchDraft.query.trim() });
+              setSearchDraft(null);
+            }}
+          >
+            <p className="dp-muted">
+              Kies wat je wilt teruglezen. Je registraties blijven bewaard.
+            </p>
+            <label className="dp-field">
+              Zoeken
+              <input
+                type="search"
+                placeholder="Middel, situatie, emotie of activiteit"
+                value={searchDraft.query}
+                onChange={(event) =>
+                  setSearchDraft({ ...searchDraft, query: event.target.value })
+                }
+              />
+            </label>
+            <label className="dp-field">
+              Periode
+              <select
+                value={searchDraft.period}
+                onChange={(event) =>
+                  setSearchDraft({
+                    ...searchDraft,
+                    period: event.target.value as HistorySession["period"],
+                  })
+                }
+              >
+                <option value="week">7 dagen</option>
+                <option value="all">Alle dagen</option>
+              </select>
+            </label>
+            <label className="dp-field">
+              Soort registratie
+              <select
+                value={searchDraft.kind}
+                onChange={(event) =>
+                  setSearchDraft({
+                    ...searchDraft,
+                    kind: event.target.value as HistorySession["kind"],
+                  })
+                }
+              >
+                <option value="all">Alles</option>
+                <option value="checkin">Check-ins</option>
+                <option value="craving">Cravings</option>
+                <option value="day">Hele dag</option>
+              </select>
+            </label>
+            <div className="dp-actions dp-history-search-actions">
+              <button type="submit" className="dp-button primary">
+                Resultaten tonen
+              </button>
+              <button
+                type="button"
+                className="dp-button"
+                onClick={() => setSearchDraft(null)}
+              >
+                Annuleren
+              </button>
+              <button
+                type="button"
+                className="dp-button quiet"
+                onClick={() =>
+                  setSearchDraft({ period: "all", kind: "all", query: "" })
+                }
+              >
+                Criteria wissen
+              </button>
+            </div>
+          </form>
+        </Dialog>
+      )}
       {period === "week" && (
         <WeekOverview
           state={state}
@@ -755,126 +863,22 @@ export function HistoryView({
         />
       )}
       {hasRecords && (kind === "all" || kind === "checkin") && (
-        <section
-          className="dp-mood-plot dp-card"
-          aria-labelledby="dp-mood-plot-title"
-        >
-          <div className="dp-section-head">
-            <div>
-              <h2 id="dp-mood-plot-title">Stemming per moment</h2>
-              <p className="dp-muted">
-                Losse metingen van −2 tot +2. Je dagsamenvatting blijft apart.
-              </p>
-            </div>
-            <span className="dp-count">
-              {observations.length}{" "}
-              {observations.length === 1 ? "meting" : "metingen"}
-            </span>
-          </div>
-          {graphPoints.length ? (
-            <>
-              <div className="dp-chart-frame">
-                <div className="dp-chart-axis" aria-hidden="true">
-                  {[2, 1, 0, -1, -2].map((value) => (
-                    <span key={value}>{value > 0 ? `+${value}` : value}</span>
-                  ))}
-                </div>
-                <svg
-                  viewBox="0 0 640 160"
-                  preserveAspectRatio="none"
-                  role="img"
-                  aria-label={`${graphPoints.length} stemmingsmetingen in volgorde. De waarden staan in de uitklapbare lijst hieronder.`}
-                >
-                  {[-2, -1, 0, 1, 2].map((value) => (
-                    <g key={value}>
-                      <line
-                        x1="35"
-                        x2="624"
-                        y1={80 - value * 29}
-                        y2={80 - value * 29}
-                        className="dp-plot-guide"
-                      />
-                    </g>
-                  ))}
-                  {graphPoints.map((point, index) => (
-                    <circle
-                      key={point.id}
-                      cx={
-                        graphPoints.length === 1
-                          ? 320
-                          : 50 + (index / (graphPoints.length - 1)) * 558
-                      }
-                      cy={80 - point.mood * 29}
-                      r="5"
-                      vectorEffect="non-scaling-stroke"
-                      className={
-                        point.label === "Nameting"
-                          ? "dp-plot-after"
-                          : "dp-plot-before"
-                      }
-                    >
-                      <title>
-                        {dateLabel(point.date)} {point.time} · {point.label} ·
-                        stemming {moodLabel(point.mood)}
-                      </title>
-                    </circle>
-                  ))}
-                </svg>
-              </div>
-              <div className="dp-chart-dates" aria-hidden="true">
-                <span>{dateLabel(graphPoints[0].date)}</span>
-                <span>
-                  {dateLabel(graphPoints[graphPoints.length - 1].date)}
-                </span>
-              </div>
-              <p className="dp-plot-key">
-                <span>
-                  <i aria-hidden="true" /> Check-in
-                </span>
-                <span>
-                  <i className="dp-key-after" aria-hidden="true" /> Nameting
-                </span>
-              </p>
-              <details className="dp-observation-details">
-                <summary>
-                  Scores bekijken als tekst ({graphPoints.length})
-                </summary>
-                <ul>
-                  {graphPoints.map((point) => (
-                    <li key={point.id}>
-                      <span>
-                        {dateLabel(point.date)} · {point.time} · {point.label}
-                      </span>
-                      <strong>Stemming {moodLabel(point.mood)}</strong>
-                    </li>
-                  ))}
-                </ul>
-              </details>
-              {observations.length > 40 && (
-                <p className="dp-muted">
-                  De grafiek en tekstlijst tonen de laatste 40 metingen binnen
-                  je selectie. Oudere metingen kun je via de registraties
-                  openen.
-                </p>
-              )}
-              <p className="dp-muted">
-                Deze punten tonen je eigen observaties, geen bewijs dat een
-                activiteit een verandering veroorzaakt.
-              </p>
-            </>
-          ) : (
-            <p className="dp-empty-inline">
-              Geen stemmingsscores gevonden binnen deze selectie. Hieronder
-              staan de registraties die bij je filters passen.
-            </p>
-          )}
-        </section>
+        <MoodPlot observations={observations} />
       )}
-      <section aria-labelledby="dp-history-entries">
-        <div className="dp-section-head">
-          <h2 id="dp-history-entries" tabIndex={-1}>
-            Registraties
-          </h2>
+      <section
+        className="dp-records-section"
+        aria-labelledby="dp-history-entries"
+      >
+        <div className="dp-section-head dp-records-header">
+          <div>
+            <p className="dp-kicker">Je bewaarde momenten</p>
+            <h2 id="dp-history-entries" tabIndex={-1}>
+              Registraties
+            </h2>
+            <p className="dp-muted">
+              Check-ins, cravings en dagoverzichten, elk in hun eigen groep.
+            </p>
+          </div>
           <p className="dp-muted" role="status">
             {entries.length} gevonden
           </p>
@@ -898,7 +902,7 @@ export function HistoryView({
                   changeFilter({ period: "all", kind: "all", query: "" });
                 }}
               >
-                Filters wissen
+                Alle registraties tonen
               </button>
             ) : (
               <a className="dp-button quiet" href="#/today">

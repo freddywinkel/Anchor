@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { applyHistoryFilters } from "./history-filters";
 import { readFile } from "node:fs/promises";
 import {
   createEmptyState,
@@ -63,7 +64,7 @@ async function history(page: Page) {
   await expect(
     page.getByText("Je gegevens worden geopend…", { exact: true }),
   ).toHaveCount(0);
-  await page.getByLabel("Soort registratie").selectOption("craving");
+  await applyHistoryFilters(page, { kind: "craving" });
 }
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -93,15 +94,15 @@ test("bekende en eigen middelen zijn zichtbaar en doorzoekbaar zonder oude regis
     ["3-mmc", "3-MMC"],
     ["KRATOM", customSubstance],
   ]) {
-    await page.getByRole("searchbox").fill(query);
+    await applyHistoryFilters(page, { query });
     await expect(rows).toHaveCount(1);
     await expect(rows.locator("summary")).toContainText(value);
   }
-  await page.getByRole("searchbox").fill("keuken");
+  await applyHistoryFilters(page, { query: "keuken" });
   await expect(rows).toHaveCount(1);
   await rows.locator("summary").click();
   await expect(rows).toContainText("Historische situatie");
-  await page.getByRole("searchbox").fill("undefined");
+  await applyHistoryFilters(page, { query: "undefined" });
   await expect(rows).toHaveCount(0);
   expect(await rawState(page)).toBe(original);
 });
@@ -115,7 +116,7 @@ test("een eigen middel blijft veilige tekst en past in de smalle geschiedenis", 
     await dialog.dismiss();
   });
   await history(page);
-  await page.getByRole("searchbox").fill("kratom");
+  await applyHistoryFilters(page, { query: "kratom" });
   const row = page.locator(".dp-history-list > li");
   await expect(row).toContainText(customSubstance);
   await row.locator("summary").click();

@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
+  applyHistoryFilters,
+  expectHistoryFilters,
+} from "./history-filters.ts";
+import {
   createEmptyState,
   today,
   STORAGE_KEY,
@@ -720,7 +724,7 @@ try {
     (key) => localStorage.getItem(key),
     STORAGE_KEY,
   );
-  await expect(hp.getByLabel("Periode")).toHaveValue("all");
+  await expectHistoryFilters(hp, { period: "all" });
   for (const [kind, label] of [
     ["moment", "Check-ins"],
     ["craving", "Cravings"],
@@ -737,7 +741,7 @@ try {
   await expect(
     hp.getByRole("img", { name: /2 stemmingsmetingen/ }),
   ).toBeVisible();
-  await hp.getByLabel("Periode").selectOption("week");
+  await applyHistoryFilters(hp, { period: "week" });
   const oldMoment = historyGroup(hp, "moment").locator(".dp-history-record");
   await expect(oldMoment).toHaveCount(1);
   await expandHistoryRecord(oldMoment);
@@ -771,12 +775,12 @@ try {
     "Onrustig",
     "glas water",
   ]) {
-    await hp.getByRole("searchbox").fill(needle);
+    await applyHistoryFilters(hp, { query: needle });
     await expect(
       historyGroup(hp, "craving").locator(".dp-history-record"),
     ).toHaveCount(1);
   }
-  await hp.getByRole("searchbox").fill("");
+  await applyHistoryFilters(hp, { query: "" });
   const dayRecord = historyGroup(hp, "day").locator(".dp-history-record");
   await expandHistoryRecord(dayRecord);
   await expect(dayRecord).toContainText("Een dag met onbekende slaapminuten.");
@@ -786,7 +790,7 @@ try {
   );
   await expect(historyField(dayRecord, "Stemming")).toHaveText("niet ingevuld");
   await expect(dayRecord).toContainText("0/100");
-  await hp.getByLabel("Soort registratie").selectOption("craving");
+  await applyHistoryFilters(hp, { kind: "craving" });
   const cravingRecord = historyGroup(hp, "craving").locator(
     ".dp-history-record",
   );
@@ -830,8 +834,7 @@ try {
   await expect(
     readOnlyPage.getByText(/Alleen lezen\. Sluit andere Anchor-tabbladen/),
   ).toBeVisible();
-  await readOnlyPage.getByLabel("Soort registratie").selectOption("craving");
-  await readOnlyPage.getByRole("searchbox").fill("keuken");
+  await applyHistoryFilters(readOnlyPage, { kind: "craving", query: "keuken" });
   await expandHistoryRecord(
     historyGroup(readOnlyPage, "craving").locator(".dp-history-record"),
   );
@@ -1010,7 +1013,7 @@ try {
       [STORAGE_KEY, DRAFT_STORAGE_KEY],
     );
   const beforeHistoryReads = await historyStorage();
-  await expect(historyPage.getByLabel("Periode")).toHaveValue("all");
+  await expectHistoryFilters(historyPage, { period: "all" });
   for (const kind of ["moment", "craving", "day"])
     await expect(
       historyGroup(historyPage, kind).locator(".dp-history-list > li"),
@@ -1052,7 +1055,7 @@ try {
         historyGroup(historyPage, other).locator(".dp-history-list > li"),
       ).toHaveCount(previousCounts[other]);
   }
-  await historyPage.getByRole("searchbox").fill("aantekening 2999.");
+  await applyHistoryFilters(historyPage, { query: "aantekening 2999." });
   await expect(historyPage.locator(".dp-history-list > li")).toHaveCount(1);
   await expandHistoryRecord(
     historyGroup(historyPage, "moment").locator(".dp-history-record"),
@@ -1061,12 +1064,12 @@ try {
     "aantekening 2999.",
   );
   await expect(historyPage.locator(".dp-history-body")).toHaveCount(1);
-  await historyPage.getByRole("searchbox").fill("");
+  await applyHistoryFilters(historyPage, { query: "" });
   for (const kind of ["moment", "craving", "day"])
     await expect(
       historyGroup(historyPage, kind).locator(".dp-history-list > li"),
     ).toHaveCount(50);
-  await historyPage.getByLabel("Periode").selectOption("week");
+  await applyHistoryFilters(historyPage, { period: "week" });
   for (const [kind, count] of [
     ["moment", 28],
     ["craving", 7],

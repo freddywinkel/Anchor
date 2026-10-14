@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { applyHistoryFilters, expectHistoryFilters } from "./history-filters";
 import {
   createEmptyState,
   validateState,
@@ -44,10 +45,6 @@ const stored = (page: Page) =>
     }),
     [DATA_KEY, DRAFT_KEY],
   );
-const period = (page: Page) =>
-  page.getByRole("combobox", { name: "Periode", exact: true });
-const kind = (page: Page) =>
-  page.getByRole("combobox", { name: "Soort registratie", exact: true });
 
 test("terug uit de editor herstelt filters, geopende kaart en geladen geschiedenis zonder opslag", async ({
   page,
@@ -59,9 +56,11 @@ test("terug uit de editor herstelt filters, geopende kaart en geladen geschieden
   );
   await open(page, state, "history");
   const before = await stored(page);
-  await period(page).selectOption("week");
-  await kind(page).selectOption("craving");
-  await page.getByRole("searchbox").fill("match");
+  await applyHistoryFilters(page, {
+    period: "week",
+    kind: "craving",
+    query: "match",
+  });
   await page
     .getByRole("button", { name: "Meer cravings tonen", exact: true })
     .click();
@@ -73,9 +72,6 @@ test("terug uit de editor herstelt filters, geopende kaart en geladen geschieden
   await expect(
     page.getByRole("heading", { name: "Terugkijken", exact: true }),
   ).toBeVisible();
-  await expect(period(page)).toHaveValue("week");
-  await expect(kind(page)).toHaveValue("craving");
-  await expect(page.getByRole("searchbox")).toHaveValue("match");
   await expect(
     page.locator(
       '.dp-history-group[data-history-kind="craving"] .dp-history-record',
@@ -83,6 +79,11 @@ test("terug uit de editor herstelt filters, geopende kaart en geladen geschieden
   ).toHaveCount(60);
   await expect(entry.locator("details")).toHaveAttribute("open", "");
   await expect(entry.locator("summary")).toBeFocused();
+  await expectHistoryFilters(page, {
+    period: "week",
+    kind: "craving",
+    query: "match",
+  });
   expect(await stored(page)).toEqual(before);
 });
 
@@ -119,9 +120,11 @@ for (const target of ["moment", "craving", "day"] as const) {
     ];
     await open(page, state, "history");
     const before = await stored(page);
-    await period(page).selectOption("week");
-    await kind(page).selectOption("day");
-    await page.getByRole("searchbox").fill("geen overeenkomst");
+    await applyHistoryFilters(page, {
+      period: "week",
+      kind: "day",
+      query: "geen overeenkomst",
+    });
     await expect(
       page.getByRole("heading", { name: "Geen registraties gevonden" }),
     ).toBeVisible();
@@ -136,14 +139,13 @@ for (const target of ["moment", "craving", "day"] as const) {
         ),
       })
       .click();
-    await expect(page.getByRole("searchbox")).toHaveValue("");
-    await expect(kind(page)).toHaveValue("all");
     const id = target === "day" ? `day-${DATE}` : `week-${target}`;
     const entry = page.locator(
       `.dp-history-group[data-history-kind="${target}"] [data-history-id="${id}"]`,
     );
     await expect(entry.locator("details")).toHaveAttribute("open", "");
     await expect(entry.locator("summary")).toBeFocused();
+    await expectHistoryFilters(page, { kind: "all", query: "" });
     await expect(entry.locator(".dp-history-body")).toContainText(
       target === "moment"
         ? "Volledige check-innotitie"
@@ -173,9 +175,11 @@ for (const change of ["delete", "date", "search"] as const) {
       craving(`removed-${index}`),
     );
     await open(page, state, "history");
-    await period(page).selectOption("week");
-    await kind(page).selectOption("craving");
-    await page.getByRole("searchbox").fill("match");
+    await applyHistoryFilters(page, {
+      period: "week",
+      kind: "craving",
+      query: "match",
+    });
     await page
       .getByRole("button", { name: "Meer cravings tonen", exact: true })
       .click();
@@ -202,9 +206,6 @@ for (const change of ["delete", "date", "search"] as const) {
     }
     await expect(page).toHaveURL(/#\/history$/);
     await expect(page.locator(".dp-history-record")).toHaveCount(59);
-    await expect(period(page)).toHaveValue("week");
-    await expect(kind(page)).toHaveValue("craving");
-    await expect(page.getByRole("searchbox")).toHaveValue("match");
     const heading = page.getByRole("heading", {
       name: "Registraties",
       exact: true,
@@ -216,6 +217,11 @@ for (const change of ["delete", "date", "search"] as const) {
         return rect.top >= 0 && rect.bottom <= window.innerHeight;
       }),
     ).toBe(true);
+    await expectHistoryFilters(page, {
+      period: "week",
+      kind: "craving",
+      query: "match",
+    });
     const records = JSON.parse((await stored(page)).data!).cravings;
     expect(records).toHaveLength(change === "delete" ? 59 : 60);
   });
@@ -273,8 +279,7 @@ test("dezelfde weekselectie verschuift op een nieuwe dag zonder opgeslagen data 
   ];
   await open(page, state, "history");
   const before = await stored(page);
-  await period(page).selectOption("week");
-  await kind(page).selectOption("craving");
+  await applyHistoryFilters(page, { period: "week", kind: "craving" });
   await expect(page.locator(".dp-history-record")).toHaveCount(2);
   await page.clock.setFixedTime(new Date("2026-10-15T00:01:00+02:00"));
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -282,7 +287,7 @@ test("dezelfde weekselectie verschuift op een nieuwe dag zonder opgeslagen data 
   await expect(page.locator(".dp-week-period")).toHaveText(
     "9 oktober 2026 tot en met 15 oktober 2026",
   );
-  await expect(kind(page)).toHaveValue("craving");
+  await expectHistoryFilters(page, { kind: "craving" });
   expect(await stored(page)).toEqual(before);
 });
 

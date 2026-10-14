@@ -4,6 +4,11 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { parseBackup, validateState, STORAGE_KEY } from "../src/lib/storage.ts";
+import {
+  applyHistoryFilters,
+  expectHistoryFilters,
+  openHistoryFilters,
+} from "./history-filters.ts";
 
 const base = new URL(
   process.env.ANCHOR_LIVE_URL || "https://freddywinkel.github.io/Anchor/",
@@ -35,6 +40,7 @@ const errors = [];
 const requests = [];
 const violations = [];
 const documents = [];
+const formSaveGeometry = {};
 function prohibitedRequest(request) {
   const url = new URL(request.url());
   if (!["http:", "https:"].includes(url.protocol)) return false;
@@ -94,6 +100,63 @@ async function stored() {
   );
   assert.ok(raw, "A record must actually reach local storage");
   return { raw, state: validateState(JSON.parse(raw)) };
+}
+
+async function verifyFormSavePosition(form, name) {
+  const button = form.getByRole("button", { name, exact: true });
+  const positions = [];
+  for (const fraction of [0, 0.5]) {
+    await page.evaluate((fraction) => {
+      scrollTo(
+        0,
+        (document.documentElement.scrollHeight - innerHeight) * fraction,
+      );
+      return new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      );
+    }, fraction);
+    positions.push(
+      await button.evaluate((element) => {
+        const form = element.closest("form");
+        const fields = [
+          ...form.querySelectorAll("input, select, textarea"),
+        ].filter((field) => field.checkVisibility());
+        const ancestors = [];
+        for (
+          let node = element;
+          node && node !== form;
+          node = node.parentElement
+        )
+          ancestors.push(getComputedStyle(node).position);
+        return {
+          documentTop: element.getBoundingClientRect().top + scrollY,
+          lastFieldBottom: Math.max(
+            ...fields.map(
+              (field) => field.getBoundingClientRect().bottom + scrollY,
+            ),
+          ),
+          ancestors,
+        };
+      }),
+    );
+  }
+  assert.ok(
+    positions.every(
+      (position) => position.documentTop > position.lastFieldBottom,
+    ),
+    `${name}: save remains below its form fields`,
+  );
+  assert.ok(
+    positions.every((position) =>
+      position.ancestors.every((style) => !["fixed", "sticky"].includes(style)),
+    ),
+    `${name}: save uses normal document flow`,
+  );
+  assert.ok(
+    Math.abs(positions[0].documentTop - positions[1].documentTop) <= 1,
+    `${name}: scrolling does not move save within the document`,
+  );
+  return positions;
 }
 
 async function verifyFonts() {
@@ -659,6 +722,10 @@ try {
   await momentForm
     .getByRole("combobox", { name: "Activiteit", exact: true })
     .selectOption("Buiten wandelen");
+  formSaveGeometry.checkin = await verifyFormSavePosition(
+    momentForm,
+    "Check-in opslaan",
+  );
   await momentForm
     .getByRole("button", { name: "Check-in opslaan", exact: true })
     .click();
@@ -702,6 +769,10 @@ try {
     .getByRole("button", { name: "Pannetje 2 van 5", exact: true })
     .click();
   await afterForm.getByRole("button", { name: "+1 Goed", exact: true }).click();
+  formSaveGeometry.followup = await verifyFormSavePosition(
+    afterForm,
+    "Nameting opslaan",
+  );
   await afterForm
     .getByRole("button", { name: "Nameting opslaan", exact: true })
     .click();
@@ -751,7 +822,64 @@ try {
     localStorage.getItem("anchor.app.drafts.v1"),
   );
   await page.goto(new URL("#/history", base).href);
-  await expect(page.getByLabel("Periode")).toHaveValue("all");
+  await expect(
+    page.getByRole("searchbox", { name: "Zoeken", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Zoeken en filteren", exact: true }),
+  ).toBeVisible();
+  await expectHistoryFilters(page, { period: "all" });
+  const registrations = page.getByRole("region", {
+    name: "Registraties",
+    exact: true,
+  });
+  await expect(registrations.locator(".dp-history-group")).toHaveCount(3);
+  await applyHistoryFilters(page, {
+    kind: "craving",
+    query: expectedSubstances[0],
+  });
+  await expect(registrations.locator(".dp-history-record")).toHaveCount(1);
+  const searchDialog = await openHistoryFilters(page);
+  await searchDialog
+    .getByRole("searchbox", { name: "Zoeken", exact: true })
+    .fill("Fictieve zoekterm zonder resultaat");
+  await searchDialog
+    .getByRole("button", { name: "Annuleren", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Zoeken en filteren", exact: true }),
+  ).toBeFocused();
+  await expect(registrations.locator(".dp-history-record")).toHaveCount(1);
+  await expectHistoryFilters(page, {
+    period: "all",
+    kind: "craving",
+    query: expectedSubstances[0],
+  });
+  await applyHistoryFilters(page, { kind: "all", query: "" });
+  const moodPlot = page.getByRole("region", {
+    name: "Stemming per moment",
+    exact: true,
+  });
+  await expect(
+    moodPlot.getByRole("img", { name: /^2 stemmingsmetingen in volgorde/ }),
+  ).toBeVisible();
+  const selectedMood = moodPlot.locator(".anchor-mood-selection-copy");
+  await expect(selectedMood).toContainText("Nameting");
+  await expect(selectedMood).toContainText("Goed (+1)");
+  await moodPlot
+    .getByRole("button", { name: "Vorige meting", exact: true })
+    .click();
+  await expect(selectedMood).toContainText("Check-in");
+  await expect(selectedMood).toContainText("Laag (-1)");
+  await moodPlot
+    .getByRole("button", { name: "Volgende meting", exact: true })
+    .click();
+  await expect(selectedMood).toContainText("Goed (+1)");
+  await moodPlot.locator("[data-mood-point]").first().click();
+  await expect(selectedMood).toContainText("Laag (-1)");
+  await page.screenshot({
+    path: path.join(directory, "phone-premium-history-offline.png"),
+  });
   const cravingGroup = page.locator(".dp-history-group").filter({
     has: page.getByRole("heading", { name: "Cravings", exact: true }),
   });
@@ -918,9 +1046,7 @@ try {
   await expect(page).toHaveURL(new RegExp("#/help$"));
   assert.equal((await stored()).raw, themed.raw);
   await page.goto(new URL("#/history", base).href);
-  await page
-    .getByRole("combobox", { name: "Periode", exact: true })
-    .selectOption("week");
+  await applyHistoryFilters(page, { period: "week" });
   const week = page.getByRole("region", {
     name: "Rustig terugkijken op je week",
   });
@@ -935,6 +1061,15 @@ try {
   await page
     .getByLabel("Wat wil je onthouden van deze dag?")
     .fill("Synthetische releasecontrole: rust genomen");
+  formSaveGeometry.day = await verifyFormSavePosition(
+    page.locator("form").filter({
+      has: page.getByRole("button", {
+        name: "Dagoverzicht opslaan",
+        exact: true,
+      }),
+    }),
+    "Dagoverzicht opslaan",
+  );
   await page
     .getByRole("button", { name: "Dagoverzicht opslaan", exact: true })
     .click();
@@ -984,6 +1119,7 @@ try {
     entryActions,
     scrollBounds,
     cravingSaveGeometry,
+    formSaveGeometry,
     fonts,
     offlineFonts,
     fontCache,
@@ -997,6 +1133,9 @@ try {
       "successful craving and follow-up saves close their forms; unanswered activity choice stays null",
       "multiple craving substances survive save, timeline and expanded history readbacks, reload, offline editing and backup export",
       "craving save stays below the behavior field in normal document flow while scrolling",
+      "check-in, follow-up and day save buttons stay below their fields in normal document flow while scrolling",
+      "history starts with a search button; popup apply and cancel preserve intentional filters and saved data",
+      "one Registraties region groups all record types; premium mood chart supports point and previous/next selection offline",
       "separate check-in and craving disclosures show complete information offline without edits or new drafts",
       "manifest/icons and scoped worker",
       "local display and body fonts load and remain cached offline, including accented characters",

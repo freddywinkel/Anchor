@@ -2,6 +2,18 @@
 
 Auditdatum: 12 oktober 2026, aangevuld op 13 en 14 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
 
+## Rustige formulieren en vernieuwd Terugkijken — versie 1.12.0, 14 oktober 2026
+
+Alle opslagacties staan na de laatste vraag in documentvolgorde: craving, check-in, nameting en dagoverzicht. De mobiele sticky-regels en hun tijdelijke viewportinstelling zijn verwijderd; focuscorrectie voor toetsenbord en navigatie blijft bestaan. Vensters scrollen zelfstandig.
+
+Terugkijken heeft een vergrootglas naast de paginatitel. De gedeelde toegankelijke dialoog biedt zoekterm, periode en soort. Alleen **Resultaten tonen** past criteria toe; Annuleren, sluiten en Escape behouden de bestaande selectie, geopende kaarten en paginatie. Criteria wissen verandert eerst de tijdelijke selectie. De toegepaste criteria blijven zichtbaar buiten het venster. Een expliciete openerfocus houdt terugkeer ook in WebKit betrouwbaar; zoeken wijzigt geen registraties of concepten en blijft in een alleen-lezen-tabblad beschikbaar.
+
+De stemmingskaart toont afzonderlijke selecteerbare meetpunten met een uitgeschreven score, tijd, datum, vorige/volgende bediening en tekstlijst. De schaal blijft −2 tot +2; afstanden staan expliciet voor registratievolgorde, niet tijdsduur. Alleen werkelijk ingevulde scores worden getoond, nametingen houden hun eigen datum en een dagoverzicht wordt niet als losse meting opgenomen. De laatste veertig meetpunten blijven begrensd met zichtbare aantallen. **Registraties** vormt één omsloten onderdeel met daarbinnen check-ins, cravings en dagoverzichten.
+
+Geen nieuwe dependencies, schemawijzigingen, migratie of opslagwrites vanuit zoeken/grafiek. Opslagsleutels, back-ups, appidentiteit en expliciete updateactivering blijven gelijk. De verifier ondersteunt ook de voorafgaande publieke versie 1.11.0 (`3412880`).
+
+Lokale verificatie: 90 unitgevallen; 165 unieke browsergevallen bevestigd (162 in de volledige reeks, twee opnieuw groen nadat een gelijktijdige previewbuild voorbij was, plus een gerichte dialoogfocusregressie); 25 aanvullende controles; twee echte workerupdates met elk 14 controles, waaronder de overgang vanaf `3412880`, alle zes conceptsoorten en offline opslaan/herladen/exporteren. Typecheck, formattering, dependency-audit en productiebuild/PWA-controle slagen. Negen gerichte Windows-WebKit-gevallen en een synthetische touchproef bevestigen opslagplaatsing, popupbediening en focusherstel. Screenshots van 320/390/820 pixels, grote tekst en licht/donker zijn bekeken. Geen fysieke iPhone/iPad- of VoiceOver-certificering. De aangrenzende oude apps behouden alle 457/457 en 494/494 bronbestanden, HEAD en Git-status. Bewijs: `tmp/history-premium-20261014/`, `tmp/premium-chart-20261014/` en `tmp/static-save-20261014/`. De publieke release wordt na deployment afzonderlijk gecontroleerd tegen de exacte broncommit.
+
 ## Meerdere middelen en craving-opslag onderaan — versie 1.11.0, 14 oktober 2026
 
 De mobiele craving-opslagbalk uit 1.10.0 stond al over eerdere vragen. Op gebruikersverzoek staat deze actie weer in de gewone documentvolgorde na Gedrag en de invoerhulp. De andere formulieren behouden hun bestaande gedrag.

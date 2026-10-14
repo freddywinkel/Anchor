@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { createEmptyState } from "../src/lib/storage";
+import { applyHistoryFilters, openHistoryFilters } from "./history-filters";
 
 const DATA_KEY = "anchor.app.data.v1";
 const DRAFT_KEY = "anchor.app.drafts.v1";
@@ -66,10 +67,10 @@ async function expandSaved(page: Page) {
 
 async function reopenSaved(page: Page, type: "craving" | "check-in") {
   await open(page, "/history");
-  await page.getByLabel("Periode").selectOption("all");
-  await page
-    .getByLabel("Soort registratie")
-    .selectOption(type === "craving" ? "craving" : "checkin");
+  await applyHistoryFilters(page, {
+    period: "all",
+    kind: type === "craving" ? "craving" : "checkin",
+  });
   await expandSaved(page);
   await page
     .getByRole("button", { name: new RegExp(`^Bewerken: ${type} van`) })
@@ -168,8 +169,7 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   expect((await state(page)).cravings).toHaveLength(1);
   expect((await state(page)).cravings[0].id).toBe(first.cravings[0].id);
   await open(page, "/history");
-  await page.getByLabel("Periode").selectOption("all");
-  await page.getByLabel("Soort registratie").selectOption("craving");
+  await applyHistoryFilters(page, { period: "all", kind: "craving" });
   await expandSaved(page);
   await expect(
     page.getByText("Ik belde iemand en ging wandelen."),
@@ -1141,12 +1141,19 @@ test("een tweede tabblad kan gegevens niet overschrijven en kan na herladen bewe
   ).toBeDisabled();
   const original = await state(second);
   await second.goto("./#/history");
+  const searchDialog = await openHistoryFilters(second);
   await expect(
-    second.getByRole("combobox", { name: "Soort registratie", exact: true }),
+    searchDialog.getByRole("combobox", {
+      name: "Soort registratie",
+      exact: true,
+    }),
   ).toBeEnabled();
   await second
     .getByRole("combobox", { name: "Soort registratie", exact: true })
     .selectOption("craving");
+  await searchDialog
+    .getByRole("button", { name: "Resultaten tonen", exact: true })
+    .click();
   await second.locator(".dp-history-list summary").click();
   await second.getByRole("button", { name: /^Bewerken: craving/ }).click();
   await expect(second.getByLabel("Gedachte", { exact: true })).toBeDisabled();

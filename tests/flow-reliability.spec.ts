@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator, type Page } from "@playwright/test";
 
 const DATA = "anchor.app.data.v1";
 const DRAFT = "anchor.app.drafts.v1";
@@ -240,35 +240,151 @@ test("browser Terug sluit een open menu bij navigatie", async ({ page }) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test("mobiele opslagactie blijft bereikbaar en maakt ruimte voor grote tekst en toetsenbord", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("./#/moment/new");
-  const save = page.getByRole("button", {
-    name: "Check-in opslaan",
-    exact: true,
+async function expectSaveAfterFields(page: Page, save: Locator) {
+  await expect(save).toBeVisible();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await save.evaluate((element) =>
+    element
+      .closest("form")!
+      .scrollIntoView({ block: "start", behavior: "instant" }),
+  );
+  const position = await save.evaluate((element) => {
+    const form = element.closest("form")!;
+    const saveRect = element.getBoundingClientRect();
+    const fields = [...form.querySelectorAll("input, select, textarea")].filter(
+      (field) => field.checkVisibility(),
+    );
+    return {
+      actionPosition: getComputedStyle(element.parentElement!).position,
+      buttonPosition: getComputedStyle(element).position,
+      fieldsBeforeSave: fields.every(
+        (field) =>
+          !!(
+            field.compareDocumentPosition(element) &
+            Node.DOCUMENT_POSITION_FOLLOWING
+          ) && field.getBoundingClientRect().bottom <= saveRect.top,
+      ),
+      belowNavigation:
+        saveRect.top >=
+        document.querySelector(".dp-bottom-nav")!.getBoundingClientRect().top,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    };
   });
+  expect(position.actionPosition).toBe("static");
+  expect(position.buttonPosition).toBe("static");
+  expect(position.fieldsBeforeSave).toBe(true);
+  expect(position.belowNavigation).toBe(true);
+  expect(position.overflow).toBe(false);
+  await save.focus();
   await expect
     .poll(() =>
-      save.evaluate((el) => {
-        const r = el.getBoundingClientRect();
-        const n = document
+      save.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const nav = document
           .querySelector(".dp-bottom-nav")!
           .getBoundingClientRect();
-        return r.top >= 0 && r.bottom <= n.top;
+        return rect.top >= 15 && rect.bottom <= nav.top - 15;
       }),
     )
     .toBe(true);
-  await page.evaluate(() => (document.documentElement.style.fontSize = "200%"));
-  await expect(page.locator("html")).toHaveAttribute(
-    "data-anchor-compact-actions",
-    "false",
-  );
-  await page.evaluate(() => (document.documentElement.style.fontSize = ""));
-  await page.setViewportSize({ width: 390, height: 440 });
-  await expect(page.locator("html")).toHaveAttribute(
-    "data-anchor-compact-actions",
-    "false",
-  );
-});
+  await expect(save).toBeFocused();
+}
+
+for (const layout of [
+  { name: "telefoon", width: 390, height: 844, font: "100%" },
+  {
+    name: "smal scherm met grote tekst",
+    width: 320,
+    height: 844,
+    font: "200%",
+  },
+  {
+    name: "beperkte hoogte bij toetsenbord",
+    width: 390,
+    height: 440,
+    font: "100%",
+  },
+]) {
+  test(`check-in, dagoverzicht en nameting bewaren pas na hun vragen: ${layout.name}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: layout.width, height: layout.height });
+    await page.goto("./#/moment/new");
+    await page.evaluate(
+      (font) => (document.documentElement.style.fontSize = font),
+      layout.font,
+    );
+    await page
+      .getByRole("textbox", { name: /^In je eigen woorden/ })
+      .fill("Synthetische check-in");
+    const checkinSave = page.getByRole("button", {
+      name: "Check-in opslaan",
+      exact: true,
+    });
+    await expectSaveAfterFields(page, checkinSave);
+    await checkinSave.click();
+    await expect(page).toHaveURL(/#\/today$/);
+
+    await page.goto("./#/day/2026-10-14");
+    await page
+      .getByRole("textbox", {
+        name: "Wat wil je onthouden van deze dag?",
+        exact: true,
+      })
+      .fill("Synthetisch dagoverzicht");
+    const daySave = page.getByRole("button", {
+      name: "Dagoverzicht opslaan",
+      exact: true,
+    });
+    await expectSaveAfterFields(page, daySave);
+    await daySave.click();
+    await expect(page).toHaveURL(/#\/today$/);
+
+    await page.goto("./#/moment/new");
+    await page
+      .getByRole("textbox", { name: /^In je eigen woorden/ })
+      .fill("Voor de activiteit");
+    await page.getByText("Activiteit toevoegen", { exact: true }).click();
+    await page
+      .getByRole("combobox", { name: "Activiteit", exact: true })
+      .selectOption("Buiten wandelen");
+    await page
+      .getByRole("button", { name: "Check-in opslaan", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Nameting invullen", exact: true })
+      .click();
+    const after = page.locator(".dp-after-form");
+    await after.getByRole("button", { name: "Ja", exact: true }).click();
+    const afterSave = after.getByRole("button", {
+      name: "Nameting opslaan",
+      exact: true,
+    });
+    await expectSaveAfterFields(page, afterSave);
+    await afterSave.click();
+    await expect(page).toHaveURL(/#\/today$/);
+    const saved = await page.evaluate(
+      (key) => JSON.parse(localStorage.getItem(key)!),
+      DATA,
+    );
+    expect(saved.days).toHaveLength(1);
+    expect(saved.days[0].note).toBe("Synthetisch dagoverzicht");
+    expect(saved.moments).toHaveLength(2);
+    expect(
+      saved.moments.find(
+        (moment: { note: string }) => moment.note === "Voor de activiteit",
+      ),
+    ).toMatchObject({ activity: "Buiten wandelen", attempted: true });
+    expect(
+      await page.evaluate(
+        (key) => JSON.parse(localStorage.getItem(key)!).records,
+        DRAFT,
+      ),
+    ).toEqual({});
+  });
+}

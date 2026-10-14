@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { applyHistoryFilters } from "./history-filters";
 import {
   createEmptyState,
   type AppState,
@@ -35,7 +36,7 @@ async function openHistory(page: Page, state: AppState) {
   await expect(
     page.getByRole("heading", { name: "Terugkijken", exact: true }),
   ).toBeVisible();
-  await page.getByLabel("Periode").selectOption("all");
+  await applyHistoryFilters(page, { period: "all" });
   await expandVisible(page);
 }
 
@@ -213,9 +214,8 @@ test("zoeken vindt emoties uit beide metingen en de dag, zonder intensiteit als 
     },
   ];
   await openHistory(page, state);
-  const search = page.getByRole("searchbox", { name: "Zoeken" });
   for (const term of ["OVERPRIKKELD", "Opgelucht"]) {
-    await search.fill(term);
+    await applyHistoryFilters(page, { query: term });
     await expandVisible(page);
     await expect(page.locator(".dp-history-list > li")).toHaveCount(1);
     await expect(page.locator(".dp-history-list summary")).toContainText(
@@ -225,7 +225,7 @@ test("zoeken vindt emoties uit beide metingen en de dag, zonder intensiteit als 
       page.getByRole("img", { name: /^1 stemmingsmetingen/ }),
     ).toBeVisible();
   }
-  await search.fill("Blij");
+  await applyHistoryFilters(page, { query: "Blij" });
   await expandVisible(page);
   await expect(page.locator(".dp-history-list > li")).toHaveCount(1);
   await expect(
@@ -235,13 +235,13 @@ test("zoeken vindt emoties uit beide metingen en de dag, zonder intensiteit als 
   await expect(
     page.getByText(/Geen stemmingsscores gevonden binnen deze selectie/),
   ).toBeVisible();
-  await search.fill("pannetjes 2/5");
+  await applyHistoryFilters(page, { query: "pannetjes 2/5" });
   await expandVisible(page);
   await expect(page.locator(".dp-history-list > li")).toHaveCount(1);
   await expect(
     page.getByText("Zonder stemming", { exact: true }),
   ).toBeVisible();
-  await search.fill("Tevreden");
+  await applyHistoryFilters(page, { query: "Tevreden" });
   await expandVisible(page);
   const day = page.locator(".dp-history-list > li");
   await expect(day).toHaveCount(1);

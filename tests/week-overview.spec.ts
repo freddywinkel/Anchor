@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { applyHistoryFilters } from "./history-filters";
 import {
   createEmptyState,
   type AppState,
@@ -36,9 +37,7 @@ async function openWeek(page: Page, state: AppState) {
     { key: DATA_KEY, value: state },
   );
   await page.goto("./#/history");
-  await page
-    .getByRole("combobox", { name: "Periode", exact: true })
-    .selectOption("week");
+  await applyHistoryFilters(page, { period: "week" });
   await expect(
     page.getByRole("heading", { name: "Rustig terugkijken op je week" }),
   ).toBeVisible();
@@ -175,10 +174,7 @@ test("week houdt scores, slaap en soorten apart, blijft leesbaar op klein scherm
   await expect(
     week.getByText(state.growth[0].text, { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Soort registratie", exact: true })
-    .selectOption("craving");
-  await page.getByRole("searchbox").fill("Cocaïne");
+  await applyHistoryFilters(page, { kind: "craving", query: "Cocaïne" });
   await expect(
     week
       .locator(".dp-week-counts > div")

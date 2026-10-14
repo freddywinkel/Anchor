@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { applyHistoryFilters } from "./history-filters";
 import {
   createEmptyState,
   validateState,
@@ -127,9 +128,7 @@ async function openHistory(page: Page, initial: AppState) {
   await expect(
     page.getByRole("heading", { name: "Terugkijken", exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("combobox", { name: "Periode", exact: true })
-    .selectOption("all");
+  await applyHistoryFilters(page, { period: "all" });
 }
 async function expectUnchanged(
   page: Page,
@@ -462,29 +461,23 @@ test("elke soort heeft eigen begrensde paginatie en filters doorzoeken ook nog n
   await expect(group(page, "day").locator(".dp-history-list > li")).toHaveCount(
     50,
   );
-  await page
-    .getByRole("searchbox", { name: "Zoeken" })
-    .fill("verborgen zoekterm");
+  await applyHistoryFilters(page, { query: "verborgen zoekterm" });
   for (const kind of ["moment", "craving", "day"] as const)
     await expect(
       group(page, kind).locator(".dp-history-list > li"),
     ).toHaveCount(1);
-  await page.getByRole("searchbox", { name: "Zoeken" }).fill("");
+  await applyHistoryFilters(page, { query: "" });
   for (const kind of ["moment", "craving", "day"] as const)
     await expect(
       group(page, kind).locator(".dp-history-list > li"),
     ).toHaveCount(50);
-  await page
-    .getByRole("combobox", { name: "Soort registratie", exact: true })
-    .selectOption("day");
+  await applyHistoryFilters(page, { kind: "day" });
   await expect(group(page, "day").locator(".dp-history-list > li")).toHaveCount(
     50,
   );
   await expect(group(page, "moment")).toHaveCount(0);
   await expect(group(page, "craving")).toHaveCount(0);
-  await page
-    .getByRole("combobox", { name: "Periode", exact: true })
-    .selectOption("week");
+  await applyHistoryFilters(page, { period: "week" });
   await expect(page.locator(".dp-history-record")).toHaveCount(0);
   await expectUnchanged(page, before);
 });

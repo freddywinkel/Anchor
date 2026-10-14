@@ -12,6 +12,7 @@ const approvedBaselines = [
   "bc176fd0ddf36bcd261ad2bd648537b717e2d7a7",
   "8090e444bf0e292ebfc92fe95e80b1ed86ba76dc",
   "a8262d9113c1f7940cd730f83a2ad0c4a78eefac",
+  "34128808396c3a71ad8d497f0cd78415def3d688",
 ];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
@@ -32,7 +33,7 @@ if (baselineRef) {
   );
   if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44 or a8262d9.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9 or 3412880.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -144,7 +145,9 @@ const oldestBaseline = baselineCommit === approvedBaselines[0];
 // The first two releases used unlinked EIS and stayed on the craving after
 // saving. Recent published versions use the same flow as the current app.
 const legacyBaseline = approvedBaselines.slice(0, 2).includes(baselineCommit);
-const multipleSubstancesBaseline = baselineCommit === null;
+const multipleSubstancesBaseline =
+  baselineCommit === null ||
+  baselineCommit === "34128808396c3a71ad8d497f0cd78415def3d688";
 const fixtureUnknownCravingId = "update-unknown-substance";
 const fixtureScalarCravingId = "update-scalar-substance";
 const fixtureMomentId = "update-linked-emotions";

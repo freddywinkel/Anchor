@@ -9,5 +9,6 @@ Anchor is a standalone Dutch personal diary/PWA. Do not import or modify the adj
 - Data keys: `anchor.app.data.v1` and `anchor.app.drafts.v1`. Never enumerate or clear unrelated storage. All saved data passes validation and revision checks; obtain the app writer lock before writing.
 - Preserve records and drafts across updates. No forced worker activation with open drafts; no destructive schema reset. Validate backups before any replacement and require confirmation.
 - Keep text inputs readable, themes accessible, keyboard focus visible, narrow layouts usable, and reduced-motion respected.
+- All form save actions stay after the last question in normal document flow, including check-ins, follow-ups and daily summaries; no sticky save overlays. History search/filter controls open from the magnifier and apply only on explicit submission.
 - Before a release: typecheck, unit tests, browser tests, dependency audit, production PWA build, real offline/update verification, source preservation checks when working beside the old app.
 - Stage explicit files. Creating this repository does not authorize deployment; publish the website only when requested.
