@@ -95,7 +95,7 @@ export function Dialog({
         if (event.key !== "Tab") return;
         const controls = [
           ...ref.current!.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
+            'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]',
           ),
         ].filter((element) => element.getClientRects().length);
         const first = controls[0];

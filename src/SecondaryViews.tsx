@@ -32,6 +32,7 @@ import { WeekOverview, type WeekRecordTarget } from "./WeekOverview";
 import { MOODS } from "./RatingsEditor";
 import { Dialog } from "./Dialog";
 import { MoodPlot } from "./MoodPlot";
+import { EmotionGlossary } from "./EmotionGlossary";
 import "./history.css";
 import "./secondary.css";
 
@@ -2055,6 +2056,7 @@ export function SettingsView({
 }) {
   const [error, setError] = useState("");
   const errorField = useRef<HTMLParagraphElement>(null);
+  const [showEmotionMeanings, setShowEmotionMeanings] = useState(false);
   const save = (next: AppState, message: string) => {
     const saved = onSave(next, message);
     setError(
@@ -2064,6 +2066,30 @@ export function SettingsView({
   };
   return (
     <div className="dp-settings">
+      <section
+        className="dp-settings-section dp-card"
+        aria-labelledby="dp-emotion-meanings-title"
+      >
+        <h2 id="dp-emotion-meanings-title">Emoties en betekenissen</h2>
+        <p>
+          Zoek een gevoelswoord of blader door de groepen. Bij elk woord vind je
+          een korte uitleg.
+        </p>
+        <button
+          type="button"
+          className="dp-button"
+          aria-haspopup="dialog"
+          onClick={(event) => {
+            event.currentTarget.focus({ preventScroll: true });
+            setShowEmotionMeanings(true);
+          }}
+        >
+          Bekijk de betekenissen
+        </button>
+      </section>
+      {showEmotionMeanings && (
+        <EmotionGlossary onClose={() => setShowEmotionMeanings(false)} />
+      )}
       <section
         className="dp-settings-section dp-card"
         aria-labelledby="dp-appearance"
