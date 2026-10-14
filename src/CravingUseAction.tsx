@@ -1,6 +1,26 @@
 import { useId, useRef, useState } from "react";
 import type { CravingRecord } from "./lib/storage";
+import { cravingUseConfirmation } from "./lib/cravingUse";
 import "./craving-use.css";
+
+export function CravingUseConfirmation({ record }: { record: CravingRecord }) {
+  const confirmation = cravingUseConfirmation(record);
+  if (!confirmation) return null;
+  return (
+    <div className="dp-muted dp-craving-use-confirmation">
+      <p>
+        {confirmation.confirmedAt ? (
+          <time dateTime={confirmation.confirmedAt}>
+            {confirmation.confirmedAtLabel}
+          </time>
+        ) : (
+          confirmation.confirmedAtLabel
+        )}
+      </p>
+      {confirmation.elapsedLabel && <p>{confirmation.elapsedLabel}</p>}
+    </div>
+  );
+}
 
 export function CravingUseAction({
   record,
@@ -58,6 +78,7 @@ export function CravingUseAction({
           {used ? "Markering verwijderen" : "Gebruikt aangeven"}
         </button>
       </div>
+      {used && <CravingUseConfirmation record={record} />}
       {error && (
         <p className="dp-error" role="alert">
           {error}

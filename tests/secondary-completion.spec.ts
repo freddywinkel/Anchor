@@ -308,9 +308,12 @@ test("plan bewaart invoer bij fouten en toont na afgeronde opslag een duidelijke
   await setFailures(page, false, false);
   await finish.click();
   expect(await stored(page)).toEqual(editedState);
-  await expect(save).toBeDisabled();
+  await expect(save).toHaveCount(0);
   await expect(form.getByRole("status")).toHaveText("Je plan is opgeslagen.");
   expect((await drafts(page)).plan).toBeUndefined();
+  await form
+    .getByRole("button", { name: "Mijn plan bewerken", exact: true })
+    .click();
   await form
     .getByRole("textbox", { name: "Hier vind ik steun", exact: true })
     .fill("Iemand die ik vertrouw");

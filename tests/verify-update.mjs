@@ -13,6 +13,7 @@ const approvedBaselines = [
   "8090e444bf0e292ebfc92fe95e80b1ed86ba76dc",
   "a8262d9113c1f7940cd730f83a2ad0c4a78eefac",
   "34128808396c3a71ad8d497f0cd78415def3d688",
+  "b95a3c3a0a0762b643309e566ef0b54fd23340cb",
 ];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
@@ -33,7 +34,7 @@ if (baselineRef) {
   );
   if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9 or 3412880.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9, 3412880 or b95a3c3.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -147,10 +148,18 @@ const oldestBaseline = baselineCommit === approvedBaselines[0];
 const legacyBaseline = approvedBaselines.slice(0, 2).includes(baselineCommit);
 const multipleSubstancesBaseline =
   baselineCommit === null ||
-  baselineCommit === "34128808396c3a71ad8d497f0cd78415def3d688";
-// None of the approved historical releases understands this additive field.
-// Exercise it before activation only when both builds are the current source.
-const useMarkerBaseline = baselineCommit === null;
+  approvedBaselines.slice(5).includes(baselineCommit);
+// The published 1.15.0 baseline and current source understand the additive marker.
+const useMarkerBaseline =
+  baselineCommit === null ||
+  baselineCommit === "b95a3c3a0a0762b643309e566ef0b54fd23340cb";
+const useConfirmationTimeBaseline = baselineCommit === null;
+function expectConfirmationInstant(value, earliest, latest) {
+  expect(value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  expect(new Date(value).toISOString()).toBe(value);
+  expect(Date.parse(value)).toBeGreaterThanOrEqual(earliest);
+  expect(Date.parse(value)).toBeLessThanOrEqual(latest);
+}
 const fixtureUnknownCravingId = "update-unknown-substance";
 const fixtureScalarCravingId = "update-scalar-substance";
 const fixtureMomentId = "update-linked-emotions";
@@ -229,13 +238,19 @@ try {
       page.getByRole("heading", { name: "Je craving", exact: true }),
     ).toBeVisible();
   } else await expect(page).toHaveURL(/#\/today$/);
+  let initialConfirmationBounds = null;
   if (useMarkerBaseline) {
+    const earliest = await page.evaluate(() => Date.now());
     await page
       .getByRole("button", { name: "Gebruikt aangeven", exact: true })
       .click();
     await expect(
       page.getByRole("button", { name: "Markering verwijderen", exact: true }),
     ).toBeVisible();
+    initialConfirmationBounds = [
+      earliest,
+      await page.evaluate(() => Date.now()),
+    ];
   }
   let saved = await page.evaluate(() =>
     localStorage.getItem("anchor.app.data.v1"),
@@ -248,6 +263,15 @@ try {
   else
     expect(
       Object.hasOwn(JSON.parse(saved).cravings[0], "usedAfterCraving"),
+    ).toBe(false);
+  if (useConfirmationTimeBaseline)
+    expectConfirmationInstant(
+      JSON.parse(saved).cravings[0].usedConfirmedAt,
+      ...initialConfirmationBounds,
+    );
+  else
+    expect(
+      Object.hasOwn(JSON.parse(saved).cravings[0], "usedConfirmedAt"),
     ).toBe(false);
   if (multipleSubstancesBaseline) {
     expect(JSON.parse(saved).cravings[0].substances).toEqual([
@@ -358,6 +382,7 @@ try {
     delete unknownCraving.substance;
     delete unknownCraving.substances;
     delete unknownCraving.usedAfterCraving;
+    delete unknownCraving.usedConfirmedAt;
     const seeded = validateState({
       ...JSON.parse(saved),
       cravings: [
@@ -896,8 +921,12 @@ try {
   ).toBe(beforeUpdate);
   if (useMarkerBaseline) {
     expect(JSON.parse(beforeUpdate).cravings[0].usedAfterCraving).toBe(true);
+    if (!useConfirmationTimeBaseline)
+      expect(
+        Object.hasOwn(JSON.parse(beforeUpdate).cravings[0], "usedConfirmedAt"),
+      ).toBe(false);
     currentGuardChecks.push(
-      "an explicitly marked craving survives the current-to-current worker activation in byte-identical saved storage",
+      "an explicitly marked craving survives worker activation in byte-identical saved storage, retaining its confirmation timestamp when supported and never backfilling older markers",
     );
   }
   await expect(
@@ -991,6 +1020,10 @@ try {
   expect(
     Object.hasOwn(beforeUseMarker.cravings.at(-1), "usedAfterCraving"),
   ).toBe(false);
+  expect(
+    Object.hasOwn(beforeUseMarker.cravings.at(-1), "usedConfirmedAt"),
+  ).toBe(false);
+  const confirmationStartedAt = await page.evaluate(() => Date.now());
   await page
     .getByRole("button", { name: "Gebruikt aangeven", exact: true })
     .click();
@@ -1003,12 +1036,31 @@ try {
   const finalState = JSON.parse(finalRaw);
   const combinedCraving = finalState.cravings.at(-1);
   expect(combinedCraving.usedAfterCraving).toBe(true);
+  expectConfirmationInstant(
+    combinedCraving.usedConfirmedAt,
+    confirmationStartedAt,
+    await page.evaluate(() => Date.now()),
+  );
+  const confirmation = page.getByRole("group", {
+    name: "Gebruik na craving",
+    exact: true,
+  });
+  await expect(confirmation.locator("time")).toHaveAttribute(
+    "datetime",
+    combinedCraving.usedConfirmedAt,
+  );
+  await expect(confirmation).toContainText("Bevestigd op");
+  await expect(confirmation).toContainText("na de craving bevestigd.");
   expect(finalState).toEqual({
     ...beforeUseMarker,
     revision: beforeUseMarker.revision + 1,
     cravings: beforeUseMarker.cravings.map((entry) =>
       entry.id === combinedCraving.id
-        ? { ...entry, usedAfterCraving: true }
+        ? {
+            ...entry,
+            usedAfterCraving: true,
+            usedConfirmedAt: combinedCraving.usedConfirmedAt,
+          }
         : entry,
     ),
   });
@@ -1026,6 +1078,11 @@ try {
   expect(await draftRecords()).toEqual({});
   await go(`/craving/${combinedCraving.id}`);
   await page.reload();
+  await expect(
+    page
+      .getByRole("group", { name: "Gebruik na craving", exact: true })
+      .locator("time"),
+  ).toHaveAttribute("datetime", combinedCraving.usedConfirmedAt);
   await expect(
     page.getByRole("button", { name: "Markering verwijderen", exact: true }),
   ).toBeVisible();
@@ -1053,12 +1110,26 @@ try {
   currentGuardChecks.push(
     "after activation, offline multi-substance creation with a custom name, save, reload and validated backup preserve all historical records and settings",
     "after activation from every baseline, an explicit use mark is saved through the UI, survives offline reload and is included in the validated backup without assigning use to individual substances",
+    "a new confirmation receives a canonical UTC instant bounded by the actual button click, displays its time and elapsed interval, and retains that exact timestamp through offline reload and the validated backup",
   );
   if (useMarkerBaseline) {
     // A normal explicit activation requires resolving drafts first (tested
     // above). Closing the last app page also permits a waiting worker to
     // activate naturally: that path must preserve both saved data and drafts.
     // Use a separate synthetic profile, never force skipWaiting past the guard.
+    const lifecycleState = structuredClone(finalState);
+    // 1.15.0 supports the true marker, but its strict parser cannot read the
+    // new timestamp. Adapt only this isolated pre-update fixture, never the
+    // actual main-profile data or byte-equality assertions above.
+    if (!useConfirmationTimeBaseline)
+      for (const craving of lifecycleState.cravings)
+        delete craving.usedConfirmedAt;
+    const lifecycleRaw = useConfirmationTimeBaseline
+      ? finalRaw
+      : JSON.stringify(lifecycleState);
+    const lifecycleCraving = lifecycleState.cravings.find(
+      (entry) => entry.id === combinedCraving.id,
+    );
     const lifecycleContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
     });
@@ -1078,11 +1149,11 @@ try {
       );
       await lifecyclePage.evaluate(
         (raw) => localStorage.setItem("anchor.app.data.v1", raw),
-        finalRaw,
+        lifecycleRaw,
       );
       // A hash-only navigation does not reload React state after fixture setup.
       await lifecyclePage.reload();
-      const route = `http://127.0.0.1:8801/Anchor/#/craving/${combinedCraving.id}`;
+      const route = `http://127.0.0.1:8801/Anchor/#/craving/${lifecycleCraving.id}`;
       await lifecyclePage.goto(route);
       await expect(
         lifecyclePage.getByRole("heading", { name: "Je craving", exact: true }),
@@ -1097,14 +1168,17 @@ try {
         draftKey,
       );
       const markerDraft =
-        JSON.parse(markerDraftRaw).records[`craving:${combinedCraving.id}`];
-      expect(markerDraft).toEqual({ ...combinedCraving, thought: draftText });
+        JSON.parse(markerDraftRaw).records[`craving:${lifecycleCraving.id}`];
+      expect(markerDraft).toEqual({ ...lifecycleCraving, thought: draftText });
       expect(markerDraft.usedAfterCraving).toBe(true);
+      expect(Object.hasOwn(markerDraft, "usedConfirmedAt")).toBe(
+        useConfirmationTimeBaseline,
+      );
       expect(
         await lifecyclePage.evaluate(() =>
           localStorage.getItem("anchor.app.data.v1"),
         ),
-      ).toBe(finalRaw);
+      ).toBe(lifecycleRaw);
       expect(
         await lifecyclePage
           .locator('script[type="module"]')
@@ -1140,7 +1214,7 @@ try {
         await lifecyclePage.evaluate(() =>
           localStorage.getItem("anchor.app.data.v1"),
         ),
-      ).toBe(finalRaw);
+      ).toBe(lifecycleRaw);
       expect(
         await lifecyclePage.evaluate(
           (key) => localStorage.getItem(key),
@@ -1172,6 +1246,21 @@ try {
           exact: true,
         }),
       ).toBeVisible();
+      const restoredConfirmation = lifecyclePage.getByRole("group", {
+        name: "Gebruik na craving",
+        exact: true,
+      });
+      if (useConfirmationTimeBaseline)
+        await expect(restoredConfirmation.locator("time")).toHaveAttribute(
+          "datetime",
+          lifecycleCraving.usedConfirmedAt,
+        );
+      else {
+        await expect(restoredConfirmation).toContainText(
+          "Bevestigingstijd niet bekend.",
+        );
+        await expect(restoredConfirmation.locator("time")).toHaveCount(0);
+      }
       expect(
         await lifecyclePage
           .locator('script[type="module"]')
@@ -1181,7 +1270,7 @@ try {
         await lifecyclePage.evaluate(() =>
           localStorage.getItem("anchor.app.data.v1"),
         ),
-      ).toBe(finalRaw);
+      ).toBe(lifecycleRaw);
       expect(
         await lifecyclePage.evaluate(
           (key) => localStorage.getItem(key),
@@ -1197,7 +1286,7 @@ try {
         await lifecyclePage.evaluate(() =>
           localStorage.getItem("anchor.app.data.v1"),
         ),
-      ).toBe(finalRaw);
+      ).toBe(lifecycleRaw);
       expect(
         await lifecyclePage.evaluate(
           (key) => localStorage.getItem(key),
@@ -1205,7 +1294,10 @@ try {
         ),
       ).toBe(markerDraftRaw);
       currentGuardChecks.push(
-        "a marked saved craving and marked edit draft survive a natural current-to-current worker activation after closing the last app page, then an offline reopen, with both storage strings byte-identical; the explicit update button correctly blocks while the draft is open",
+        "a marked saved craving and marked edit draft survive natural worker activation after closing the last app page, then an offline reopen, with both storage strings byte-identical; the explicit update button correctly blocks while the draft is open",
+        useConfirmationTimeBaseline
+          ? "saved and draft confirmation timestamps survive natural current-to-current activation byte-exactly"
+          : "older marked records and drafts retain unknown confirmation times after natural activation without invented timestamps",
       );
     } catch (error) {
       await lifecyclePage

@@ -54,6 +54,7 @@ import { Dialog } from "./Dialog";
 import { CravingView } from "./CravingView";
 import { CravingUseAction } from "./CravingUseAction";
 import { cravingSubstances } from "./lib/substances";
+import { cravingUseConfirmation } from "./lib/cravingUse";
 import "./secondary.css";
 import {
   MOODS,
@@ -569,8 +570,13 @@ export function App() {
     if (!writer || blocked) return save(state, "");
     if ((existing.usedAfterCraving === true) === used) return true;
     const next = { ...existing };
-    if (used) next.usedAfterCraving = true;
-    else delete next.usedAfterCraving;
+    if (used) {
+      next.usedAfterCraving = true;
+      next.usedConfirmedAt = new Date().toISOString();
+    } else {
+      delete next.usedAfterCraving;
+      delete next.usedConfirmedAt;
+    }
     return save(
       {
         ...state,
@@ -1585,7 +1591,19 @@ function Today({
                           </p>
                         )}
                         {(item as CravingRecord).usedAfterCraving === true && (
-                          <p className="dp-hint">Gebruikt</p>
+                          <p className="dp-hint">
+                            Gebruikt
+                            <br />
+                            {
+                              cravingUseConfirmation(item as CravingRecord)
+                                ?.confirmedAtLabel
+                            }
+                            <br />
+                            {
+                              cravingUseConfirmation(item as CravingRecord)
+                                ?.elapsedLabel
+                            }
+                          </p>
                         )}
                       </>
                     ) : (

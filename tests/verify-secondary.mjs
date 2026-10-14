@@ -195,6 +195,9 @@ try {
   expect((await drafts()).plan).toBeUndefined();
   saveCheck("Personal plan draft survives reload and clears on save");
   await page
+    .getByRole("button", { name: "Mijn plan bewerken", exact: true })
+    .click();
+  await page
     .getByLabel("Dit kan ik doen")
     .fill("Een wijziging die ik wil verwerpen.");
   await page
@@ -208,9 +211,12 @@ try {
     })
     .getByRole("button", { name: "Ja, concept wissen", exact: true })
     .click();
-  await expect(page.getByLabel("Dit kan ik doen")).toHaveValue(
+  await expect(page.locator(".dp-plan-text")).toContainText(
     "Naar buiten wandelen.",
   );
+  await expect(
+    page.getByRole("button", { name: "Mijn plan opslaan", exact: true }),
+  ).toHaveCount(0);
   expect((await drafts()).plan).toBeUndefined();
   saveCheck(
     "Plan draft can be explicitly discarded without changing the saved plan",

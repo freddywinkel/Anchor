@@ -34,6 +34,7 @@ import { Dialog } from "./Dialog";
 import { MoodPlot } from "./MoodPlot";
 import { EmotionGlossary } from "./EmotionGlossary";
 import { CravingUseAction } from "./CravingUseAction";
+import { cravingUseConfirmation } from "./lib/cravingUse";
 import "./history.css";
 import "./secondary.css";
 
@@ -244,6 +245,8 @@ function HistoryRecord({
     entry.type === "craving"
       ? cravingSubstances(entry.item).filter((name) => name.trim())
       : [];
+  const useConfirmation =
+    entry.type === "craving" ? cravingUseConfirmation(entry.item) : null;
   const substanceLabel =
     substances.length > 1 ? "Middelen of gedrag" : "Middel of gedrag";
   const typeLabel =
@@ -281,7 +284,17 @@ function HistoryRecord({
                 {substanceLabel}: {substances.join(", ") || "Niet ingevuld"}
               </span>
               {entry.item.usedAfterCraving === true && (
-                <span className="dp-craving-use-badge">Gebruikt</span>
+                <>
+                  <span className="dp-craving-use-badge">Gebruikt</span>
+                  <span className="dp-history-preview">
+                    {useConfirmation?.confirmedAtLabel}
+                  </span>
+                  {useConfirmation?.elapsedLabel && (
+                    <span className="dp-history-preview">
+                      {useConfirmation.elapsedLabel}
+                    </span>
+                  )}
+                </>
               )}
             </>
           )}
@@ -1032,6 +1045,10 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   const [plan, setPlan] = useState<AppState["plan"]>(
     () => (loadDrafts().plan as AppState["plan"] | undefined) || state.plan,
   );
+  const hasSavedPlan = Object.values(state.plan).some((text) => text.trim());
+  const [planEditing, setPlanEditing] = useState(
+    () => !!loadDrafts().plan || !hasSavedPlan,
+  );
   const [planError, setPlanError] = useState("");
   const [planDraftError, setPlanDraftError] = useState("");
   const [planSaved, setPlanSaved] = useState(false);
@@ -1042,6 +1059,7 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
   const goalDirection = useRef<HTMLSelectElement>(null);
   const goalDescription = useRef<HTMLInputElement>(null);
   const planStart = useRef<HTMLTextAreaElement>(null);
+  const planEditButton = useRef<HTMLButtonElement>(null);
   const planDirty = useRef(!!loadDrafts().plan);
   const addButton = useRef<HTMLButtonElement>(null);
   const goalFeedback = useRef<HTMLParagraphElement>(null);
@@ -1173,6 +1191,10 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
         : "Je plan is opgeslagen, maar het concept kon niet worden opgeruimd. Probeer het afronden opnieuw.",
     );
     if (!result.ok) requestAnimationFrame(() => planFeedback.current?.focus());
+    else {
+      setPlanEditing(false);
+      requestAnimationFrame(() => planEditButton.current?.focus());
+    }
   }
   function savePlan(event: React.FormEvent) {
     event.preventDefault();
@@ -1497,126 +1519,203 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
           </form>
         )}
       </section>
-      <form
-        className="dp-personal-plan dp-card"
-        onSubmit={savePlan}
-        aria-labelledby="dp-personal-plan-title"
-      >
-        <p className="dp-kicker">Mijn persoonlijke houvast</p>
-        <h2 id="dp-personal-plan-title">Wat helpt als het lastig wordt?</h2>
-        <p className="dp-muted">Vul alleen in wat voor jou bruikbaar is.</p>
-        <label className="dp-field">
-          Dit merk ik bij mezelf
-          <textarea
-            ref={planStart}
-            rows={3}
-            maxLength={4000}
-            value={plan.warning}
-            onChange={(event) =>
-              updatePlan({ ...plan, warning: event.target.value })
-            }
-            placeholder="Bijvoorbeeld: ik trek me terug of slaap slechter."
-          />
-        </label>
-        <label className="dp-field">
-          Dit kan ik doen
-          <textarea
-            rows={3}
-            maxLength={4000}
-            value={plan.action}
-            onChange={(event) =>
-              updatePlan({ ...plan, action: event.target.value })
-            }
-            placeholder="Een kleine stap die mij helpt."
-          />
-        </label>
-        <label className="dp-field">
-          Hier vind ik steun
-          <textarea
-            rows={3}
-            maxLength={4000}
-            value={plan.support}
-            onChange={(event) =>
-              updatePlan({ ...plan, support: event.target.value })
-            }
-            placeholder="Iemand of een plek waar ik terecht kan."
-          />
-        </label>
-        {planDirty.current && (
-          <DraftNotice error={planDraftError} focusRef={planFeedback} />
-        )}
-        {planError && (
-          <p className="dp-error" role="alert" tabIndex={-1} ref={planFeedback}>
-            {planError}
-          </p>
-        )}
-        {planSaved && !planDirty.current && (
-          <p className="dp-muted" role="status">
-            Je plan is opgeslagen.
-          </p>
-        )}
-        <div className="dp-row-actions">
-          <button
-            className="dp-button primary"
-            type="submit"
-            disabled={!planDirty.current}
-          >
-            {planCleanupPending
-              ? "Afronden opnieuw proberen"
-              : "Mijn plan opslaan"}
-          </button>
-          {planDirty.current && (
-            <button
-              className="dp-button quiet"
-              type="button"
-              onClick={() => setDiscardingPlan(true)}
-            >
-              Concept wissen
-            </button>
+      {!planEditing ? (
+        <section
+          className="dp-personal-plan dp-card"
+          aria-labelledby="dp-personal-plan-title"
+        >
+          <p className="dp-kicker">Mijn persoonlijke houvast</p>
+          <h2 id="dp-personal-plan-title">Wat helpt als het lastig wordt?</h2>
+          {planSaved && (
+            <p className="dp-muted" role="status">
+              Je plan is opgeslagen.
+            </p>
           )}
-        </div>
-        {discardingPlan && (
-          <div
-            className="dp-inline-confirm"
-            role="group"
-            aria-label="Concept van persoonlijk plan wissen"
+          <dl className="dp-plan-text">
+            {(
+              [
+                ["Dit merk ik bij mezelf", state.plan.warning],
+                ["Dit kan ik doen", state.plan.action],
+                ["Hier vind ik steun", state.plan.support],
+              ] as const
+            ).map(([label, text]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd className={text.trim() ? "" : "dp-muted"}>
+                  {text.trim() ? text : "Nog niet ingevuld"}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <button
+            ref={planEditButton}
+            type="button"
+            className="dp-button quiet"
+            onClick={() => {
+              setPlan(state.plan);
+              setPlanSaved(false);
+              setPlanEditing(true);
+              requestAnimationFrame(() => {
+                if (
+                  !document.activeElement?.matches(
+                    "input, textarea, select, [contenteditable='true']",
+                  )
+                )
+                  planStart.current?.focus();
+              });
+            }}
           >
-            <p>Je concept wissen en je opgeslagen plan terugzetten?</p>
-            <div className="dp-row-actions">
+            <Pencil size={17} aria-hidden="true" />{" "}
+            <span className="dp-plan-edit-label">Mijn plan bewerken</span>
+          </button>
+        </section>
+      ) : (
+        <form
+          className="dp-personal-plan dp-card"
+          onSubmit={savePlan}
+          aria-labelledby="dp-personal-plan-title"
+        >
+          <p className="dp-kicker">Mijn persoonlijke houvast</p>
+          <h2 id="dp-personal-plan-title">Wat helpt als het lastig wordt?</h2>
+          <p className="dp-muted">Vul alleen in wat voor jou bruikbaar is.</p>
+          <label className="dp-field">
+            Dit merk ik bij mezelf
+            <textarea
+              ref={planStart}
+              rows={3}
+              maxLength={4000}
+              value={plan.warning}
+              onChange={(event) =>
+                updatePlan({ ...plan, warning: event.target.value })
+              }
+              placeholder="Bijvoorbeeld: ik trek me terug of slaap slechter."
+            />
+          </label>
+          <label className="dp-field">
+            Dit kan ik doen
+            <textarea
+              rows={3}
+              maxLength={4000}
+              value={plan.action}
+              onChange={(event) =>
+                updatePlan({ ...plan, action: event.target.value })
+              }
+              placeholder="Een kleine stap die mij helpt."
+            />
+          </label>
+          <label className="dp-field">
+            Hier vind ik steun
+            <textarea
+              rows={3}
+              maxLength={4000}
+              value={plan.support}
+              onChange={(event) =>
+                updatePlan({ ...plan, support: event.target.value })
+              }
+              placeholder="Iemand of een plek waar ik terecht kan."
+            />
+          </label>
+          {planDirty.current && (
+            <DraftNotice error={planDraftError} focusRef={planFeedback} />
+          )}
+          {planError && (
+            <p
+              className="dp-error"
+              role="alert"
+              tabIndex={-1}
+              ref={planFeedback}
+            >
+              {planError}
+            </p>
+          )}
+          {planSaved && !planDirty.current && (
+            <p className="dp-muted" role="status">
+              Je plan is opgeslagen.
+            </p>
+          )}
+          <div className="dp-row-actions">
+            <button
+              className="dp-button primary"
+              type="submit"
+              disabled={!planDirty.current}
+            >
+              {planCleanupPending
+                ? "Afronden opnieuw proberen"
+                : "Mijn plan opslaan"}
+            </button>
+            {planDirty.current && (
               <button
+                className="dp-button quiet"
                 type="button"
-                className="dp-button"
+                onClick={() => setDiscardingPlan(true)}
+              >
+                Concept wissen
+              </button>
+            )}
+            {!planDirty.current && (hasSavedPlan || planSaved) && (
+              <button
+                className="dp-button quiet"
+                type="button"
                 onClick={() => {
-                  const result = saveDraft("plan", null);
-                  if (!result.ok) {
-                    setPlanDraftError(
-                      result.message || "Je concept kon niet worden gewist.",
-                    );
-                    requestAnimationFrame(() => planFeedback.current?.focus());
-                    return;
-                  }
-                  planDirty.current = false;
-                  setPlanCleanupPending(false);
-                  setPlan(state.plan);
-                  setPlanError("");
-                  setPlanDraftError("");
-                  setDiscardingPlan(false);
-                  requestAnimationFrame(() => planStart.current?.focus());
+                  setPlanEditing(false);
+                  requestAnimationFrame(() => planEditButton.current?.focus());
                 }}
               >
-                Ja, concept wissen
+                Bewerken sluiten
               </button>
-              <button
-                type="button"
-                className="dp-button quiet"
-                onClick={() => setDiscardingPlan(false)}
-              >
-                Verder schrijven
-              </button>
-            </div>
+            )}
           </div>
-        )}
-      </form>
+          {discardingPlan && (
+            <div
+              className="dp-inline-confirm"
+              role="group"
+              aria-label="Concept van persoonlijk plan wissen"
+            >
+              <p>Je concept wissen en je opgeslagen plan terugzetten?</p>
+              <div className="dp-row-actions">
+                <button
+                  type="button"
+                  className="dp-button"
+                  onClick={() => {
+                    const result = saveDraft("plan", null);
+                    if (!result.ok) {
+                      setPlanDraftError(
+                        result.message || "Je concept kon niet worden gewist.",
+                      );
+                      requestAnimationFrame(() =>
+                        planFeedback.current?.focus(),
+                      );
+                      return;
+                    }
+                    planDirty.current = false;
+                    setPlanCleanupPending(false);
+                    setPlan(state.plan);
+                    setPlanError("");
+                    setPlanDraftError("");
+                    setDiscardingPlan(false);
+                    const keepEditing = !hasSavedPlan && !planSaved;
+                    setPlanEditing(keepEditing);
+                    requestAnimationFrame(() =>
+                      keepEditing
+                        ? planStart.current?.focus()
+                        : planEditButton.current?.focus(),
+                    );
+                  }}
+                >
+                  Ja, concept wissen
+                </button>
+                <button
+                  type="button"
+                  className="dp-button quiet"
+                  onClick={() => setDiscardingPlan(false)}
+                >
+                  Verder schrijven
+                </button>
+              </div>
+            </div>
+          )}
+        </form>
+      )}
     </div>
   );
 }

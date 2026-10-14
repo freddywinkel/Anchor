@@ -224,6 +224,31 @@
 }
 .dp .dp-personal-plan > button {
   justify-self: start;
+  max-width: 100%;
+}
+.dp .dp-plan-edit-label {
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.dp .dp-plan-text {
+  display: grid;
+  gap: 1.5rem;
+  margin: 0.5rem 0;
+  min-width: 0;
+}
+.dp .dp-plan-text > div {
+  min-width: 0;
+}
+.dp .dp-plan-text dt {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.dp .dp-plan-text dd {
+  margin: 0;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .dp .dp-growth-compose {
   display: grid;

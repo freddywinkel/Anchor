@@ -99,8 +99,16 @@ export function CravingView({
   const confirmationDescriptionId = `${prefix}-delete-description`;
   const dirty =
     !record ||
-    JSON.stringify({ ...record, usedAfterCraving: undefined }) !==
-      JSON.stringify({ ...value, usedAfterCraving: undefined });
+    JSON.stringify({
+      ...record,
+      usedAfterCraving: undefined,
+      usedConfirmedAt: undefined,
+    }) !==
+      JSON.stringify({
+        ...value,
+        usedAfterCraving: undefined,
+        usedConfirmedAt: undefined,
+      });
 
   useEffect(() => {
     if (confirmDelete) cancelDeleteRef.current?.focus();
@@ -237,9 +245,15 @@ export function CravingView({
     const currentRecord = state.cravings.find(
       (item) => item.id === nextRecord.id,
     );
-    if (currentRecord?.usedAfterCraving === true)
+    if (currentRecord?.usedAfterCraving === true) {
       nextRecord.usedAfterCraving = true;
-    else delete nextRecord.usedAfterCraving;
+      if (currentRecord.usedConfirmedAt !== undefined)
+        nextRecord.usedConfirmedAt = currentRecord.usedConfirmedAt;
+      else delete nextRecord.usedConfirmedAt;
+    } else {
+      delete nextRecord.usedAfterCraving;
+      delete nextRecord.usedConfirmedAt;
+    }
     for (const field of narrativeFields)
       nextRecord[field] = value[field].trim();
     const exists = state.cravings.some((item) => item.id === nextRecord.id);

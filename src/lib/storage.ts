@@ -45,6 +45,9 @@ export type CravingRecord = {
   // Only an explicit user mark; absence means unknown, never "did not use".
   // This does not identify which, if any, listed substances were used.
   usedAfterCraving?: true;
+  // UTC instant of the explicit confirmation, not an inferred time of use.
+  // Older true markers without this field keep their unknown timestamp.
+  usedConfirmedAt?: string;
   situation: string;
   thought: string;
   bodySensation: string;
@@ -421,11 +424,26 @@ function cravingSubstanceNames(value: unknown, draft: boolean): string[] {
   return names;
 }
 
+function cravingConfirmationTime(value: unknown): string {
+  const result = string(value, "Bevestigingstijdstip", 24);
+  const year = Number(result.slice(0, 4));
+  if (
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(result) ||
+    year < 1900 ||
+    year > 2199 ||
+    !Number.isFinite(Date.parse(result)) ||
+    new Date(result).toISOString() !== result
+  )
+    return invalid("Het bevestigingstijdstip is ongeldig.");
+  return result;
+}
+
 function craving(value: unknown, draft = false): CravingRecord {
   const input = object(value, "Drangregistratie");
   const hasSubstance = Object.hasOwn(input, "substance");
   const hasSubstances = Object.hasOwn(input, "substances");
   const hasUsedAfterCraving = Object.hasOwn(input, "usedAfterCraving");
+  const hasUsedConfirmedAt = Object.hasOwn(input, "usedConfirmedAt");
   if (hasSubstance && hasSubstances)
     return invalid("Middel en middelen mogen niet tegelijk zijn ingevuld.");
   const item = fields(
@@ -442,11 +460,14 @@ function craving(value: unknown, draft = false): CravingRecord {
       ...(hasSubstance ? ["substance"] : []),
       ...(hasSubstances ? ["substances"] : []),
       ...(hasUsedAfterCraving ? ["usedAfterCraving"] : []),
+      ...(hasUsedConfirmedAt ? ["usedConfirmedAt"] : []),
     ],
     "Drangregistratie",
   );
   if (hasUsedAfterCraving && item.usedAfterCraving !== true)
     return invalid("De gebruiksmarkering moet ontbreken of waar zijn.");
+  if (hasUsedConfirmedAt && !hasUsedAfterCraving)
+    return invalid("Een bevestigingstijdstip vereist een gebruiksmarkering.");
   return {
     id: identifier(item.id),
     date: draftDate(item.date, draft),
@@ -465,6 +486,9 @@ function craving(value: unknown, draft = false): CravingRecord {
       : {}),
     // Additive v1 field: never derive use from free text or substance choices.
     ...(hasUsedAfterCraving ? { usedAfterCraving: true as const } : {}),
+    ...(hasUsedConfirmedAt
+      ? { usedConfirmedAt: cravingConfirmationTime(item.usedConfirmedAt) }
+      : {}),
   };
 }
 

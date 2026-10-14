@@ -36,3 +36,15 @@
 .dp .dp-craving-use-feedback:empty {
   margin: 0;
 }
+.dp .dp-craving-use-confirmation {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.dp .dp-craving-use-confirmation > p {
+  margin: 0;
+}
+.dp .dp-craving-use-confirmation > p + p {
+  margin-top: 0.25rem;
+}

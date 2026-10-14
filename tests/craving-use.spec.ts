@@ -11,6 +11,7 @@ import { applyHistoryFilters } from "./history-filters";
 const DATA = "anchor.app.data.v1";
 const DRAFTS = "anchor.app.drafts.v1";
 const date = "2026-10-14";
+const confirmedAt = "2026-10-14T12:00:00.000Z";
 const targetId = "use-target";
 const errors = new WeakMap<Page, string[]>();
 
@@ -149,15 +150,25 @@ async function expand(page: Page, id = targetId) {
   return entry;
 }
 
-function markedState(before: AppState, id: string, used: boolean): AppState {
+function markedState(
+  before: AppState,
+  id: string,
+  used: boolean,
+  timestamp = confirmedAt,
+): AppState {
   return {
     ...before,
     revision: before.revision + 1,
     cravings: before.cravings.map((item) => {
       if (item.id !== id) return item;
       const next = { ...item };
-      if (used) next.usedAfterCraving = true;
-      else delete next.usedAfterCraving;
+      if (used) {
+        next.usedAfterCraving = true;
+        next.usedConfirmedAt = timestamp;
+      } else {
+        delete next.usedAfterCraving;
+        delete next.usedConfirmedAt;
+      }
       return next;
     }),
   };
@@ -219,6 +230,7 @@ test("gebruik is pas na opslaan optioneel te markeren en verwijderen betekent op
   const pending = await drafts(page);
   const saved = before.cravings.at(-1)!;
   expect(saved).not.toHaveProperty("usedAfterCraving");
+  expect(saved).not.toHaveProperty("usedConfirmedAt");
   await mark(support).click();
   await expect(support.getByText("Gebruikt", { exact: true })).toBeVisible();
   expect(await stored(page)).toEqual(markedState(before, saved.id, true));
@@ -229,6 +241,9 @@ test("gebruik is pas na opslaan optioneel te markeren en verwijderen betekent op
   );
   expect((await stored(page)).cravings.at(-1)).not.toHaveProperty(
     "usedAfterCraving",
+  );
+  expect((await stored(page)).cravings.at(-1)).not.toHaveProperty(
+    "usedConfirmedAt",
   );
   await expect(mark(support)).toBeVisible();
   expect(await drafts(page)).toEqual(pending);
@@ -290,6 +305,7 @@ test("een bestaande craving uit Vandaag heeft de markeractie buiten het formulie
   await expect(behavior).toHaveValue(
     "Mijn aangepaste beschrijving is nog een concept.",
   );
+  await page.clock.setFixedTime(new Date(`${date}T14:30:00+02:00`));
   await page
     .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
     .click();
@@ -300,6 +316,7 @@ test("een bestaande craving uit Vandaag heeft de markeractie buiten het formulie
   expect(saved).toEqual({
     ...before.cravings[0],
     usedAfterCraving: true,
+    usedConfirmedAt: confirmedAt,
     behavior: "Mijn aangepaste beschrijving is nog een concept.",
   });
 });
@@ -309,18 +326,28 @@ for (const initiallyMarked of [false, true]) {
     page,
   }) => {
     const initial = fixture();
-    if (initiallyMarked) initial.cravings[0].usedAfterCraving = true;
+    if (initiallyMarked) {
+      initial.cravings[0].usedAfterCraving = true;
+      initial.cravings[0].usedConfirmedAt = "2026-10-14T10:30:00.000Z";
+    }
     await seed(page, initial);
     await open(page, `/craving/${targetId}`);
     const note = "Niet-opgeslagen tekst uit een ouder concept.";
     await page.getByLabel("Gedachte", { exact: true }).fill(note);
     const pending = await drafts(page);
-    if (initiallyMarked)
+    if (initiallyMarked) {
       expect(pending[`craving:${targetId}`].usedAfterCraving).toBe(true);
-    else
+      expect(pending[`craving:${targetId}`].usedConfirmedAt).toBe(
+        initial.cravings[0].usedConfirmedAt,
+      );
+    } else {
       expect(pending[`craving:${targetId}`]).not.toHaveProperty(
         "usedAfterCraving",
       );
+      expect(pending[`craving:${targetId}`]).not.toHaveProperty(
+        "usedConfirmedAt",
+      );
+    }
     await page.getByRole("link", { name: "Terugkijken", exact: true }).click();
     const entry = await expand(page);
     await (initiallyMarked ? remove(entry) : mark(entry)).click();
@@ -338,8 +365,13 @@ for (const initiallyMarked of [false, true]) {
     )!;
     expect(saved.thought).toBe(note);
     expect(saved.behavior).toBe(initial.cravings[0].behavior);
-    if (initiallyMarked) expect(saved).not.toHaveProperty("usedAfterCraving");
-    else expect(saved.usedAfterCraving).toBe(true);
+    if (initiallyMarked) {
+      expect(saved).not.toHaveProperty("usedAfterCraving");
+      expect(saved).not.toHaveProperty("usedConfirmedAt");
+    } else {
+      expect(saved.usedAfterCraving).toBe(true);
+      expect(saved.usedConfirmedAt).toBe(confirmedAt);
+    }
     expect((await drafts(page))[`craving:${targetId}`]).toBeUndefined();
     expect((await drafts(page)).growth).toEqual(pending.growth);
     await page.reload();
@@ -455,7 +487,9 @@ test("de markering werkt offline en overleeft een back-upherstel terwijl nul, on
   const backup = parseBackup(buffer.toString());
   expect(backup).toEqual(marked);
   expect(backup.cravings[0].usedAfterCraving).toBe(true);
+  expect(backup.cravings[0].usedConfirmedAt).toBe(confirmedAt);
   expect(backup.cravings[1]).not.toHaveProperty("usedAfterCraving");
+  expect(backup.cravings[1]).not.toHaveProperty("usedConfirmedAt");
   expect(
     backup.moments[0].before.emotionRatings?.map((item) => item.intensity),
   ).toEqual([0, null]);
@@ -463,6 +497,9 @@ test("de markering werkt offline en overleeft een back-upherstel terwijl nul, on
   await remove(await expand(page)).click();
   expect((await stored(page)).cravings[0]).not.toHaveProperty(
     "usedAfterCraving",
+  );
+  expect((await stored(page)).cravings[0]).not.toHaveProperty(
+    "usedConfirmedAt",
   );
   await open(page, "/settings");
   await page
@@ -487,4 +524,164 @@ test("de markering werkt offline en overleeft een back-upherstel terwijl nul, on
   expect({ ...restored, revision: marked.revision }).toEqual(marked);
   expect((await raw(page))[2]).toBe("Blijft bewaard.");
   await context.setOffline(false);
+});
+
+test("bevestigingstijd en verstreken tijd blijven zichtbaar in Vandaag, geschiedenis, week en de opgeslagen craving", async ({
+  page,
+}) => {
+  await seed(page);
+  await open(page);
+  await mark(await expand(page)).click();
+  const after = await raw(page);
+  const confirmation = "Bevestigd op 14 oktober 2026 om 14:00";
+  const elapsed = "1 uur en 45 minuten na de craving bevestigd.";
+  const entry = record(page);
+  await expect(entry.locator("summary")).toContainText(confirmation);
+  await expect(entry.locator("summary")).toContainText(elapsed);
+  const action = entry.getByRole("group", {
+    name: "Gebruik na craving",
+    exact: true,
+  });
+  await expect(action).toContainText(confirmation);
+  await expect(action).toContainText(elapsed);
+
+  await open(page, "/today");
+  const timeline = page
+    .locator(".dp-timeline button")
+    .filter({ hasText: craving().situation });
+  await expect(timeline).toContainText(confirmation);
+  await expect(timeline).toContainText(elapsed);
+  await timeline.click();
+  await expect(page).toHaveURL(new RegExp(`#/craving/${targetId}$`));
+  const editorAction = page.getByRole("group", {
+    name: "Gebruik na craving",
+    exact: true,
+  });
+  await expect(editorAction).toContainText(confirmation);
+  await expect(editorAction).toContainText(elapsed);
+  expect(
+    await editorAction.evaluate((element) => element.closest("form") === null),
+  ).toBe(true);
+
+  await open(page);
+  await applyHistoryFilters(page, { period: "week" });
+  const week = page.getByRole("region", {
+    name: "Rustig terugkijken op je week",
+    exact: true,
+  });
+  await week
+    .locator("summary")
+    .filter({ hasText: "woensdag 14 oktober 2026" })
+    .click();
+  await expect(week.getByText(confirmation, { exact: true })).toBeVisible();
+  await expect(week.getByText(elapsed, { exact: true })).toBeVisible();
+  expect(await raw(page)).toEqual(after);
+});
+
+test("een oude markering zonder tijd blijft onbekend en krijgt geen tijd bij openen of normaal bewerken", async ({
+  page,
+}) => {
+  const initial = fixture();
+  initial.cravings[0].usedAfterCraving = true;
+  await seed(page, initial);
+  await open(page);
+  const before = await raw(page);
+  const entry = await expand(page);
+  await expect(entry.locator("summary")).toContainText(
+    "Bevestigingstijd niet bekend.",
+  );
+  await expect(
+    entry.getByRole("group", { name: "Gebruik na craving", exact: true }),
+  ).toContainText("Bevestigingstijd niet bekend.");
+  await expect(entry).not.toContainText("Bevestigd op");
+  await expect(entry).not.toContainText("na de craving bevestigd");
+  expect(await raw(page)).toEqual(before);
+  await open(page, "/today");
+  const timeline = page
+    .locator(".dp-timeline button")
+    .filter({ hasText: craving().situation });
+  await expect(timeline).toContainText("Bevestigingstijd niet bekend.");
+  await timeline.click();
+  const action = page.getByRole("group", {
+    name: "Gebruik na craving",
+    exact: true,
+  });
+  await expect(action).toContainText("Bevestigingstijd niet bekend.");
+  expect(await raw(page)).toEqual(before);
+  await page
+    .getByLabel("Gedachte", { exact: true })
+    .fill("Een synthetische normale tekstwijziging.");
+  await page
+    .getByRole("button", { name: "Wijzigingen opslaan", exact: true })
+    .click();
+  const saved = (await stored(page)).cravings.find(
+    (item) => item.id === targetId,
+  )!;
+  expect(saved.usedAfterCraving).toBe(true);
+  expect(saved).not.toHaveProperty("usedConfirmedAt");
+  expect(saved.thought).toBe("Een synthetische normale tekstwijziging.");
+  await page.clock.setFixedTime(new Date(`${date}T17:00:00+02:00`));
+  await open(page);
+  await expect(record(page).locator("summary")).toContainText(
+    "Bevestigingstijd niet bekend.",
+  );
+  expect(
+    (await stored(page)).cravings.find((item) => item.id === targetId),
+  ).toEqual(saved);
+});
+
+test("de bevestigingstijd verandert alleen door de markering expliciet te verwijderen en opnieuw aan te geven", async ({
+  page,
+}) => {
+  await seed(page);
+  await open(page);
+  await mark(await expand(page)).click();
+  const marked = await stored(page);
+  expect(marked.cravings[0].usedConfirmedAt).toBe(confirmedAt);
+  await page.clock.setFixedTime(new Date(`${date}T15:00:00+02:00`));
+  await page.reload();
+  await expect(record(page).locator("summary")).toContainText(
+    "Bevestigd op 14 oktober 2026 om 14:00",
+  );
+  expect(await stored(page)).toEqual(marked);
+  await remove(await expand(page)).click();
+  expect((await stored(page)).cravings[0]).not.toHaveProperty(
+    "usedConfirmedAt",
+  );
+  await mark(await expand(page)).click();
+  const markedAgain = await stored(page);
+  expect(markedAgain.cravings[0].usedConfirmedAt).toBe(
+    "2026-10-14T13:00:00.000Z",
+  );
+  await expect(record(page).locator("summary")).toContainText(
+    "Bevestigd op 14 oktober 2026 om 15:00",
+  );
+  await expect(record(page).locator("summary")).toContainText(
+    "2 uur en 45 minuten na de craving bevestigd.",
+  );
+  expect(markedAgain.cravings[0].behavior).toBe(craving().behavior);
+});
+
+test("een bevestiging na middernacht toont de eigen datum en de tijd sinds de craving zonder dagen te verwarren", async ({
+  page,
+}) => {
+  const initial = fixture();
+  initial.cravings[0].date = "2026-10-13";
+  initial.cravings[0].time = "23:45";
+  await seed(page, initial);
+  await page.clock.setFixedTime(new Date("2026-10-14T00:15:00+02:00"));
+  await open(page);
+  const entry = await expand(page);
+  await mark(entry).click();
+  expect((await stored(page)).cravings[0].usedConfirmedAt).toBe(
+    "2026-10-13T22:15:00.000Z",
+  );
+  await expect(entry.locator("summary")).toContainText("13 oktober 2026");
+  await expect(entry.locator("summary")).toContainText("23:45");
+  await expect(entry.locator("summary")).toContainText(
+    "Bevestigd op 14 oktober 2026 om 00:15",
+  );
+  await expect(entry.locator("summary")).toContainText(
+    "30 minuten na de craving bevestigd.",
+  );
 });

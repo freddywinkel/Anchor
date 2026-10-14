@@ -309,3 +309,241 @@ describe("explicit use marker on a saved craving", () => {
     assert.equal(loadState().state.cravings[0].usedAfterCraving, true);
   });
 });
+
+describe("optional explicit craving confirmation timestamp", () => {
+  const confirmedAt = "2026-10-14T17:08:32.456Z";
+
+  it("keeps older true markers without a timestamp unchanged in data, drafts, backups and unrelated saves", () => {
+    const legacy: CravingRecord = { ...record(), usedAfterCraving: true };
+    const state = stateWith([legacy, record("unmarked")]);
+    const raw = JSON.stringify(state, null, 2);
+    const draftRaw = JSON.stringify({
+      version: 1,
+      records: { "craving:craving-1": legacy },
+    });
+    store.values.set(STORAGE_KEY, raw);
+    store.values.set(DRAFT_STORAGE_KEY, draftRaw);
+    const loaded = loadState();
+    assert.equal(loaded.blocked, false);
+    assert.deepEqual(loaded.state, state);
+    assert.deepEqual(loadDrafts()["craving:craving-1"], legacy);
+    assert.deepEqual(parseBackup(exportBackup(loaded.state)), state);
+    assert.equal(
+      Object.hasOwn(loaded.state.cravings[0], "usedConfirmedAt"),
+      false,
+    );
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+    assert.deepEqual(store.writes, []);
+    const saved = saveState({ ...loaded.state, theme: "light" });
+    assert.equal(saved.ok, true);
+    assert.deepEqual(saved.state!.cravings, state.cravings);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+  });
+
+  it("round-trips canonical UTC timestamps without inferring a use time or rewriting historical records", () => {
+    const timestamps = [
+      "1900-01-01T00:00:00.000Z",
+      "2000-02-29T23:59:59.999Z",
+      confirmedAt,
+      "2199-12-31T23:59:59.999Z",
+    ];
+    const state = stateWith(
+      timestamps.map((usedConfirmedAt, index) => ({
+        ...record(`timestamp-${index}`),
+        substances: ["Alcohol", "Cocaine"],
+        usedAfterCraving: true,
+        usedConfirmedAt,
+      })),
+    );
+    const original = structuredClone(state);
+    const saved = saveState(state);
+    assert.equal(saved.ok, true);
+    assert.deepEqual(state, original);
+    assert.deepEqual(loadState().state, saved.state);
+    assert.deepEqual(parseBackup(exportBackup(saved.state!)), saved.state);
+    const restored = replaceFromBackup(
+      parseBackup(exportBackup(saved.state!)),
+      saved.state!.revision,
+    );
+    assert.equal(restored.ok, true);
+    assert.deepEqual(restored.state!.cravings, original.cravings);
+    assert.deepEqual(
+      restored.state!.cravings.map((entry) => entry.usedConfirmedAt),
+      timestamps,
+    );
+  });
+
+  it("rejects malformed, noncanonical and out-of-range timestamps without modifying valid state or drafts", () => {
+    const marked: CravingRecord = {
+      ...record(),
+      usedAfterCraving: true,
+      usedConfirmedAt: confirmedAt,
+    };
+    const saved = saveState(stateWith([marked])).state!;
+    assert.equal(saveDraft("craving:craving-1", marked).ok, true);
+    const raw = store.values.get(STORAGE_KEY);
+    const draftRaw = store.values.get(DRAFT_STORAGE_KEY);
+    const invalidTimes = [
+      null,
+      undefined,
+      false,
+      0,
+      [],
+      {},
+      new Date(confirmedAt),
+      "",
+      "2026-10-14",
+      "2026-10-14T17:08:32Z",
+      "2026-10-14T17:08:32.45Z",
+      "2026-10-14T17:08:32.4560Z",
+      "2026-10-14T19:08:32.456+02:00",
+      "2026-10-14t17:08:32.456z",
+      "2026-10-14T24:00:00.000Z",
+      "2026-10-14T17:08:60.000Z",
+      "2026-13-01T17:08:32.456Z",
+      "2026-02-29T17:08:32.456Z",
+      "2100-02-29T17:08:32.456Z",
+      "1899-12-31T23:59:59.999Z",
+      "2200-01-01T00:00:00.000Z",
+      "+010000-01-01T00:00:00.000Z",
+      ` ${confirmedAt}`,
+      "x".repeat(1000),
+    ];
+    for (const value of invalidTimes) {
+      const candidate = structuredClone(saved);
+      Object.assign(candidate.cravings[0], { usedConfirmedAt: value });
+      assert.throws(() => validateState(candidate), /bevestigingstijdstip/i);
+      assert.equal(saveState(candidate).ok, false);
+      assert.equal(
+        saveDraft("craving:craving-1", candidate.cravings[0]).ok,
+        false,
+      );
+      // JSON cannot represent undefined or a Date object as those input types.
+      if (value !== undefined && !(value instanceof Date)) {
+        const backup = JSON.parse(exportBackup(saved));
+        backup.state.cravings[0].usedConfirmedAt = value;
+        assert.throws(
+          () => parseBackup(JSON.stringify(backup)),
+          /bevestigingstijdstip/i,
+        );
+      }
+      assert.equal(store.values.get(STORAGE_KEY), raw);
+      assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+      assert.deepEqual(loadDrafts()["craving:craving-1"], marked);
+      assert.equal(hasUnpersistedDrafts(), false);
+    }
+  });
+
+  it("rejects an orphan timestamp instead of inferring a true use marker", () => {
+    const saved = saveState(stateWith([record()])).state!;
+    const raw = store.values.get(STORAGE_KEY);
+    const candidate = structuredClone(saved);
+    candidate.cravings[0].usedConfirmedAt = confirmedAt;
+    assert.throws(
+      () => validateState(candidate),
+      /vereist een gebruiksmarkering/,
+    );
+    assert.equal(saveState(candidate).ok, false);
+    assert.equal(
+      saveDraft("craving:craving-1", candidate.cravings[0]).ok,
+      false,
+    );
+    const backup = JSON.parse(exportBackup(saved));
+    backup.state.cravings[0].usedConfirmedAt = confirmedAt;
+    assert.throws(
+      () => parseBackup(JSON.stringify(backup)),
+      /vereist een gebruiksmarkering/,
+    );
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    assert.equal(store.values.has(DRAFT_STORAGE_KEY), false);
+  });
+
+  it("keeps invalid stored confirmation bytes available for recovery rather than clearing them", () => {
+    const invalidRecord = {
+      ...record(),
+      usedAfterCraving: true,
+      usedConfirmedAt: "not an instant",
+    };
+    const stateRaw = JSON.stringify({
+      ...createEmptyState(),
+      cravings: [invalidRecord],
+    });
+    const draftRaw = JSON.stringify({
+      version: 1,
+      records: { "craving:craving-1": invalidRecord },
+    });
+    store.values.set(STORAGE_KEY, stateRaw);
+    store.values.set(DRAFT_STORAGE_KEY, draftRaw);
+    assert.equal(loadState().blocked, true);
+    assert.equal(saveState(stateWith([record()])).ok, false);
+    assert.ok(draftStorageWarning());
+    assert.equal(JSON.parse(exportDraftRecovery()).raw, draftRaw);
+    assert.equal(store.values.get(STORAGE_KEY), stateRaw);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), draftRaw);
+    assert.deepEqual(store.writes, []);
+  });
+
+  it("preserves confirmation time with unfinished draft input and in recovery after a write failure", () => {
+    const draft: CravingRecord = {
+      ...record(),
+      date: "2026-",
+      time: "",
+      substances: ["Alcohol", ""],
+      usedAfterCraving: true,
+      usedConfirmedAt: confirmedAt,
+    };
+    assert.equal(saveDraft("craving:craving-1", draft).ok, true);
+    assert.deepEqual(loadDrafts()["craving:craving-1"], draft);
+    const raw = store.values.get(DRAFT_STORAGE_KEY);
+    store.failWrite = true;
+    const changed = { ...draft, thought: "Nog niet opgeslagen tekst" };
+    assert.equal(saveDraft("craving:craving-1", changed).ok, false);
+    assert.equal(store.values.get(DRAFT_STORAGE_KEY), raw);
+    assert.deepEqual(loadDrafts()["craving:craving-1"], changed);
+    const recovery = JSON.parse(exportDraftRecovery());
+    assert.equal(recovery.raw, raw);
+    assert.deepEqual(recovery.pendingRecords["craving:craving-1"], changed);
+    store.failWrite = false;
+    assert.equal(saveDraft("craving:craving-1", changed).ok, true);
+    assert.deepEqual(loadDrafts()["craving:craving-1"], changed);
+  });
+
+  it("preserves confirmation metadata on copied edits and requires both fields to be removed together", () => {
+    const marked: CravingRecord = {
+      ...record(),
+      substance: "Alcohol",
+      usedAfterCraving: true,
+      usedConfirmedAt: confirmedAt,
+    };
+    const changed = withCravingSubstances(marked, ["Cocaine", "Eigen naam"]);
+    assert.equal(changed.usedConfirmedAt, confirmedAt);
+    assert.equal(changed.usedAfterCraving, true);
+    const saved = saveState(stateWith([changed, record("other")])).state!;
+    const raw = store.values.get(STORAGE_KEY);
+    const unmarked = { ...saved.cravings[0] };
+    delete unmarked.usedAfterCraving;
+    assert.equal(
+      saveState({ ...saved, cravings: [unmarked, saved.cravings[1]] }).ok,
+      false,
+    );
+    assert.equal(store.values.get(STORAGE_KEY), raw);
+    delete unmarked.usedConfirmedAt;
+    const removed = saveState({
+      ...saved,
+      cravings: [unmarked, saved.cravings[1]],
+    });
+    assert.equal(removed.ok, true);
+    assert.deepEqual(loadState().state.cravings, [unmarked, record("other")]);
+    assert.equal(
+      Object.hasOwn(removed.state!.cravings[0], "usedAfterCraving"),
+      false,
+    );
+    assert.equal(
+      Object.hasOwn(removed.state!.cravings[0], "usedConfirmedAt"),
+      false,
+    );
+    assert.equal(marked.usedConfirmedAt, confirmedAt);
+    assert.deepEqual(parseBackup(exportBackup(removed.state!)), removed.state);
+  });
+});

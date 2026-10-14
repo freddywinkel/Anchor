@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import type { AppState } from "./lib/storage";
 import { cravingSubstances } from "./lib/substances";
 import { RatingLine } from "./RatingsEditor";
+import { CravingUseConfirmation } from "./CravingUseAction";
 import {
   buildWeekOverview,
   sleepDescription,
@@ -152,7 +153,12 @@ function WeekDayDetails({
           element: (
             <li key={`craving:${value.id}`} tabIndex={-1}>
               <strong>Craving · {value.time}</strong>
-              {value.usedAfterCraving === true && <p>Gebruikt</p>}
+              {value.usedAfterCraving === true && (
+                <>
+                  <p>Gebruikt</p>
+                  <CravingUseConfirmation record={value} />
+                </>
+              )}
               <p className="dp-preserve-lines">
                 {cravingSubstances(value).length > 1
                   ? "Middelen of gedrag"
