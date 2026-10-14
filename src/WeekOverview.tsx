@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { AppState } from "./lib/storage";
+import { cravingSubstances } from "./lib/substances";
 import { RatingLine } from "./RatingsEditor";
 import {
   buildWeekOverview,
@@ -151,7 +152,13 @@ function WeekDayDetails({
           element: (
             <li key={`craving:${value.id}`} tabIndex={-1}>
               <strong>Craving · {value.time}</strong>
-              <p>Middel of gedrag: {value.substance || "niet ingevuld"}.</p>
+              <p className="dp-preserve-lines">
+                {cravingSubstances(value).length > 1
+                  ? "Middelen of gedrag"
+                  : "Middel of gedrag"}
+                :{" "}
+                {cravingSubstances(value).join(", ").trim() || "niet ingevuld"}.
+              </p>
               <button
                 type="button"
                 className="dp-text-button dp-week-record-link"

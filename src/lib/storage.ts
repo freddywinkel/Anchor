@@ -41,6 +41,7 @@ export type CravingRecord = {
   date: string;
   time: string;
   substance?: string;
+  substances?: string[];
   situation: string;
   thought: string;
   bodySensation: string;
@@ -404,9 +405,25 @@ function day(value: unknown, draft = false): Day {
   return result;
 }
 
+function cravingSubstanceNames(value: unknown, draft: boolean): string[] {
+  if (!Array.isArray(value) || value.length > 20)
+    return invalid("Middelen moeten een lijst van maximaal 20 namen zijn.");
+  // Array.from also validates sparse slots instead of silently preserving holes.
+  const names = Array.from(value, (name) => string(name, "Middel", 120));
+  if (!draft) {
+    if (names.some((name) => !name.trim()))
+      return invalid("Geef elk middel een naam of verwijder de lege keuze.");
+    unique(names, (name) => name.trim().toLocaleLowerCase("nl-NL"), "Middelen");
+  }
+  return names;
+}
+
 function craving(value: unknown, draft = false): CravingRecord {
   const input = object(value, "Drangregistratie");
   const hasSubstance = Object.hasOwn(input, "substance");
+  const hasSubstances = Object.hasOwn(input, "substances");
+  if (hasSubstance && hasSubstances)
+    return invalid("Middel en middelen mogen niet tegelijk zijn ingevuld.");
   const item = fields(
     input,
     [
@@ -419,6 +436,7 @@ function craving(value: unknown, draft = false): CravingRecord {
       "emotion",
       "behavior",
       ...(hasSubstance ? ["substance"] : []),
+      ...(hasSubstances ? ["substances"] : []),
     ],
     "Drangregistratie",
   );
@@ -434,6 +452,9 @@ function craving(value: unknown, draft = false): CravingRecord {
     // Additive v1 field: never infer a substance for older records or drafts.
     ...(hasSubstance
       ? { substance: string(item.substance, "Middel", 120) }
+      : {}),
+    ...(hasSubstances
+      ? { substances: cravingSubstanceNames(item.substances, draft) }
       : {}),
   };
 }

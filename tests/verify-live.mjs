@@ -370,9 +370,16 @@ try {
   }
   const synthetic =
     "Synthetische releasecontrole: fictief moment, geen persoonlijke gegevens.";
+  const expectedSubstances = ["3-MMC", "Cocaine"];
   await page
     .getByRole("combobox", { name: "Middel of gedrag", exact: true })
-    .selectOption("3-MMC");
+    .selectOption(expectedSubstances[0]);
+  await page
+    .getByRole("button", { name: "Nog een middel toevoegen", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Middel of gedrag 2", exact: true })
+    .selectOption(expectedSubstances[1]);
   await page.getByLabel("Wie, wat en waar", { exact: true }).fill(synthetic);
   await page
     .getByLabel("Gedachte", { exact: true })
@@ -429,16 +436,72 @@ try {
   await page
     .getByLabel(/^Gedrag \(wat deed je\?\)/)
     .fill("Fictief gedrag voor de browsertest.");
+  const cravingSaveGeometry = [];
+  for (const fraction of [0, 0.5]) {
+    await page.evaluate((fraction) => {
+      window.scrollTo(
+        0,
+        (document.documentElement.scrollHeight - innerHeight) * fraction,
+      );
+      return new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      );
+    }, fraction);
+    cravingSaveGeometry.push(
+      await page
+        .getByRole("button", { name: "Craving opslaan", exact: true })
+        .evaluate((button) => {
+          const box = button.getBoundingClientRect();
+          const behavior =
+            document.querySelector(
+              '.anchor-craving-form textarea[name="behavior"]',
+            ) ??
+            [...document.querySelectorAll(".anchor-craving-form textarea")].at(
+              -1,
+            );
+          const ancestors = [];
+          for (
+            let element = button;
+            element && element.tagName !== "FORM";
+            element = element.parentElement
+          )
+            ancestors.push(getComputedStyle(element).position);
+          return {
+            documentTop: box.top + scrollY,
+            behaviorBottom: behavior.getBoundingClientRect().bottom + scrollY,
+            ancestors,
+          };
+        }),
+    );
+  }
+  for (const geometry of cravingSaveGeometry) {
+    assert.ok(
+      geometry.documentTop > geometry.behaviorBottom,
+      "Craving save belongs below the final behavior field",
+    );
+    assert.ok(
+      geometry.ancestors.every(
+        (position) => !["fixed", "sticky"].includes(position),
+      ),
+      "Craving save must remain in normal document flow",
+    );
+  }
+  assert.ok(
+    Math.abs(
+      cravingSaveGeometry[0].documentTop - cravingSaveGeometry[1].documentTop,
+    ) <= 1,
+    "Craving save keeps its document position while scrolling",
+  );
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
   await expect(page).toHaveURL(/#\/today$/);
   const before = await stored();
   assert.equal(before.state.cravings.length, 1);
-  assert.equal(before.state.cravings[0].substance, "3-MMC");
-  await expect(page.locator(".dp-timeline")).toContainText(
-    "Middel of gedrag: 3-MMC",
-  );
+  assert.deepEqual(before.state.cravings[0].substances, expectedSubstances);
+  assert.equal(Object.hasOwn(before.state.cravings[0], "substance"), false);
+  for (const substance of expectedSubstances)
+    await expect(page.locator(".dp-timeline")).toContainText(substance);
   assert.equal(before.state.cravings[0].situation, synthetic);
   for (const [field, value] of Object.entries(internalValues))
     assert.equal(before.state.cravings[0][field], value);
@@ -449,6 +512,9 @@ try {
   await expect(
     page.getByRole("combobox", { name: "Middel of gedrag", exact: true }),
   ).toHaveValue("3-MMC");
+  await expect(
+    page.getByRole("combobox", { name: "Middel of gedrag 2", exact: true }),
+  ).toHaveValue(expectedSubstances[1]);
   await expect(
     page.getByLabel("Wie, wat en waar", { exact: true }),
   ).toHaveValue(synthetic);
@@ -470,6 +536,12 @@ try {
   );
   assert.deepEqual(offlineProbe, { failed: true, online: false });
   await page.reload();
+  await expect(
+    page.getByRole("combobox", { name: "Middel of gedrag", exact: true }),
+  ).toHaveValue(expectedSubstances[0]);
+  await expect(
+    page.getByRole("combobox", { name: "Middel of gedrag 2", exact: true }),
+  ).toHaveValue(expectedSubstances[1]);
   await expect(
     page.getByLabel("Wie, wat en waar", { exact: true }),
   ).toHaveValue(synthetic);
@@ -515,7 +587,8 @@ try {
   assert.equal(after.state.cravings.length, 1);
   assert.equal(after.state.cravings[0].id, before.state.cravings[0].id);
   assert.equal(after.state.cravings[0].behavior, offlineBehavior);
-  assert.equal(after.state.cravings[0].substance, "3-MMC");
+  assert.deepEqual(after.state.cravings[0].substances, expectedSubstances);
+  assert.equal(Object.hasOwn(after.state.cravings[0], "substance"), false);
   assert.equal(after.state.revision, before.state.revision + 1);
   await expect(page).toHaveURL(/#\/today$/);
   await page.goto(
@@ -525,6 +598,12 @@ try {
   await expect(page.getByLabel(/^Gedrag \(wat deed je\?\)/)).toHaveValue(
     offlineBehavior,
   );
+  await expect(
+    page.getByRole("combobox", { name: "Middel of gedrag", exact: true }),
+  ).toHaveValue(expectedSubstances[0]);
+  await expect(
+    page.getByRole("combobox", { name: "Middel of gedrag 2", exact: true }),
+  ).toHaveValue(expectedSubstances[1]);
   assert.equal((await stored()).raw, after.raw);
   await page.screenshot({
     path: path.join(directory, "phone-craving-offline.png"),
@@ -680,12 +759,15 @@ try {
     has: page.getByRole("heading", { name: "Check-ins", exact: true }),
   });
   await expect(cravingGroup.locator("details")).not.toHaveAttribute("open", "");
-  await expect(cravingGroup.locator("summary")).toContainText("3-MMC");
+  for (const substance of expectedSubstances)
+    await expect(cravingGroup.locator("summary")).toContainText(substance);
   await expect(cravingGroup.locator("summary")).toContainText(
     after.state.cravings[0].time,
   );
   await cravingGroup.locator("summary").click();
   const historyCraving = cravingGroup.locator(".dp-history-body");
+  for (const substance of expectedSubstances)
+    await expect(historyCraving).toContainText(substance);
   for (const value of [
     synthetic,
     offlineBehavior,
@@ -901,6 +983,7 @@ try {
     todayCards,
     entryActions,
     scrollBounds,
+    cravingSaveGeometry,
     fonts,
     offlineFonts,
     fontCache,
@@ -912,7 +995,8 @@ try {
       "mobile page has bounded vertical overscroll, anchored bottom navigation and reachable footer at both scroll endpoints",
       "real craving UI save/reload",
       "successful craving and follow-up saves close their forms; unanswered activity choice stays null",
-      "optional craving substance survives save, reload, offline editing and backup export",
+      "multiple craving substances survive save, timeline and expanded history readbacks, reload, offline editing and backup export",
+      "craving save stays below the behavior field in normal document flow while scrolling",
       "separate check-in and craving disclosures show complete information offline without edits or new drafts",
       "manifest/icons and scoped worker",
       "local display and body fonts load and remain cached offline, including accented characters",

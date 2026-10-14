@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
 import path from "node:path";
-import { validateState } from "../src/lib/storage.ts";
+import { parseBackup, validateState } from "../src/lib/storage.ts";
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const directory = path.join(repositoryRoot, "tmp/update-check");
 const approvedBaselines = [
@@ -11,6 +11,7 @@ const approvedBaselines = [
   "a42fc3bf9a0be0c3b09f4b3bb52d2830cb1e6f19",
   "bc176fd0ddf36bcd261ad2bd648537b717e2d7a7",
   "8090e444bf0e292ebfc92fe95e80b1ed86ba76dc",
+  "a8262d9113c1f7940cd730f83a2ad0c4a78eefac",
 ];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
@@ -31,7 +32,7 @@ if (baselineRef) {
   );
   if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd or 8090e44.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44 or a8262d9.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -143,6 +144,9 @@ const oldestBaseline = baselineCommit === approvedBaselines[0];
 // The first two releases used unlinked EIS and stayed on the craving after
 // saving. Recent published versions use the same flow as the current app.
 const legacyBaseline = approvedBaselines.slice(0, 2).includes(baselineCommit);
+const multipleSubstancesBaseline = baselineCommit === null;
+const fixtureUnknownCravingId = "update-unknown-substance";
+const fixtureScalarCravingId = "update-scalar-substance";
 const fixtureMomentId = "update-linked-emotions";
 const fixtureDay = "2026-10-12";
 let legacyMoment = null;
@@ -202,6 +206,14 @@ try {
     await page
       .getByRole("combobox", { name: "Middel of gedrag", exact: true })
       .selectOption("Cocaine");
+  if (multipleSubstancesBaseline) {
+    await page
+      .getByRole("button", { name: "Nog een middel toevoegen", exact: true })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Middel of gedrag 2", exact: true })
+      .selectOption("Alcohol");
+  }
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
@@ -217,7 +229,15 @@ try {
   expect(JSON.parse(saved).cravings[0].situation).toBe(
     "Updatecontrole: een fictief moment",
   );
-  if (!legacyBaseline)
+  if (multipleSubstancesBaseline) {
+    expect(JSON.parse(saved).cravings[0].substances).toEqual([
+      "Cocaine",
+      "Alcohol",
+    ]);
+    expect(Object.hasOwn(JSON.parse(saved).cravings[0], "substance")).toBe(
+      false,
+    );
+  } else if (!legacyBaseline)
     expect(JSON.parse(saved).cravings[0].substance).toBe("Cocaine");
   if (oldestBaseline)
     expect(Object.hasOwn(JSON.parse(saved), "palette")).toBe(false);
@@ -311,8 +331,27 @@ try {
     );
     // This profile is isolated and synthetic. Seed the richer saved shapes so
     // the previous published app must read them before the real worker update.
+    const unknownCraving = {
+      ...JSON.parse(saved).cravings[0],
+      id: fixtureUnknownCravingId,
+    };
+    delete unknownCraving.substance;
+    delete unknownCraving.substances;
     const seeded = validateState({
       ...JSON.parse(saved),
+      cravings: [
+        ...JSON.parse(saved).cravings,
+        unknownCraving,
+        ...(multipleSubstancesBaseline
+          ? [
+              {
+                ...unknownCraving,
+                id: fixtureScalarCravingId,
+                substance: "Cocaine",
+              },
+            ]
+          : []),
+      ],
       moments: [
         {
           id: fixtureMomentId,
@@ -375,6 +414,18 @@ try {
     await page
       .getByRole("combobox", { name: "Middel of gedrag", exact: true })
       .selectOption("3-MMC");
+  if (multipleSubstancesBaseline) {
+    await page
+      .getByRole("button", { name: "Nog een middel toevoegen", exact: true })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Middel of gedrag 2", exact: true })
+      .selectOption("Alcohol");
+    expect((await draftRecords())["craving:new"].substances).toEqual([
+      "3-MMC",
+      "Alcohol",
+    ]);
+  }
   if (!legacyBaseline) {
     await go(`/moment/${fixtureMomentId}`);
     await page
@@ -606,7 +657,9 @@ try {
   const beforeUpdate = await page.evaluate(() =>
     localStorage.getItem("anchor.app.data.v1"),
   );
-  expect(JSON.parse(beforeUpdate).cravings).toHaveLength(2);
+  expect(JSON.parse(beforeUpdate).cravings).toHaveLength(
+    JSON.parse(saved).cravings.length + 1,
+  );
   if (!legacyBaseline) {
     const snapshot = JSON.parse(beforeUpdate);
     expect(snapshot.moments).toHaveLength(1);
@@ -650,10 +703,29 @@ try {
         (entry) => !Object.hasOwn(entry, "substance"),
       ),
     ).toBe(true);
-  else
-    expect(
-      JSON.parse(beforeUpdate).cravings.map((entry) => entry.substance),
-    ).toEqual(["Cocaine", "3-MMC"]);
+  else {
+    const cravings = JSON.parse(beforeUpdate).cravings;
+    const unknown = cravings.find(
+      (entry) => entry.id === fixtureUnknownCravingId,
+    );
+    expect(Object.hasOwn(unknown, "substance")).toBe(false);
+    expect(Object.hasOwn(unknown, "substances")).toBe(false);
+    if (multipleSubstancesBaseline) {
+      expect(cravings[0].substances).toEqual(["Cocaine", "Alcohol"]);
+      expect(cravings.at(-1).substances).toEqual(["3-MMC", "Alcohol"]);
+      expect(
+        cravings.find((entry) => entry.id === fixtureScalarCravingId).substance,
+      ).toBe("Cocaine");
+    } else
+      expect(
+        cravings
+          .filter((entry) => entry.substance)
+          .map((entry) => entry.substance),
+      ).toEqual(["Cocaine", "3-MMC"]);
+    currentGuardChecks.push(
+      "historical scalar and unknown substances remain unchanged alongside current multiple-substance records and drafts when supported by the baseline",
+    );
+  }
   expect(
     JSON.parse(beforeUpdate).cravings.map((entry) => entry.thought),
   ).toContain("Concept blijft tijdens de update behouden.");
@@ -863,12 +935,72 @@ try {
       () =>
         JSON.parse(localStorage.getItem("anchor.app.data.v1")).cravings.length,
     ),
-  ).toBe(2);
+  ).toBe(JSON.parse(beforeUpdate).cravings.length);
   expect(
     await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
   ).toBe(paletteDraft);
   await page.goto("http://127.0.0.1:8801/Anchor/#/craving/new");
   await expect(page.getByLabel(/^Gedachte/)).toHaveValue(paletteDraftText);
+  const combinedSubstances = ["Cocaine", "Fictief tweede middel"];
+  await page
+    .getByRole("combobox", { name: "Middel of gedrag", exact: true })
+    .selectOption(combinedSubstances[0]);
+  await page
+    .getByRole("button", { name: "Nog een middel toevoegen", exact: true })
+    .click();
+  await page
+    .getByRole("combobox", { name: "Middel of gedrag 2", exact: true })
+    .selectOption("__custom__");
+  await page
+    .getByLabel("Naam van middel of gedrag 2", { exact: true })
+    .fill(combinedSubstances[1]);
+  await page
+    .getByRole("button", { name: "Craving opslaan", exact: true })
+    .click();
+  await expect(page).toHaveURL(/#\/today$/);
+  const finalRaw = await page.evaluate(() =>
+    localStorage.getItem("anchor.app.data.v1"),
+  );
+  const finalState = JSON.parse(finalRaw);
+  const combinedCraving = finalState.cravings.at(-1);
+  expect(combinedCraving.substances).toEqual(combinedSubstances);
+  expect(Object.hasOwn(combinedCraving, "substance")).toBe(false);
+  expect(combinedCraving.thought).toBe(paletteDraftText);
+  expect(finalState.cravings.slice(0, -1)).toEqual(
+    JSON.parse(afterPalette).cravings,
+  );
+  expect({
+    ...finalState,
+    cravings: JSON.parse(afterPalette).cravings,
+    revision: JSON.parse(afterPalette).revision,
+  }).toEqual(JSON.parse(afterPalette));
+  expect(await draftRecords()).toEqual({});
+  await go(`/craving/${combinedCraving.id}`);
+  await page.reload();
+  await expect(
+    page.getByRole("combobox", { name: "Middel of gedrag", exact: true }),
+  ).toHaveValue(combinedSubstances[0]);
+  await expect(
+    page.getByLabel("Naam van middel of gedrag 2", { exact: true }),
+  ).toHaveValue(combinedSubstances[1]);
+  expect(
+    await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
+  ).toBe(finalRaw);
+  await go("/settings");
+  const backupDownload = page.waitForEvent("download");
+  await page
+    .getByRole("button", { name: "Back-up downloaden", exact: true })
+    .click();
+  const backup = await backupDownload;
+  const backupPath = path.join(
+    directory,
+    "multi-substance-offline-backup.json",
+  );
+  await backup.saveAs(backupPath);
+  expect(parseBackup(await readFile(backupPath, "utf8"))).toEqual(finalState);
+  currentGuardChecks.push(
+    "after activation, offline multi-substance creation with a custom name, save, reload and validated backup preserve all historical records and settings",
+  );
   expect(errors).toEqual([]);
   const result = {
     passed: true,
@@ -884,11 +1016,12 @@ try {
       "updated app reloads fully offline",
       ...currentGuardChecks,
     ],
-    savedRecords: JSON.parse(beforeUpdate).cravings.length,
+    savedRecords: finalState.cravings.length,
+    recordsBeforeUpdate: JSON.parse(beforeUpdate).cravings.length,
     recordCounts: Object.fromEntries(
       ["cravings", "moments", "days", "goals", "growth"].map((kind) => [
         kind,
-        JSON.parse(beforeUpdate)[kind].length,
+        finalState[kind].length,
       ]),
     ),
     moduleA: originalModule,

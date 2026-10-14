@@ -51,6 +51,7 @@ import {
   createHistorySession,
 } from "./SecondaryViews";
 import { CravingView } from "./CravingView";
+import { cravingSubstances } from "./lib/substances";
 import "./secondary.css";
 import {
   MOODS,
@@ -1649,10 +1650,17 @@ function Today({
                     </span>
                     {type === "craving" ? (
                       <>
-                        {(item as CravingRecord).substance && (
-                          <p className="dp-hint">
-                            Middel of gedrag:{" "}
-                            {(item as CravingRecord).substance}
+                        {cravingSubstances(item as CravingRecord).some((name) =>
+                          name.trim(),
+                        ) && (
+                          <p className="dp-hint anchor-prose">
+                            {cravingSubstances(item as CravingRecord).length > 1
+                              ? "Middelen of gedrag"
+                              : "Middel of gedrag"}
+                            :{" "}
+                            {cravingSubstances(item as CravingRecord).join(
+                              ", ",
+                            )}
                           </p>
                         )}
                         <p className="dp-row-note">

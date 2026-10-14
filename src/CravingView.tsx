@@ -6,7 +6,8 @@ import {
   type CravingRecord,
 } from "./lib/storage";
 import { CRAVING_SUGGESTIONS } from "./lib/cravingSuggestions";
-import { SUBSTANCE_OPTIONS } from "./lib/substances";
+import { cravingSubstances, withCravingSubstances } from "./lib/substances";
+import { CravingSubstances } from "./CravingSubstances";
 import "./craving.css";
 
 type CravingViewProps = {
@@ -86,12 +87,6 @@ export function CravingView({
     "saved" | "deleted" | null
   >(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [customSubstance, setCustomSubstance] = useState(
-    () =>
-      !!value.substance &&
-      !SUBSTANCE_OPTIONS.some((option) => option === value.substance),
-  );
-  const substanceNameRef = useRef<HTMLInputElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const deleteButtonRef = useRef<HTMLButtonElement>(null);
@@ -140,23 +135,11 @@ export function CravingView({
     setError(null);
   }
 
-  function updateSubstance(substance: string) {
-    const next = { ...value };
-    if (substance) next.substance = substance;
-    else delete next.substance;
+  function updateSubstances(names: string[]) {
+    const next = withCravingSubstances(value, names);
     setValue(next);
     onDraft(next);
     setError(null);
-  }
-
-  function chooseSubstance(choice: string) {
-    const custom = choice === "__custom__";
-    setCustomSubstance(custom);
-    if (!custom) updateSubstance(choice);
-    else {
-      if (!customSubstance) updateSubstance("");
-      requestAnimationFrame(() => substanceNameRef.current?.focus());
-    }
   }
 
   function addSuggestion(
@@ -230,9 +213,19 @@ export function CravingView({
       );
       return;
     }
-    const nextRecord = { ...value };
-    if (value.substance?.trim()) nextRecord.substance = value.substance.trim();
-    else delete nextRecord.substance;
+    const names = cravingSubstances(value)
+      .map((name) => name.trim())
+      .filter(Boolean);
+    if (
+      new Set(names.map((name) => name.toLocaleLowerCase("nl-NL"))).size !==
+      names.length
+    ) {
+      showError(
+        "Een middel staat meerdere keren in de lijst. Verwijder de dubbele rij; je andere invoer blijft behouden.",
+      );
+      return;
+    }
+    const nextRecord = withCravingSubstances(value, names);
     for (const field of narrativeFields)
       nextRecord[field] = value[field].trim();
     const exists = state.cravings.some((item) => item.id === nextRecord.id);
@@ -383,40 +376,10 @@ export function CravingView({
           <p id={dateHintId} className="anchor-craving-day">
             {dayLabel(value.date)}
           </p>
-          <label className="dp-field" htmlFor={`${prefix}-substance`}>
-            <span id={`${prefix}-substance-label`}>Middel of gedrag</span>
-            <span className="dp-hint" id={`${prefix}-substance-hint`}>
-              Optioneel. Waar was de drang op gericht?
-            </span>
-            <select
-              id={`${prefix}-substance`}
-              aria-labelledby={`${prefix}-substance-label`}
-              aria-describedby={`${prefix}-substance-hint`}
-              value={customSubstance ? "__custom__" : (value.substance ?? "")}
-              onChange={(event) => chooseSubstance(event.target.value)}
-            >
-              <option value="">Niet ingevuld</option>
-              {SUBSTANCE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-              <option value="__custom__">Ander middel of gedrag</option>
-            </select>
-          </label>
-          {customSubstance && (
-            <label className="dp-field" htmlFor={`${prefix}-substance-name`}>
-              Naam van middel of gedrag
-              <input
-                id={`${prefix}-substance-name`}
-                ref={substanceNameRef}
-                type="text"
-                maxLength={120}
-                value={value.substance ?? ""}
-                onChange={(event) => updateSubstance(event.target.value)}
-              />
-            </label>
-          )}
+          <CravingSubstances
+            values={cravingSubstances(value)}
+            onChange={updateSubstances}
+          />
         </section>
 
         <section
@@ -539,7 +502,7 @@ export function CravingView({
             lichamelijke sensatie, emotie of gedrag. Alleen een middel kiezen is
             nog geen beschrijving.
           </p>
-          <div className="dp-actions dp-form-actions anchor-craving-save-actions">
+          <div className="dp-actions anchor-craving-save-actions">
             <button className="dp-button primary" type="submit">
               {record ? "Wijzigingen opslaan" : "Craving opslaan"}
             </button>

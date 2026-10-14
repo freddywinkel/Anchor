@@ -15,9 +15,6 @@
   margin: 0;
 }
 @media (max-width: 760px) {
-  html[data-anchor-compact-actions="true"] .dp .anchor-craving-save {
-    display: contents;
-  }
   html[data-anchor-compact-actions="true"] .dp .dp-form-actions,
   html[data-anchor-compact-actions="true"] .dp .anchor-save-bar {
     position: sticky;

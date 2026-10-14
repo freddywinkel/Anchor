@@ -2,6 +2,18 @@
 
 Auditdatum: 12 oktober 2026, aangevuld op 13 en 14 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
 
+## Meerdere middelen en craving-opslag onderaan — versie 1.11.0, 14 oktober 2026
+
+De mobiele craving-opslagbalk uit 1.10.0 stond al over eerdere vragen. Op gebruikersverzoek staat deze actie weer in de gewone documentvolgorde na Gedrag en de invoerhulp. De andere formulieren behouden hun bestaande gedrag.
+
+Een craving kan meerdere bekende middelen of eigen namen bevatten. Toevoegen focust de nieuwe keuze; verwijderen behoudt de overige namen, tekst en registratie-identiteit. Standaardkeuzes die al in een andere rij staan zijn uitgeschakeld; dubbele eigen namen krijgen lokale feedback. Vandaag, de volledige uitklapbare geschiedenis, zoeken en het weekoverzicht gebruiken dezelfde uitlezing van namen.
+
+De optionele additieve vorm `substances: string[]` bestaat naast het oude `substance: string`, nooit tegelijk. Oude registraties en concepten worden bij lezen niet herschreven en onbekend blijft onbekend. De nieuwe UI gebruikt bij één ingevuld middel de bestaande enkelvoudige vorm. Arrays zijn begrensd op twintig namen van maximaal 120 tekens; concepten bewaren tijdelijk lege of dubbele rijen, terwijl definitieve gegevens niet-lege unieke namen vereisen. Back-ups behouden beide vormen. Opslagsleutels, schemaversie, manifestidentiteit en expliciete updateactivering blijven gelijk. Oudere clients wijzen onbekende velden af in plaats van ze stilzwijgend weg te schrijven.
+
+Regressies controleren herladen, bewerken, invoerfouten, opslagfouten, naamverwijdering, zoeken, volledige weergave, smalle schermen en de plaats van de opslagknop. De updateverifier ondersteunt de voorafgaande publieke versie 1.10.0 (`a8262d9`) en alle zes conceptsoorten; de publieke verifier controleert meerdere middelen ook offline en in een gevalideerde back-up. Alleen synthetische browserprofielen worden gebruikt.
+
+Lokale verificatie: 90 unitgevallen, 153 unieke browsergevallen en 25 aanvullende controles geslaagd. Eén nieuw testgeval uit de volledige reeks had nog een oude filterselector ingelezen; de vier betreffende weergavegevallen zijn daarna met de juiste toegankelijke selector opnieuw geslaagd. Typecheck, formattering, dependency-audit en productiebuild/PWA-controle slagen. De huidige-clientupdate en de overgang vanaf `a8262d9` slagen elk met 14 controles, inclusief alle zes conceptsoorten, bytegelijk behoud van bestaande gegevens en offline opslaan/herladen/exporteren van een nieuwe combinatie. De schermcontrole omvat 320, 390 en 820 pixels en dubbele tekstgrootte. Bewijs staat onder `tmp/craving-multiple-20261014/` en `tmp/multiple-substances-20261014/`. De aangrenzende oude apps zijn ongewijzigd (457/457 en 494/494 bronbestanden, HEAD en Git-status).
+
 ## Auditverbeteringen — versie 1.10.0, 14 oktober 2026
 
 Beide aanvullende audits zijn verwerkt zonder opslagmigratie. De bestaande gegevens- en conceptsleutels, schema versie 1, appidentiteit, offlinefunctionaliteit en expliciete updateactivering blijven behouden. Geen automatische correcties van oude scores, lege nametingen, dubbele emotienamen of datums.

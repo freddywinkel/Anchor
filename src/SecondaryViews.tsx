@@ -27,7 +27,7 @@ import type {
 } from "./lib/storage";
 import { loadDrafts, saveDraft } from "./lib/storage";
 import type { Palette } from "./lib/palettes";
-import { SUBSTANCE_OPTIONS } from "./lib/substances";
+import { cravingSubstances, SUBSTANCE_OPTIONS } from "./lib/substances";
 import { WeekOverview, type WeekRecordTarget } from "./WeekOverview";
 import { MOODS } from "./RatingsEditor";
 import "./secondary.css";
@@ -231,6 +231,12 @@ function HistoryRecord({
   open: boolean;
   onToggle: (open: boolean) => void;
 }) {
+  const substances =
+    entry.type === "craving"
+      ? cravingSubstances(entry.item).filter((name) => name.trim())
+      : [];
+  const substanceLabel =
+    substances.length > 1 ? "Middelen of gedrag" : "Middel of gedrag";
   const typeLabel =
     entry.type === "day"
       ? "Dagoverzicht"
@@ -262,10 +268,7 @@ function HistoryRecord({
           </span>
           {entry.type === "craving" && (
             <span className="dp-history-preview">
-              Middel of gedrag:{" "}
-              {entry.item.substance?.trim()
-                ? entry.item.substance
-                : "Niet ingevuld"}
+              {substanceLabel}: {substances.join(", ") || "Niet ingevuld"}
             </span>
           )}
           {entry.type === "moment" && (
@@ -299,7 +302,7 @@ function HistoryRecord({
             <HistoryFields
               craving
               fields={[
-                ["Middel of gedrag", entry.item.substance],
+                [substanceLabel, substances.join("\n")],
                 ["Externe situatie (wie, wat en waar)", entry.item.situation],
                 ["Gedachte", entry.item.thought],
                 ["Lichamelijke sensatie", entry.item.bodySensation],
@@ -593,7 +596,7 @@ export function HistoryView({
           (period === "all" ||
             (item.date >= start && item.date <= currentDate)) &&
           (kind === "all" || kind === "craving") &&
-          `${item.substance || ""} ${item.situation} ${item.thought} ${item.bodySensation} ${item.emotion} ${item.behavior} craving drang`
+          `${cravingSubstances(item).join(" ")} ${item.situation} ${item.thought} ${item.bodySensation} ${item.emotion} ${item.behavior} craving drang`
             .toLocaleLowerCase("nl-NL")
             .includes(search),
       )
