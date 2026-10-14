@@ -1,6 +1,22 @@
 # Anchor — product- en technische audit
 
-Auditdatum: 12 oktober 2026, aangevuld op 13 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
+Auditdatum: 12 oktober 2026, aangevuld op 13 en 14 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
+
+## Auditverbeteringen — versie 1.10.0, 14 oktober 2026
+
+Beide aanvullende audits zijn verwerkt zonder opslagmigratie. De bestaande gegevens- en conceptsleutels, schema versie 1, appidentiteit, offlinefunctionaliteit en expliciete updateactivering blijven behouden. Geen automatische correcties van oude scores, lege nametingen, dubbele emotienamen of datums.
+
+- Geldige back-ups rond de maximale gegevensomvang zijn opnieuw importeerbaar: compacte nieuwe uitvoer en begrensde ondersteuning van oudere ingesprongen uitvoer, met ongewijzigde strenge controle van de gedecodeerde gegevens.
+- Eén actuele lokale kalenderdag voor Vandaag, geschiedenis en week; vernieuwen bij middernacht en hervatten. Concepten houden hun eigen tijdstip. Updatecontrole ook bij verbindingherstel en zichtbaarheid, begrensd met een uitgestelde controle.
+- Geschiedenis bewaart filters, open kaarten, geladen aantallen, focus en terugkeerpositie. Weekregels leiden naar de volledige bestaande registratie. Stemming krijgt leesbare woorden en nametingen op een andere datum tonen die datum in de samenvatting.
+- Lege nametingen worden niet nieuw aangemaakt door alleen op Opslaan te drukken. Expliciete nul, Nee en gekozen emoties blijven geldig. Alleen de nameting verwijderen vereist bevestiging en bewaart check-in en overige concepten; gedeeltelijk mislukte afronding kan veilig opnieuw.
+- Houvast-ingangen delen dezelfde terugroute. Conceptvensters tonen fouten binnen het venster en houden bevestiging, succes en sluiten toetsenbordbereikbaar. Browsernavigatie sluit open menu's.
+- Dagkeuze opent bestaande dagoverzichten of een nieuwe gekozen dag. Andere dagconcepten blijven intact. Cravingconcepten krijgen een hervatmelding; nieuwe dubbele emotiekeuzes worden voorkomen zonder oude registraties te wissen.
+- Kleine momenten laden per 50. Een lege geschiedenis toont één lege toestand. Mobiele opslagacties blijven bereikbaar als het scherm daarvoor ruimte heeft en keren bij grotere tekst/kleiner venster terug in documentvolgorde.
+
+Nieuwe regressies staan in `flow-reliability.spec.ts`, `followup-integrity.spec.ts`, `craving-resume.spec.ts`, `secondary-navigation.spec.ts` en de grensgevallen in `storage.test.ts`. De echte serviceworker-upgradetest ondersteunt expliciet de voorafgaande publieke versie 1.9.0 (`8090e44`), alle opgeslagen recordtypen en zes soorten concepten. Alle interactieve controles gebruiken geïsoleerde profielen met synthetische gegevens. Browsercontroles bewijzen geen fysieke iPhone/iPad-installatie of VoiceOver-conformiteit.
+
+Lokale verificatie: 82 unitgevallen, 141 unieke browsergevallen en 25 aanvullende controles geslaagd. De volledige browserreeks had aanvankelijk drie verouderde tekst-/terugkeerverwachtingen; na gerichte aanpassing slagen ook die drie controles. Typecheck, formattering, productiebuild/PWA-controle en dependency-audit slagen. De definitieve update vanaf `8090e44` slaagt met 12 controles, waaronder bytegelijk gegevensbehoud en hervatten van alle zes soorten concepten. Ook een huidige-clientupdate is met 12 controles getest. Online- en zichtbaarheidsevents ontdekken een echte gewijzigde worker, begrenzen controles tot eenmaal per minuut en houden concepten intact; dit is gecontroleerde browsersimulatie. Bij 44 combinaties van scherm, tekstgrootte en Chromium/Windows-WebKit zijn geen horizontale overloop, te kleine invoertekst of runtimefouten gevonden. De aangrenzende oude apps behouden 457/457 en 494/494 bronbestanden, HEAD en Git-status. Bewijs staat onder `tmp/production-fixes-20261014/`, `tmp/secondary-qa/` en `tmp/update-check/`.
 
 ## Kleine integratierelease — versie 1.9.0
 

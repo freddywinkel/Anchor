@@ -3,11 +3,14 @@ import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
 import path from "node:path";
+import { validateState } from "../src/lib/storage.ts";
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const directory = path.join(repositoryRoot, "tmp/update-check");
 const approvedBaselines = [
   "2072cf1af8ddedd1d49c2e40e8286d0874842ff3",
   "a42fc3bf9a0be0c3b09f4b3bb52d2830cb1e6f19",
+  "bc176fd0ddf36bcd261ad2bd648537b717e2d7a7",
+  "8090e444bf0e292ebfc92fe95e80b1ed86ba76dc",
 ];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
@@ -28,7 +31,7 @@ if (baselineRef) {
   );
   if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify approved release 2072cf1 or a42fc3b.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd or 8090e44.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -137,6 +140,11 @@ const documents = [];
 const currentGuardChecks = [];
 const draftKey = "anchor.app.drafts.v1";
 const oldestBaseline = baselineCommit === approvedBaselines[0];
+// The first two releases used unlinked EIS and stayed on the craving after
+// saving. Recent published versions use the same flow as the current app.
+const legacyBaseline = approvedBaselines.slice(0, 2).includes(baselineCommit);
+const fixtureMomentId = "update-linked-emotions";
+const fixtureDay = "2026-10-12";
 let legacyMoment = null;
 const draftRecords = async () =>
   page.evaluate(
@@ -190,14 +198,14 @@ try {
     ? page.getByLabel(/^Situatie \(wie, wat, waar\)/)
     : page.getByLabel("Wie, wat en waar", { exact: true });
   await situation.fill("Updatecontrole: een fictief moment");
-  if (!baselineCommit)
+  if (!legacyBaseline)
     await page
       .getByRole("combobox", { name: "Middel of gedrag", exact: true })
       .selectOption("Cocaine");
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  if (baselineCommit) {
+  if (legacyBaseline) {
     await expect(page).toHaveURL(/#\/craving\/(?!new)/);
     await expect(
       page.getByRole("heading", { name: "Je craving", exact: true }),
@@ -209,11 +217,11 @@ try {
   expect(JSON.parse(saved).cravings[0].situation).toBe(
     "Updatecontrole: een fictief moment",
   );
-  if (!baselineCommit)
+  if (!legacyBaseline)
     expect(JSON.parse(saved).cravings[0].substance).toBe("Cocaine");
   if (oldestBaseline)
     expect(Object.hasOwn(JSON.parse(saved), "palette")).toBe(false);
-  if (baselineCommit) {
+  if (legacyBaseline) {
     await go("/moment/new");
     await page.getByRole("button", { name: "-1 Laag", exact: true }).click();
     await page.getByLabel(/^Emotionele intensiteit/).fill("67");
@@ -249,7 +257,7 @@ try {
     expect(Object.hasOwn(legacyMoment.before, "emotionRatings")).toBe(false);
     expect(Object.hasOwn(legacyMoment.after, "emotionRatings")).toBe(false);
   }
-  if (!baselineCommit) {
+  if (!legacyBaseline) {
     await go("/plan");
     await page
       .getByRole("button", { name: "Doel toevoegen", exact: true })
@@ -275,7 +283,7 @@ try {
       .click();
     await expect(
       page.getByRole("button", {
-        name: baselineCommit ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
+        name: legacyBaseline ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
         exact: true,
       }),
     ).toBeVisible();
@@ -284,7 +292,7 @@ try {
     );
     await page
       .getByRole("button", {
-        name: baselineCommit ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
+        name: legacyBaseline ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
         exact: true,
       })
       .click();
@@ -301,6 +309,60 @@ try {
     currentGuardChecks.push(
       "opening a blank or unchanged goal creates no invisible draft",
     );
+    // This profile is isolated and synthetic. Seed the richer saved shapes so
+    // the previous published app must read them before the real worker update.
+    const seeded = validateState({
+      ...JSON.parse(saved),
+      moments: [
+        {
+          id: fixtureMomentId,
+          date: fixtureDay,
+          time: "09:00",
+          kind: "checkin",
+          before: {
+            mood: 0,
+            eis: null,
+            pans: 3,
+            emotionRatings: [
+              { id: "first-emotion", label: "Rustig", intensity: 0 },
+              { id: "second-emotion", label: "Onrustig", intensity: null },
+            ],
+          },
+          after: {
+            mood: null,
+            eis: null,
+            pans: 1,
+            emotionRatings: [
+              { id: "first-emotion", label: "Rustig", intensity: null },
+              { id: "second-emotion", label: "Onrustig", intensity: 40 },
+            ],
+          },
+          afterDate: "2026-10-13",
+          afterTime: "08:00",
+          activity: "Een grens aangeven",
+          attempted: false,
+          emotions: [],
+          note: "Fictieve check-in met onafhankelijke scores.",
+        },
+      ],
+      days: [
+        {
+          date: fixtureDay,
+          ratings: { mood: -1, eis: null },
+          sleepHours: "7",
+          sleepMinutes: "",
+          note: "Fictief dagoverzicht met gedeeltelijke slaap.",
+        },
+      ],
+      theme: "light",
+      homeShowGrowth: false,
+    });
+    saved = JSON.stringify(seeded);
+    await page.evaluate(
+      (raw) => localStorage.setItem("anchor.app.data.v1", raw),
+      saved,
+    );
+    await page.reload();
   }
   await page.goto("http://127.0.0.1:8801/Anchor/#/craving/new");
   await expect(
@@ -309,15 +371,24 @@ try {
   await page
     .getByLabel(/^Gedachte/)
     .fill("Concept blijft tijdens de update behouden.");
-  if (!baselineCommit)
+  if (!legacyBaseline)
     await page
       .getByRole("combobox", { name: "Middel of gedrag", exact: true })
       .selectOption("3-MMC");
-  if (!baselineCommit) {
+  if (!legacyBaseline) {
+    await go(`/moment/${fixtureMomentId}`);
+    await page
+      .getByLabel(/^In je eigen woorden/)
+      .fill("Bewaarde check-inwijziging voor de update.");
+    await go(`/day/${fixtureDay}`);
+    await page
+      .locator("textarea")
+      .last()
+      .fill("Bewaarde dagwijziging voor de update.");
     await go("/plan");
     await page
       .getByRole("button", {
-        name: baselineCommit ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
+        name: legacyBaseline ? "Bewerk doel Cocaine" : "Bewerken: doel Cocaine",
         exact: true,
       })
       .click();
@@ -334,8 +405,10 @@ try {
     await go("/today");
     expect(Object.keys(await draftRecords()).sort()).toEqual([
       "craving:new",
+      `day:${fixtureDay}`,
       "goal",
       "growth",
+      `moment:${fixtureMomentId}`,
       "plan",
     ]);
   }
@@ -363,11 +436,18 @@ try {
       page.getByRole("dialog", { name: "Open concepten", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".anchor-draft-row")).toHaveCount(
-      baselineCommit ? 1 : 4,
+      legacyBaseline ? 1 : 6,
     );
-    for (const title of baselineCommit
+    for (const title of legacyBaseline
       ? ["Craving"]
-      : ["Craving", "Doel", "Klein moment", "Mijn plan"])
+      : [
+          "Craving",
+          "Check-in",
+          "Dagoverzicht",
+          "Doel",
+          "Klein moment",
+          "Mijn plan",
+        ])
       await expect(draftRow(title)).toHaveCount(1);
   }
   expect(
@@ -377,11 +457,39 @@ try {
     await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
   ).toBe(draft);
   await expectWaitingWorker();
-  if (baselineCommit && !oldestBaseline)
+  if (legacyBaseline && !oldestBaseline)
     await draftRow("Craving")
       .getByRole("button", { name: "Verder schrijven", exact: true })
       .click();
-  if (!baselineCommit) {
+  if (!legacyBaseline) {
+    for (const [title, text, saveButton] of [
+      [
+        "Check-in",
+        "Bewaarde check-inwijziging voor de update.",
+        /^(?:Wijzigingen check-in opslaan|Check-in opslaan)$/,
+      ],
+      [
+        "Dagoverzicht",
+        "Bewaarde dagwijziging voor de update.",
+        "Dagoverzicht opslaan",
+      ],
+    ]) {
+      await draftRow(title)
+        .getByRole("button", { name: "Verder schrijven", exact: true })
+        .click();
+      await expect(page.locator("textarea").first()).toHaveValue(text);
+      await page.getByRole("button", { name: saveButton, exact: true }).click();
+      await go("/today");
+      await page
+        .getByRole("button", { name: "Bijwerken", exact: true })
+        .click();
+    }
+    expect(Object.keys(await draftRecords()).sort()).toEqual([
+      "craving:new",
+      "goal",
+      "growth",
+      "plan",
+    ]);
     await draftRow("Doel")
       .getByRole("button", { name: "Verder schrijven", exact: true })
       .click();
@@ -432,7 +540,7 @@ try {
       .click();
     expect(Object.keys(await draftRecords())).toEqual(["craving:new"]);
     currentGuardChecks.push(
-      "update from another screen reveals and resumes goal, plan and growth drafts without losing other drafts",
+      "update from another screen reveals and resumes check-in, day, goal, plan and growth drafts without losing the craving draft",
     );
 
     // Reproduce an empty draft left by the previous version. It is not silently discarded.
@@ -489,7 +597,7 @@ try {
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  if (baselineCommit) {
+  if (legacyBaseline) {
     await expect(page).toHaveURL(/#\/craving\/(?!new)/);
     await expect(
       page.getByRole("heading", { name: "Je craving", exact: true }),
@@ -499,7 +607,44 @@ try {
     localStorage.getItem("anchor.app.data.v1"),
   );
   expect(JSON.parse(beforeUpdate).cravings).toHaveLength(2);
-  if (baselineCommit)
+  if (!legacyBaseline) {
+    const snapshot = JSON.parse(beforeUpdate);
+    expect(snapshot.moments).toHaveLength(1);
+    expect(snapshot.moments[0]).toMatchObject({
+      id: fixtureMomentId,
+      before: {
+        mood: 0,
+        pans: 3,
+        emotionRatings: [{ intensity: 0 }, { intensity: null }],
+      },
+      after: {
+        mood: null,
+        pans: 1,
+        emotionRatings: [{ intensity: null }, { intensity: 40 }],
+      },
+      afterDate: "2026-10-13",
+      attempted: false,
+      note: "Bewaarde check-inwijziging voor de update.",
+    });
+    expect(snapshot.days).toHaveLength(1);
+    expect(snapshot.days[0]).toMatchObject({
+      date: fixtureDay,
+      sleepHours: "7",
+      sleepMinutes: "",
+      note: "Bewaarde dagwijziging voor de update.",
+    });
+    expect(snapshot.goals).toHaveLength(1);
+    expect(snapshot.growth).toHaveLength(1);
+    expect(snapshot.plan.action).toBe(
+      "Een fictieve wandeling voor de updatecontrole.",
+    );
+    expect(snapshot.theme).toBe("light");
+    expect(snapshot.homeShowGrowth).toBe(false);
+    currentGuardChecks.push(
+      "all six draft types can be resumed before activation; all saved record types, linked before/after scores, partial sleep and preferences are included in byte-preservation checks",
+    );
+  }
+  if (legacyBaseline)
     expect(
       JSON.parse(beforeUpdate).cravings.every(
         (entry) => !Object.hasOwn(entry, "substance"),
@@ -517,7 +662,7 @@ try {
       await page.evaluate(() => localStorage.getItem("anchor.app.drafts.v1")),
     ).records,
   ).toEqual({});
-  if (!baselineCommit) {
+  if (!legacyBaseline) {
     await go("/today");
     await page
       .getByRole("button", { name: "Meer opties", exact: true })
@@ -740,6 +885,12 @@ try {
       ...currentGuardChecks,
     ],
     savedRecords: JSON.parse(beforeUpdate).cravings.length,
+    recordCounts: Object.fromEntries(
+      ["cravings", "moments", "days", "goals", "growth"].map((kind) => [
+        kind,
+        JSON.parse(beforeUpdate)[kind].length,
+      ]),
+    ),
     moduleA: originalModule,
     moduleB: await page.locator('script[type="module"]').getAttribute("src"),
     documents,

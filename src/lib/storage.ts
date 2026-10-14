@@ -86,6 +86,10 @@ const MAX_STATE_LENGTH = 2_000_000;
 // available so an older state at the limit remains readable after normalization.
 const MAX_SERIALIZED_STATE_LENGTH =
   MAX_STATE_LENGTH + Math.max(...PALETTE_IDS.map(paletteStorageLength));
+// Earlier releases indented exports. Dense emotion arrays can more than double
+// in size from formatting alone; validate the decoded state against the same
+// storage limit after this bounded input check.
+const MAX_BACKUP_TEXT_LENGTH = 8_000_000;
 const MAX_DRAFT_LENGTH = 256_000;
 const MAX_RECORDS = 20_000;
 const BACKUP_FORMAT = "anchor.app.backup";
@@ -696,20 +700,16 @@ export function saveState(next: AppState): SaveResult {
 
 export function exportBackup(state: AppState): string {
   const validated = validateState(state);
-  return JSON.stringify(
-    {
-      format: BACKUP_FORMAT,
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      state: validated,
-    },
-    null,
-    2,
-  );
+  return JSON.stringify({
+    format: BACKUP_FORMAT,
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    state: validated,
+  });
 }
 
 export function parseBackup(text: string): AppState {
-  if (typeof text !== "string" || text.length > MAX_SERIALIZED_STATE_LENGTH * 2)
+  if (typeof text !== "string" || text.length > MAX_BACKUP_TEXT_LENGTH)
     return invalid("Dit back-upbestand is te groot.");
   let parsed: unknown;
   try {

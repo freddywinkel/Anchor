@@ -19,6 +19,10 @@ Een rustig, Nederlandstalig dagboek om meerdere keren per dag in te checken, een
 
 De app start leeg. Er zijn geen accounts, Fitbit-koppelingen, externe analytics, automatische synchronisatie of medische conclusies.
 
+Versie 1.10.0 verwerkt de flow- en betrouwbaarheidsaudits. Terugkijken onthoudt filters, uitgeklapte kaarten en de terugkeerplek; weekregels openen de volledige registratie. Via **Dag kiezen** kun je een eerdere dag aanvullen, met behoud van concepten. Een nameting wordt pas opgeslagen na een bewust antwoord en kan afzonderlijk worden verwijderd met bevestiging. Bestaande nametingen worden niet herschreven. Conceptvensters tonen fouten binnen het venster en herstellen de toetsenbordfocus.
+
+De actuele dag wordt vernieuwd bij middernacht en hervatten; opgeslagen datums en conceptdatums blijven behouden. Kleine momenten laden per 50. Opslaan blijft op passende telefoonschermen bereikbaar boven de navigatie; bij grote tekst of weinig schermhoogte staat de knop weer in de gewone pagina. Nieuwe back-ups zijn compacter en oude, ingesprongen back-ups blijven herstelbaar binnen gecontroleerde grenzen. De opslagversie, sleutels, manifestidentiteit en gebruikersgestuurde updateactivering blijven gelijk. Er is geen gegevensmigratie.
+
 Versie 1.9.0 verbindt cravingregistratie met **Houvast**: direct zonder eerst op te slaan, of vrijblijvend na het opslaan op Vandaag. Een onafgemaakt cravingconcept blijft bereikbaar via de terugknop, ook na de oefening. Houvast biedt bruikbare voorbeelden wanneer Mijn plan nog leeg is en een uitklapbaar onderdeel **Verder na gebruik**, zonder automatisch gebruik, een actie of contact vast te leggen.
 
 Kies in **Terugkijken → Periode → Afgelopen 7 dagen** het rustige weekoverzicht. Het toont de exacte periode, dagen met notities, aantallen per soort en welke scores zijn ingevuld. Check-ins, nametingen en dagoverzichten blijven afzonderlijk; onvolledige slaap blijft onvolledig. Ontbrekende dagen krijgen geen nulscore of herstelconclusie. De zoek- en soortfilters blijven beschikbaar voor de grafiek en registraties eronder.

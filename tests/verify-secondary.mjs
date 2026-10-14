@@ -747,7 +747,7 @@ try {
   await hp.getByText("Scores bekijken als tekst (1)", { exact: true }).click();
   await expect(
     hp.locator(".dp-mood-plot .dp-observation-details"),
-  ).toContainText("Stemming +1");
+  ).toContainText("Stemming Goed (+1)");
   await expect(
     hp.locator(".dp-mood-plot .dp-observation-details"),
   ).toContainText("Nameting");

@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { AppState } from "./lib/storage";
-import { today } from "./lib/storage";
 import { RatingLine } from "./RatingsEditor";
 import {
   buildWeekOverview,
@@ -15,6 +14,11 @@ const kindNames = {
   after: "Nameting",
   day: "Dagoverzicht",
 };
+export type WeekRecordTarget = {
+  type: "moment" | "craving" | "day";
+  id: string;
+};
+type OpenRecord = (target: WeekRecordTarget) => void;
 
 function dateLabel(value: string, weekday = false) {
   const [year, month, day] = value.split("-").map(Number);
@@ -26,9 +30,15 @@ function dateLabel(value: string, weekday = false) {
   }).format(new Date(year, month - 1, day, 12));
 }
 
-function Observation({ value }: { value: WeekObservation }) {
+function Observation({
+  value,
+  onOpenRecord,
+}: {
+  value: WeekObservation;
+  onOpenRecord: OpenRecord;
+}) {
   return (
-    <li className="dp-week-observation">
+    <li className="dp-week-observation" tabIndex={-1}>
       <strong>
         {kindNames[value.kind]}
         {value.time && ` · ${value.time}`}
@@ -57,13 +67,34 @@ function Observation({ value }: { value: WeekObservation }) {
         </p>
       )}
       {value.day && <p>Slaap: {sleepDescription(value.day)}.</p>}
+      <button
+        type="button"
+        className="dp-text-button dp-week-record-link"
+        aria-label={`Bekijk ${kindNames[value.kind].toLocaleLowerCase("nl-NL")} van ${dateLabel(value.date)}${value.time ? ` om ${value.time}` : ""}`}
+        onClick={() =>
+          onOpenRecord(
+            value.day
+              ? { type: "day", id: value.day.date }
+              : { type: "moment", id: value.moment!.id },
+          )
+        }
+      >
+        Volledige registratie bekijken
+      </button>
     </li>
   );
 }
 
-function WeekDayDetails({ day }: { day: WeekDay }) {
+function WeekDayDetails({
+  day,
+  onOpenRecord,
+}: {
+  day: WeekDay;
+  onOpenRecord: OpenRecord;
+}) {
   const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(20);
+  const listRef = useRef<HTMLUListElement>(null);
   const total =
     day.observations.length + day.cravings.length + day.growth.length;
   if (!total) {
@@ -107,21 +138,35 @@ function WeekDayDetails({ day }: { day: WeekDay }) {
     ? [
         ...day.observations.map((value) => ({
           key: value.id,
-          element: <Observation key={value.id} value={value} />,
+          element: (
+            <Observation
+              key={value.id}
+              value={value}
+              onOpenRecord={onOpenRecord}
+            />
+          ),
         })),
         ...day.cravings.map((value) => ({
           key: `craving:${value.id}`,
           element: (
-            <li key={`craving:${value.id}`}>
+            <li key={`craving:${value.id}`} tabIndex={-1}>
               <strong>Craving · {value.time}</strong>
               <p>Middel of gedrag: {value.substance || "niet ingevuld"}.</p>
+              <button
+                type="button"
+                className="dp-text-button dp-week-record-link"
+                aria-label={`Bekijk craving van ${dateLabel(value.date)} om ${value.time}`}
+                onClick={() => onOpenRecord({ type: "craving", id: value.id })}
+              >
+                Volledige registratie bekijken
+              </button>
             </li>
           ),
         })),
         ...day.growth.map((value) => ({
           key: `growth:${value.id}`,
           element: (
-            <li key={`growth:${value.id}`}>
+            <li key={`growth:${value.id}`} tabIndex={-1}>
               <strong>Klein moment</strong>
               <p className="dp-preserve-lines">{value.text}</p>
             </li>
@@ -138,14 +183,22 @@ function WeekDayDetails({ day }: { day: WeekDay }) {
         </summary>
         {open && (
           <div className="dp-week-day-body">
-            <ul className="dp-week-observations">
+            <ul className="dp-week-observations" ref={listRef}>
               {rows.slice(0, visible).map((row) => row.element)}
             </ul>
             {visible < rows.length && (
               <button
                 type="button"
                 className="dp-button"
-                onClick={() => setVisible((count) => count + 20)}
+                onClick={() => {
+                  const firstAdded = visible;
+                  setVisible((count) => count + 20);
+                  requestAnimationFrame(() =>
+                    listRef.current
+                      ?.querySelectorAll<HTMLElement>(":scope > li")
+                      [firstAdded]?.focus(),
+                  );
+                }}
               >
                 Meer van deze dag tonen ({rows.length - visible})
               </button>
@@ -157,11 +210,18 @@ function WeekDayDetails({ day }: { day: WeekDay }) {
   );
 }
 
-export function WeekOverview({ state }: { state: AppState }) {
-  const endDate = today();
+export function WeekOverview({
+  state,
+  currentDate,
+  onOpenRecord,
+}: {
+  state: AppState;
+  currentDate: string;
+  onOpenRecord: OpenRecord;
+}) {
   const week = useMemo(
-    () => buildWeekOverview(state, endDate),
-    [state, endDate],
+    () => buildWeekOverview(state, currentDate),
+    [state, currentDate],
   );
   return (
     <section
@@ -227,7 +287,11 @@ export function WeekOverview({ state }: { state: AppState }) {
       </details>
       <ul className="dp-week-days" aria-label="De zeven dagen van je week">
         {week.days.map((day) => (
-          <WeekDayDetails key={day.date} day={day} />
+          <WeekDayDetails
+            key={day.date}
+            day={day}
+            onOpenRecord={onOpenRecord}
+          />
         ))}
       </ul>
       <p className="dp-muted">

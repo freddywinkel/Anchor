@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import {
   ArrowUpRight,
   Check,
@@ -18,10 +25,11 @@ import type {
   Moment,
   Ratings,
 } from "./lib/storage";
-import { today, loadDrafts, saveDraft } from "./lib/storage";
+import { loadDrafts, saveDraft } from "./lib/storage";
 import type { Palette } from "./lib/palettes";
 import { SUBSTANCE_OPTIONS } from "./lib/substances";
-import { WeekOverview } from "./WeekOverview";
+import { WeekOverview, type WeekRecordTarget } from "./WeekOverview";
+import { MOODS } from "./RatingsEditor";
 import "./secondary.css";
 
 const palettes: { id: Palette; name: string; description: string }[] = [
@@ -64,17 +72,15 @@ function dateLabel(value: string, includeYear = false) {
       : {}),
   }).format(new Date(year, month - 1, day, 12));
 }
-function recentStart() {
-  const [year, month, day] = today().split("-").map(Number);
+function recentStart(currentDate: string) {
+  const [year, month, day] = currentDate.split("-").map(Number);
   const date = new Date(year, month - 1, day - 6, 12);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 function moodLabel(value: number | null) {
   return value === null
     ? "niet ingevuld"
-    : value > 0
-      ? `+${value}`
-      : String(value);
+    : `${MOODS[value + 2]} (${value > 0 ? "+" : ""}${value})`;
 }
 function ratingsSearchText(ratings: Ratings | null) {
   return `${ratings?.emotionRatings?.map((emotion) => emotion.label).join(" ") || ""} ${ratings?.pans != null ? `pannetjes ${ratings.pans}/5` : ""}`;
@@ -166,6 +172,27 @@ type HistoryEntry =
   | { type: "moment"; item: Moment; date: string; time: string }
   | { type: "craving"; item: CravingRecord; date: string; time: string }
   | { type: "day"; item: Day; date: string; time: string };
+export type HistorySession = {
+  period: "all" | "week";
+  kind: "all" | "checkin" | "craving" | "day";
+  query: string;
+  expanded: string[];
+  visible: Record<HistoryEntry["type"], number>;
+  scrollY: number;
+  returnRecord: string | null;
+};
+export const createHistorySession = (): HistorySession => ({
+  period: "all",
+  kind: "all",
+  query: "",
+  expanded: [],
+  visible: { moment: 50, craving: 50, day: 50 },
+  scrollY: 0,
+  returnRecord: null,
+});
+const historyKey = (entry: HistoryEntry) =>
+  `${entry.type}:${entry.type === "day" ? entry.date : entry.item.id}`;
+const historyElementId = (key: string) => `anchor-history-record-${key}`;
 const historyGroupNames = {
   moment: "Check-ins",
   craving: "Cravings",
@@ -196,11 +223,14 @@ function HistoryFields({
 function HistoryRecord({
   entry,
   onEdit,
+  open,
+  onToggle,
 }: {
   entry: HistoryEntry;
   onEdit: () => void;
+  open: boolean;
+  onToggle: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const typeLabel =
     entry.type === "day"
       ? "Dagoverzicht"
@@ -213,8 +243,13 @@ function HistoryRecord({
       : "Niet ingevuld";
   return (
     <details
+      id={historyElementId(historyKey(entry))}
       className="dp-history-record"
-      onToggle={(event) => setOpen(event.currentTarget.open)}
+      open={open}
+      onToggle={(event) => {
+        if (event.currentTarget.open !== open)
+          onToggle(event.currentTarget.open);
+      }}
     >
       <summary className="dp-history-summary">
         <span className="dp-history-summary-text">
@@ -243,7 +278,9 @@ function HistoryRecord({
               {(entry.item.activity || entry.item.after) && (
                 <span className="dp-history-preview">
                   {entry.item.after
-                    ? "Nameting ingevuld"
+                    ? entry.item.afterDate !== entry.item.date
+                      ? `Nameting: ${afterLabel}`
+                      : "Nameting bewaard"
                     : "Nameting niet ingevuld"}
                 </span>
               )}
@@ -361,17 +398,18 @@ function HistoryRecord({
 function HistoryGroup({
   type,
   entries,
-  resetKey,
+  session,
+  onSessionChange,
   onEdit,
 }: {
   type: HistoryEntry["type"];
   entries: HistoryEntry[];
-  resetKey: string;
+  session: HistorySession;
+  onSessionChange: Dispatch<SetStateAction<HistorySession>>;
   onEdit: (entry: HistoryEntry) => void;
 }) {
-  const [visibleCount, setVisibleCount] = useState(50);
+  const visibleCount = session.visible[type];
   const listRef = useRef<HTMLOListElement>(null);
-  useEffect(() => setVisibleCount(50), [resetKey]);
   const visibleEntries = entries.slice(0, visibleCount);
   const headingId = `anchor-history-${type}-heading`;
   const listId = `anchor-history-${type}-records`;
@@ -395,7 +433,21 @@ function HistoryGroup({
               entry.type === "day" ? `day-${entry.date}` : entry.item.id;
             return (
               <li key={id} data-history-id={id}>
-                <HistoryRecord entry={entry} onEdit={() => onEdit(entry)} />
+                <HistoryRecord
+                  entry={entry}
+                  open={session.expanded.includes(historyKey(entry))}
+                  onToggle={(open) =>
+                    onSessionChange((current) => ({
+                      ...current,
+                      expanded: open
+                        ? [...new Set([...current.expanded, historyKey(entry)])]
+                        : current.expanded.filter(
+                            (key) => key !== historyKey(entry),
+                          ),
+                    }))
+                  }
+                  onEdit={() => onEdit(entry)}
+                />
               </li>
             );
           })}
@@ -419,7 +471,10 @@ function HistoryGroup({
               aria-controls={listId}
               onClick={() => {
                 const firstAdded = visibleEntries.length;
-                setVisibleCount((count) => count + 50);
+                onSessionChange((current) => ({
+                  ...current,
+                  visible: { ...current.visible, [type]: visibleCount + 50 },
+                }));
                 requestAnimationFrame(() =>
                   listRef.current
                     ?.querySelectorAll<HTMLElement>("li > details > summary")
@@ -438,22 +493,67 @@ function HistoryGroup({
 
 export function HistoryView({
   state,
+  currentDate,
+  session,
+  onSessionChange,
   onOpenMoment,
   onOpenDay,
   onOpenCraving,
 }: {
   state: AppState;
+  currentDate: string;
+  session: HistorySession;
+  onSessionChange: Dispatch<SetStateAction<HistorySession>>;
   onOpenMoment: (id: string) => void;
   onOpenDay: (date: string) => void;
   onOpenCraving: (id: string) => void;
 }) {
-  const [period, setPeriod] = useState("all");
-  const [kind, setKind] = useState("all");
-  const [query, setQuery] = useState("");
+  const { period, kind, query } = session;
+  const [reveal, setReveal] = useState<WeekRecordTarget | null>(null);
+  const returnPosition = useRef({
+    scrollY: session.scrollY,
+    record: session.returnRecord,
+  });
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const { scrollY, record } = returnPosition.current;
+      if (record) {
+        const summary = document
+          .getElementById(historyElementId(record))
+          ?.querySelector<HTMLElement>("summary");
+        if (summary) {
+          summary.focus({ preventScroll: true });
+          window.scrollTo({ top: scrollY, behavior: "instant" });
+        } else {
+          // Deletion or an edit can remove this card from the current selection.
+          // Keep the user's filters, but never restore focus above the viewport.
+          const heading = document.getElementById("dp-history-entries");
+          heading?.focus({ preventScroll: true });
+          heading?.scrollIntoView({ block: "start", behavior: "instant" });
+          onSessionChange((current) => ({
+            ...current,
+            returnRecord: null,
+            scrollY: 0,
+          }));
+        }
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  const changeFilter = (
+    patch: Partial<Pick<HistorySession, "period" | "kind" | "query">>,
+  ) =>
+    onSessionChange((current) => ({
+      ...current,
+      ...patch,
+      visible: { moment: 50, craving: 50, day: 50 },
+      scrollY: 0,
+      returnRecord: null,
+    }));
   const entries = useMemo<HistoryEntry[]>(() => {
-    const start = recentStart();
+    const start = recentStart(currentDate);
     const withinPeriod = (date: string) =>
-      period === "all" || (date >= start && date <= today());
+      period === "all" || (date >= start && date <= currentDate);
     const search = query.trim().toLocaleLowerCase("nl-NL");
     const moments = state.moments
       .filter(
@@ -474,7 +574,8 @@ export function HistoryView({
     const days = state.days
       .filter(
         (item) =>
-          (period === "all" || (item.date >= start && item.date <= today())) &&
+          (period === "all" ||
+            (item.date >= start && item.date <= currentDate)) &&
           (kind === "all" || kind === "day") &&
           `${item.note} ${ratingsSearchText(item.ratings)} mijn hele dag dagsamenvatting`
             .toLocaleLowerCase("nl-NL")
@@ -489,7 +590,8 @@ export function HistoryView({
     const cravings = state.cravings
       .filter(
         (item) =>
-          (period === "all" || (item.date >= start && item.date <= today())) &&
+          (period === "all" ||
+            (item.date >= start && item.date <= currentDate)) &&
           (kind === "all" || kind === "craving") &&
           `${item.substance || ""} ${item.situation} ${item.thought} ${item.bodySensation} ${item.emotion} ${item.behavior} craving drang`
             .toLocaleLowerCase("nl-NL")
@@ -504,7 +606,44 @@ export function HistoryView({
     return [...moments, ...days, ...cravings].sort((a, b) =>
       `${b.date} ${b.time}`.localeCompare(`${a.date} ${a.time}`),
     );
-  }, [state.moments, state.days, state.cravings, period, kind, query]);
+  }, [
+    state.moments,
+    state.days,
+    state.cravings,
+    period,
+    kind,
+    query,
+    currentDate,
+  ]);
+  useEffect(() => {
+    if (!reveal) return;
+    const key = `${reveal.type}:${reveal.id}`;
+    const group = entries.filter((entry) => entry.type === reveal.type);
+    const index = group.findIndex((entry) => historyKey(entry) === key);
+    if (index < 0) {
+      setReveal(null);
+      return;
+    }
+    if (index >= session.visible[reveal.type]) {
+      onSessionChange((current) => ({
+        ...current,
+        visible: {
+          ...current.visible,
+          [reveal.type]: Math.ceil((index + 1) / 50) * 50,
+        },
+      }));
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const target = document
+        .getElementById(historyElementId(key))
+        ?.querySelector<HTMLElement>("summary");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "start", behavior: "instant" });
+      setReveal(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [reveal, entries, session.visible, onSessionChange]);
   const observations = state.moments
     .filter(
       (item) =>
@@ -542,23 +681,37 @@ export function HistoryView({
     .filter(
       (point) =>
         period === "all" ||
-        (point.date >= recentStart() && point.date <= today()),
+        (point.date >= recentStart(currentDate) && point.date <= currentDate),
     )
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
   const graphPoints = observations.slice(-40);
+  const hasRecords =
+    state.moments.length + state.cravings.length + state.days.length > 0;
   return (
     <div className="dp-history">
       <div className="dp-history-filters dp-card">
         <label className="dp-field">
           Periode
-          <select value={period} onChange={(e) => setPeriod(e.target.value)}>
+          <select
+            value={period}
+            onChange={(e) =>
+              changeFilter({
+                period: e.target.value as HistorySession["period"],
+              })
+            }
+          >
             <option value="week">Afgelopen 7 dagen</option>
             <option value="all">Alle dagen</option>
           </select>
         </label>
         <label className="dp-field">
           Soort registratie
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          <select
+            value={kind}
+            onChange={(e) =>
+              changeFilter({ kind: e.target.value as HistorySession["kind"] })
+            }
+          >
             <option value="all">Alles</option>
             <option value="checkin">Check-ins</option>
             <option value="craving">Cravings</option>
@@ -573,12 +726,32 @@ export function HistoryView({
             type="search"
             placeholder="Middel, situatie, emotie of activiteit"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => changeFilter({ query: e.target.value })}
           />
         </label>
       </div>
-      {period === "week" && <WeekOverview state={state} />}
-      {(kind === "all" || kind === "checkin") && (
+      {period === "week" && (
+        <WeekOverview
+          state={state}
+          currentDate={currentDate}
+          onOpenRecord={(target) => {
+            onSessionChange((current) => ({
+              ...current,
+              kind: "all",
+              query: "",
+              expanded: [
+                ...new Set([
+                  ...current.expanded,
+                  `${target.type}:${target.id}`,
+                ]),
+              ],
+              returnRecord: null,
+            }));
+            setReveal(target);
+          }}
+        />
+      )}
+      {hasRecords && (kind === "all" || kind === "checkin") && (
         <section
           className="dp-mood-plot dp-card"
           aria-labelledby="dp-mood-plot-title"
@@ -600,7 +773,7 @@ export function HistoryView({
               <div className="dp-chart-frame">
                 <div className="dp-chart-axis" aria-hidden="true">
                   {[2, 1, 0, -1, -2].map((value) => (
-                    <span key={value}>{moodLabel(value)}</span>
+                    <span key={value}>{value > 0 ? `+${value}` : value}</span>
                   ))}
                 </div>
                 <svg
@@ -696,47 +869,69 @@ export function HistoryView({
       )}
       <section aria-labelledby="dp-history-entries">
         <div className="dp-section-head">
-          <h2 id="dp-history-entries">Registraties</h2>
+          <h2 id="dp-history-entries" tabIndex={-1}>
+            Registraties
+          </h2>
           <p className="dp-muted" role="status">
             {entries.length} gevonden
           </p>
         </div>
         {!entries.length && (
           <div className="dp-empty-inline">
-            <h3>Geen registraties gevonden</h3>
-            <p>Probeer een andere periode of verwijder je zoekterm.</p>
-            <button
-              className="dp-button quiet"
-              onClick={() => {
-                setPeriod("all");
-                setKind("all");
-                setQuery("");
-              }}
-            >
-              Filters wissen
-            </button>
+            <h3>
+              {hasRecords
+                ? "Geen registraties gevonden"
+                : "Je hebt nog geen registraties"}
+            </h3>
+            <p>
+              {hasRecords
+                ? "Probeer een andere periode of verwijder je zoekterm."
+                : "Je eerste check-in, craving of dagoverzicht verschijnt hier zodra je iets bewaart."}
+            </p>
+            {hasRecords ? (
+              <button
+                className="dp-button quiet"
+                onClick={() => {
+                  changeFilter({ period: "all", kind: "all", query: "" });
+                }}
+              >
+                Filters wissen
+              </button>
+            ) : (
+              <a className="dp-button quiet" href="#/today">
+                Naar Vandaag
+              </a>
+            )}
           </div>
         )}
-        {(["moment", "craving", "day"] as const)
-          .filter(
-            (type) =>
-              kind === "all" || kind === (type === "moment" ? "checkin" : type),
-          )
-          .map((type) => (
-            <HistoryGroup
-              key={type}
-              type={type}
-              entries={entries.filter((entry) => entry.type === type)}
-              resetKey={JSON.stringify([period, kind, query])}
-              onEdit={(entry) =>
-                entry.type === "day"
-                  ? onOpenDay(entry.date)
-                  : entry.type === "craving"
-                    ? onOpenCraving(entry.item.id)
-                    : onOpenMoment(entry.item.id)
-              }
-            />
-          ))}
+        {!!entries.length &&
+          (["moment", "craving", "day"] as const)
+            .filter(
+              (type) =>
+                kind === "all" ||
+                kind === (type === "moment" ? "checkin" : type),
+            )
+            .map((type) => (
+              <HistoryGroup
+                key={type}
+                type={type}
+                entries={entries.filter((entry) => entry.type === type)}
+                session={session}
+                onSessionChange={onSessionChange}
+                onEdit={(entry) => {
+                  onSessionChange((current) => ({
+                    ...current,
+                    scrollY: window.scrollY,
+                    returnRecord: historyKey(entry),
+                  }));
+                  entry.type === "day"
+                    ? onOpenDay(entry.date)
+                    : entry.type === "craving"
+                      ? onOpenCraving(entry.item.id)
+                      : onOpenMoment(entry.item.id);
+                }}
+              />
+            ))}
       </section>
     </div>
   );
@@ -1368,15 +1563,17 @@ export function PlanView({ state, onSave }: { state: AppState; onSave: Save }) {
 
 export function GrowthView({
   state,
+  currentDate,
   onSave,
 }: {
   state: AppState;
+  currentDate: string;
   onSave: Save;
 }) {
   type Growth = AppState["growth"][number];
   const empty = (): Growth => ({
     id: crypto.randomUUID(),
-    date: today(),
+    date: currentDate,
     text: "",
     favorite: false,
   });
@@ -1393,7 +1590,28 @@ export function GrowthView({
   const [removing, setRemoving] = useState<string | null>(null);
   const [discarding, setDiscarding] = useState(false);
   const [hasDraft, setHasDraft] = useState(!!loadDrafts().growth);
+  const previousDate = useRef(currentDate);
+  useEffect(() => {
+    const previous = previousDate.current;
+    previousDate.current = currentDate;
+    if (previous === currentDate) return;
+    if (
+      !hasDraft &&
+      !entry.text &&
+      !entry.favorite &&
+      entry.date === previous &&
+      !state.growth.some((item) => item.id === entry.id)
+    ) {
+      setEntry((current) => ({ ...current, date: currentDate }));
+    }
+  }, [currentDate]);
   const [cleanupPending, setCleanupPending] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(50);
+  const growthList = useRef<HTMLUListElement>(null);
+  const sortedGrowth = useMemo(
+    () => [...state.growth].sort((a, b) => b.date.localeCompare(a.date)),
+    [state.growth],
+  );
   const textField = useRef<HTMLTextAreaElement>(null);
   const dateField = useRef<HTMLInputElement>(null);
   const actionErrorField = useRef<HTMLParagraphElement>(null);
@@ -1464,7 +1682,7 @@ export function GrowthView({
     if (
       !/^\d{4}-\d{2}-\d{2}$/.test(entry.date) ||
       entry.date < "1900-01-01" ||
-      entry.date > today() ||
+      entry.date > currentDate ||
       parsedDate.getFullYear() !== year ||
       parsedDate.getMonth() + 1 !== month ||
       parsedDate.getDate() !== day
@@ -1536,7 +1754,7 @@ export function GrowthView({
             aria-describedby={dateError ? "dp-growth-date-error" : undefined}
             value={entry.date}
             min="1900-01-01"
-            max={today()}
+            max={currentDate}
             required
             onChange={(event) => {
               setDateError("");
@@ -1632,11 +1850,14 @@ export function GrowthView({
             <p>Je kunt later terugkomen als je iets wilt onthouden.</p>
           </div>
         ) : (
-          <ul className="dp-growth-list">
-            {[...state.growth]
-              .sort((a, b) => b.date.localeCompare(a.date))
-              .map((item) => (
-                <li key={item.id}>
+          <>
+            <ul
+              className="dp-growth-list"
+              id="anchor-growth-records"
+              ref={growthList}
+            >
+              {sortedGrowth.slice(0, visibleCount).map((item) => (
+                <li key={item.id} tabIndex={-1} data-growth-id={item.id}>
                   <div>
                     <p className="dp-kicker">{dateLabel(item.date)}</p>
                     <p className="dp-growth-text">{item.text}</p>
@@ -1773,7 +1994,34 @@ export function GrowthView({
                   )}
                 </li>
               ))}
-          </ul>
+            </ul>
+            {state.growth.length > 50 && (
+              <div className="dp-history-pagination">
+                <p className="dp-muted" role="status">
+                  Je ziet {Math.min(visibleCount, state.growth.length)} van{" "}
+                  {state.growth.length} kleine momenten.
+                </p>
+                {visibleCount < state.growth.length && (
+                  <button
+                    type="button"
+                    className="dp-button"
+                    aria-controls="anchor-growth-records"
+                    onClick={() => {
+                      const firstAdded = visibleCount;
+                      setVisibleCount((count) => count + 50);
+                      requestAnimationFrame(() =>
+                        growthList.current
+                          ?.querySelectorAll<HTMLElement>(":scope > li")
+                          [firstAdded]?.focus(),
+                      );
+                    }}
+                  >
+                    Meer kleine momenten tonen
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>

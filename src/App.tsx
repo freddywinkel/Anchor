@@ -48,6 +48,7 @@ import {
   PlanView,
   GrowthView,
   SettingsView,
+  createHistorySession,
 } from "./SecondaryViews";
 import { CravingView } from "./CravingView";
 import "./secondary.css";
@@ -145,12 +146,32 @@ function Dialog({
     return () => {
       dialog.close();
       requestAnimationFrame(() => {
+        const activeDialog =
+          document.querySelector<HTMLDialogElement>("dialog[open]");
+        if (activeDialog) {
+          if (!activeDialog.contains(document.activeElement))
+            activeDialog.querySelector<HTMLElement>("button")?.focus();
+          return;
+        }
+        if (location.hash !== previousRoute) return;
         if (
-          location.hash === previousRoute &&
           previous instanceof HTMLElement &&
-          previous.isConnected
-        )
+          previous.isConnected &&
+          previous !== document.body &&
+          previous !== document.documentElement
+        ) {
           previous.focus({ preventScroll: true });
+          if (document.activeElement === previous) return;
+        }
+        // Switching dialogs can leave BODY as the captured opener. A draft
+        // deletion can also replace the original button with a new page.
+        const menu = document.querySelector<HTMLElement>(
+          '[aria-label="Meer opties"]',
+        );
+        const fallback = menu?.getClientRects().length
+          ? menu
+          : document.querySelector<HTMLElement>("main h1");
+        fallback?.focus({ preventScroll: true });
       });
     };
   }, []);
@@ -221,6 +242,8 @@ export function App() {
   const [writer, setWriter] = useState(false);
   const [lockChecked, setLockChecked] = useState(false);
   const [route, setRoute] = useState(() => location.hash.slice(1) || "/today");
+  const [currentDate, setCurrentDate] = useState(today);
+  const [historySession, setHistorySession] = useState(createHistorySession);
   const [drafts, setDrafts] = useState(loadDrafts);
   const [draftError, setDraftError] = useState("");
   const [pendingDraftCompletion, setPendingDraftCompletion] = useState<
@@ -244,17 +267,19 @@ export function App() {
   const importSequence = useRef(0);
   const recoverySnapshot = useRef<string | null | undefined>(undefined);
   const [discardKey, setDiscardKey] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState("");
+  const dialogErrorRef = useRef<HTMLParagraphElement>(null);
+  const registrationRef = useRef<ServiceWorkerRegistration | undefined>(
+    undefined,
+  );
+  const lastUpdateCheck = useRef(0);
   const {
     needRefresh: [needRefresh],
     offlineReady: [offlineReady],
     updateServiceWorker,
   } = useRegisterSW({
     onRegisteredSW(_url, registration) {
-      if (registration) {
-        window.addEventListener("focus", () => {
-          if (navigator.onLine) void registration.update().catch(() => {});
-        });
-      }
+      registrationRef.current = registration;
     },
     onRegisterError() {
       setPwaWarning(
@@ -263,19 +288,27 @@ export function App() {
     },
   });
   const path = route.split("?")[0];
-  const helpCraving = new URLSearchParams(route.split("?")[1]).get("craving");
+  const routeQuery = new URLSearchParams(route.split("?")[1]);
+  const returnTo =
+    routeQuery.get("returnTo") === "history" ? "/history" : "/today";
+  const returnQuery = returnTo === "/history" ? "returnTo=history" : "";
+  const helpCraving = routeQuery.get("craving");
   const helpQuery =
     helpCraving &&
     (helpCraving === "new" ||
       state.cravings.some((item) => item.id === helpCraving) ||
       !!drafts[`craving:${helpCraving}`])
-      ? `?craving=${encodeURIComponent(helpCraving)}`
+      ? `?craving=${encodeURIComponent(helpCraving)}${returnQuery ? `&${returnQuery}` : ""}`
       : "";
+  const supportDestination = path.startsWith("/craving/")
+    ? `/help?craving=${encodeURIComponent(path.split("/")[2])}${returnQuery ? `&${returnQuery}` : ""}`
+    : `/help${helpQuery}`;
   const navigate = (to: string) => {
     setOfferSupport(false);
     importSequence.current++;
     setPendingDraftCompletion(null);
     setModal(null);
+    setDialogError("");
     setRoute(to);
     location.hash = to;
   };
@@ -283,10 +316,35 @@ export function App() {
   function openDrafts() {
     setDrafts(loadDrafts());
     setDiscardKey(null);
+    setDialogError("");
     setModal("drafts");
+  }
+  function showDialogError(message: string) {
+    setDialogError(message);
+    requestAnimationFrame(() => {
+      dialogErrorRef.current?.focus();
+      dialogErrorRef.current?.scrollIntoView({ block: "nearest" });
+    });
+  }
+  function focusDraftControl(key?: string, keep = false) {
+    requestAnimationFrame(() => {
+      const dialog = document.querySelector("dialog[open]");
+      const row = key
+        ? dialog?.querySelector(`[data-draft-key="${CSS.escape(key)}"]`)
+        : null;
+      const target =
+        row?.querySelector<HTMLElement>(
+          keep ? "[data-keep-draft]" : "button",
+        ) ??
+        dialog?.querySelector<HTMLElement>(
+          ".anchor-draft-row button, [data-drafts-empty]",
+        );
+      target?.focus();
+    });
   }
   function openDraftRecovery() {
     try {
+      setDialogError("");
       setDraftRecoveryRaw(localStorage.getItem(DRAFT_STORAGE_KEY));
       setDraftRecoveryDownloaded(false);
       setModal("draft-recovery");
@@ -349,10 +407,76 @@ export function App() {
     };
   }, []);
   useEffect(() => {
-    const change = () => setRoute(location.hash.slice(1) || "/today");
+    const change = () => {
+      setRoute(location.hash.slice(1) || "/today");
+      setModal(null);
+      setDialogError("");
+      importSequence.current++;
+    };
     window.addEventListener("hashchange", change);
     return () => window.removeEventListener("hashchange", change);
   }, []);
+  useEffect(() => {
+    let midnight: ReturnType<typeof setTimeout>;
+    let updateTimer: ReturnType<typeof setTimeout> | undefined;
+    const checkUpdate = () => {
+      updateTimer = undefined;
+      const registration = registrationRef.current;
+      if (
+        !registration ||
+        !navigator.onLine ||
+        document.visibilityState !== "visible"
+      )
+        return;
+      lastUpdateCheck.current = Date.now();
+      void registration.update().catch(() => {});
+    };
+    const refresh = () => {
+      setCurrentDate(today());
+      clearTimeout(midnight);
+      const now = new Date();
+      const nextDay = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+      );
+      midnight = setTimeout(refresh, nextDay.getTime() - now.getTime() + 50);
+      if (
+        registrationRef.current &&
+        navigator.onLine &&
+        document.visibilityState === "visible"
+      ) {
+        const delay = Math.max(
+          0,
+          60_000 - (Date.now() - lastUpdateCheck.current),
+        );
+        if (updateTimer === undefined) {
+          if (delay === 0) checkUpdate();
+          else updateTimer = setTimeout(checkUpdate, delay);
+        }
+      }
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      clearTimeout(midnight);
+      clearTimeout(updateTimer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, []);
+  useEffect(() => {
+    if (dialogError) {
+      dialogErrorRef.current?.focus();
+      dialogErrorRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [dialogError]);
   useEffect(() => {
     setPendingDraftCompletion(null);
     if (path !== "/today") setOfferSupport(false);
@@ -389,8 +513,28 @@ export function App() {
         const nav = document
           .querySelector(".dp-bottom-nav")
           ?.getBoundingClientRect();
+        const saveTop = [
+          ...document.querySelectorAll<HTMLElement>(
+            "main .dp-form-actions, main .anchor-save-bar",
+          ),
+        ]
+          .filter(
+            (bar) =>
+              !bar.contains(target) &&
+              getComputedStyle(bar).position === "sticky",
+          )
+          .map((bar) => bar.getBoundingClientRect())
+          .filter(
+            (rect) =>
+              rect.height && rect.top > top && rect.bottom <= viewportBottom,
+          )
+          .map((rect) => rect.top);
         const bottom =
-          Math.min(viewportBottom, nav?.height ? nav.top : viewportBottom) - 16;
+          Math.min(
+            viewportBottom,
+            nav?.height ? nav.top : viewportBottom,
+            ...saveTop,
+          ) - 16;
         const rect = target.getBoundingClientRect();
         const movement =
           rect.height > bottom - top || rect.top < top
@@ -407,6 +551,30 @@ export function App() {
       cancelAnimationFrame(frame);
       document.removeEventListener("focusin", revealFocus);
       window.visualViewport?.removeEventListener("resize", revealFocus);
+    };
+  }, []);
+  useEffect(() => {
+    const resize = () => {
+      const available = window.visualViewport?.height ?? window.innerHeight;
+      const fontSize = parseFloat(
+        getComputedStyle(document.documentElement).fontSize,
+      );
+      document.documentElement.dataset.anchorCompactActions = String(
+        available >= 600 && fontSize <= 24,
+      );
+    };
+    resize();
+    const observer = new MutationObserver(resize);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["style"],
+    });
+    window.visualViewport?.addEventListener("resize", resize);
+    window.addEventListener("resize", resize);
+    return () => {
+      observer.disconnect();
+      window.visualViewport?.removeEventListener("resize", resize);
+      window.removeEventListener("resize", resize);
     };
   }, []);
   useEffect(() => {
@@ -631,7 +799,10 @@ export function App() {
           </p>
           <small>Jouw tempo. Jouw woorden.</small>
         </div>
-        <button className="dp-help-rail" onClick={() => navigate("/help")}>
+        <button
+          className="dp-help-rail"
+          onClick={() => navigate(supportDestination)}
+        >
           <Heart size={19} />
           Mijn houvast
           <ArrowRight size={17} />
@@ -651,13 +822,7 @@ export function App() {
           <div className="dp-top-actions">
             <button
               className="dp-text-button"
-              onClick={() =>
-                navigate(
-                  cravingId
-                    ? `/help?craving=${encodeURIComponent(cravingId)}`
-                    : "/help",
-                )
-              }
+              onClick={() => navigate(supportDestination)}
             >
               <Heart size={17} />
               Houvast
@@ -801,6 +966,7 @@ export function App() {
             {path === "/today" && (
               <Today
                 state={state}
+                currentDate={currentDate}
                 navigate={navigate}
                 offerSupport={offerSupport}
                 onDismissSupport={() => setOfferSupport(false)}
@@ -815,9 +981,18 @@ export function App() {
                 />
                 <HistoryView
                   state={state}
-                  onOpenMoment={(id) => navigate(`/moment/${id}`)}
-                  onOpenCraving={(id) => navigate(`/craving/${id}`)}
-                  onOpenDay={(date) => navigate(`/day/${date}`)}
+                  currentDate={currentDate}
+                  session={historySession}
+                  onSessionChange={setHistorySession}
+                  onOpenMoment={(id) =>
+                    navigate(`/moment/${id}?returnTo=history`)
+                  }
+                  onOpenCraving={(id) =>
+                    navigate(`/craving/${id}?returnTo=history`)
+                  }
+                  onOpenDay={(date) =>
+                    navigate(`/day/${date}?returnTo=history`)
+                  }
                 />
               </>
             )}
@@ -838,7 +1013,11 @@ export function App() {
                   title="Kleine momenten"
                   description="Bewaar een fijn moment, een bewuste keuze of iets dat je wilt onthouden."
                 />
-                <GrowthView state={state} onSave={save} />
+                <GrowthView
+                  state={state}
+                  currentDate={currentDate}
+                  onSave={save}
+                />
               </>
             )}
             {path === "/settings" && (
@@ -877,6 +1056,7 @@ export function App() {
                 navigate={navigate}
                 cravingId={helpQuery ? helpCraving : null}
                 helpQuery={helpQuery}
+                returnTo={returnTo}
               />
             )}
             {path === "/exercise" && (
@@ -891,7 +1071,7 @@ export function App() {
                 onBack={(id) =>
                   navigate(
                     id
-                      ? `/moment/${id}?after=1`
+                      ? `/moment/${id}?after=1${returnQuery ? `&${returnQuery}` : ""}`
                       : new URLSearchParams(route.split("?")[1]).has("support")
                         ? `/help${helpQuery}`
                         : "/tools",
@@ -910,6 +1090,7 @@ export function App() {
                 <MomentView
                   key={momentId}
                   record={moment}
+                  returnTo={returnTo}
                   state={state}
                   onSave={save}
                   navigate={navigate}
@@ -932,6 +1113,7 @@ export function App() {
                 <CravingView
                   key={cravingId}
                   record={craving}
+                  returnTo={returnTo}
                   state={state}
                   onSave={save}
                   navigate={navigate}
@@ -941,12 +1123,10 @@ export function App() {
                   onDraft={(value) => cacheDraft(`craving:${cravingId}`, value)}
                   onClear={() => cacheDraft(`craving:${cravingId}`, null)}
                   onCompleted={() => {
-                    navigate("/today");
-                    setOfferSupport(true);
+                    navigate(returnTo);
+                    setOfferSupport(returnTo === "/today");
                   }}
-                  onSupport={() =>
-                    navigate(`/help?craving=${encodeURIComponent(cravingId)}`)
-                  }
+                  onSupport={() => navigate(supportDestination)}
                 />
               ) : (
                 <Missing navigate={navigate} />
@@ -955,6 +1135,7 @@ export function App() {
               <DayView
                 key={dayDate}
                 date={dayDate}
+                returnTo={returnTo}
                 state={state}
                 onSave={save}
                 navigate={navigate}
@@ -1055,7 +1236,7 @@ export function App() {
               ? `${dateText(details.date)}${details.time ? " · " + details.time : ""}`
               : details.name;
             return (
-              <div className="anchor-draft-row" key={key}>
+              <div className="anchor-draft-row" key={key} data-draft-key={key}>
                 <strong>{title}</strong>
                 {description && <p className="dp-muted">{description}</p>}
                 {discardKey === key ? (
@@ -1064,7 +1245,14 @@ export function App() {
                       Dit concept verwijderen? De invoer in dit onafgemaakte
                       formulier vervalt.
                     </p>
-                    <Button onClick={() => setDiscardKey(null)}>
+                    <Button
+                      data-keep-draft
+                      onClick={() => {
+                        setDiscardKey(null);
+                        setDialogError("");
+                        focusDraftControl(key);
+                      }}
+                    >
                       Behouden
                     </Button>
                     <Button
@@ -1075,9 +1263,12 @@ export function App() {
                           setDrafts(loadDrafts());
                           setGeneration((value) => value + 1);
                           setDiscardKey(null);
+                          setDialogError("");
+                          setDraftError("");
+                          focusDraftControl();
                           if (pendingDraftCompletion) navigate("/today");
                         } else
-                          setDraftError(
+                          showDialogError(
                             result.message || "Verwijderen is niet gelukt.",
                           );
                       }}
@@ -1092,7 +1283,11 @@ export function App() {
                     </Button>
                     <Button
                       disabled={!writer}
-                      onClick={() => setDiscardKey(key)}
+                      onClick={() => {
+                        setDialogError("");
+                        setDiscardKey(key);
+                        focusDraftControl(key, true);
+                      }}
                     >
                       Concept verwijderen
                     </Button>
@@ -1101,7 +1296,21 @@ export function App() {
               </div>
             );
           })}
-          {!Object.keys(drafts).length && <p>Je hebt geen open concepten.</p>}
+          {!Object.keys(drafts).length && (
+            <p tabIndex={-1} data-drafts-empty>
+              Je hebt geen open concepten.
+            </p>
+          )}
+          {dialogError && (
+            <p
+              className="dp-error"
+              role="alert"
+              tabIndex={-1}
+              ref={dialogErrorRef}
+            >
+              {dialogError}
+            </p>
+          )}
         </Dialog>
       )}
       {modal === "draft-recovery" && (
@@ -1126,7 +1335,7 @@ export function App() {
                 );
                 setDraftRecoveryDownloaded(true);
               } catch {
-                setDraftError(
+                showDialogError(
                   "Het herstelbestand kon niet worden gemaakt. Er is niets gewist.",
                 );
               }
@@ -1151,12 +1360,24 @@ export function App() {
                     "De open concepten zijn verwijderd. Je opgeslagen registraties zijn behouden.",
                   );
                 } else
-                  setDraftError(result.message || "Herstellen is niet gelukt.");
+                  showDialogError(
+                    result.message || "Herstellen is niet gelukt.",
+                  );
               }}
             >
               Alleen concepten wissen
             </Button>
           </div>
+          {dialogError && (
+            <p
+              className="dp-error"
+              role="alert"
+              tabIndex={-1}
+              ref={dialogErrorRef}
+            >
+              {dialogError}
+            </p>
+          )}
         </Dialog>
       )}
       {modal === "privacy" && (
@@ -1294,6 +1515,7 @@ export function App() {
                       setBlocked(false);
                       setWarning(null);
                       setDrafts({});
+                      setHistorySession(createHistorySession());
                       setGeneration((value) => value + 1);
                       setModal(null);
                       setToast("Je Anchor-back-up is hersteld.");
@@ -1316,29 +1538,31 @@ export function App() {
 }
 function Today({
   state,
+  currentDate,
   navigate,
   offerSupport,
   onDismissSupport,
 }: {
   state: AppState;
+  currentDate: string;
   navigate: (path: string) => void;
   offerSupport: boolean;
   onDismissSupport: () => void;
 }) {
   const current = [
     ...state.moments
-      .filter((m) => m.date === today())
+      .filter((m) => m.date === currentDate)
       .map((item) => ({ type: "moment" as const, item })),
     ...state.cravings
-      .filter((m) => m.date === today())
+      .filter((m) => m.date === currentDate)
       .map((item) => ({ type: "craving" as const, item })),
   ].sort((a, b) => b.item.time.localeCompare(a.item.time));
-  const day = state.days.find((item) => item.date === today());
+  const day = state.days.find((item) => item.date === currentDate);
   const favorite = state.growth.find((item) => item.favorite);
   return (
     <>
       <PageTitle
-        kicker={dateText(today(), true)}
+        kicker={dateText(currentDate, true)}
         title="Vandaag, op jouw tempo."
       />
       {offerSupport && (
@@ -1498,7 +1722,7 @@ function Today({
                 Dagoverzicht opgeslagen
               </p>
             )}
-            <Button onClick={() => navigate(`/day/${today()}`)}>
+            <Button onClick={() => navigate(`/day/${currentDate}`)}>
               {day ? "Dagoverzicht bewerken" : "Dagoverzicht invullen"}
               <ArrowRight size={17} />
             </Button>
@@ -1590,16 +1814,24 @@ function Support({
   navigate,
   cravingId,
   helpQuery,
+  returnTo,
 }: {
   state: AppState;
   navigate: (path: string) => void;
   cravingId: string | null;
   helpQuery: string;
+  returnTo: string;
 }) {
   return (
     <div className="dp-help-page">
       {cravingId && (
-        <Button onClick={() => navigate(`/craving/${cravingId}`)}>
+        <Button
+          onClick={() =>
+            navigate(
+              `/craving/${cravingId}${returnTo === "/history" ? "?returnTo=history" : ""}`,
+            )
+          }
+        >
           Terug naar mijn craving
         </Button>
       )}
@@ -1736,6 +1968,7 @@ function MomentView({
   onClear,
   afterInitially,
   activityIntent,
+  returnTo = "/today",
 }: {
   record?: Moment;
   state: AppState;
@@ -1746,6 +1979,7 @@ function MomentView({
   onClear: () => boolean;
   afterInitially: boolean;
   activityIntent: string | null;
+  returnTo?: string;
 }) {
   const [value, setValue] = useState<Moment>(
     () =>
@@ -1775,6 +2009,7 @@ function MomentView({
   const [afterOpen, setAfterOpen] = useState(
     afterInitially ||
       !!record?.after ||
+      record?.attempted != null ||
       !!draft?.after ||
       draft?.attempted != null,
   );
@@ -1785,8 +2020,11 @@ function MomentView({
   } | null>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const [deleting, setDeleting] = useState(false);
+  const [deletingAfter, setDeletingAfter] = useState(false);
+  const afterDeleteCancelRef = useRef<HTMLButtonElement>(null);
+  const afterDeleteButtonRef = useRef<HTMLButtonElement>(null);
   const [pendingCompletion, setPendingCompletion] = useState<{
-    kind: "before" | "after" | "delete";
+    kind: "before" | "after" | "delete" | "after-delete";
     id: string;
   } | null>(null);
   const activityLocked =
@@ -1799,6 +2037,10 @@ function MomentView({
     resumedDraft &&
     activityIntent === "grounding" &&
     value.activity !== "5-4-3-2-1";
+  const returnQuery = returnTo === "/history" ? "?returnTo=history" : "";
+  useEffect(() => {
+    if (deletingAfter) afterDeleteCancelRef.current?.focus();
+  }, [deletingAfter]);
   useEffect(() => {
     if (!activityEntry || afterInitially) return;
     const frame = requestAnimationFrame(() => {
@@ -1918,6 +2160,34 @@ function MomentView({
       showError("Kies eerst een activiteit.", "after");
       return;
     }
+    if (followup) {
+      const after = value.after ?? followupRatings(value.before);
+      const hasNewAnswer =
+        value.attempted !== null ||
+        after.mood !== null ||
+        after.eis !== null ||
+        after.pans != null ||
+        !!after.emotionRatings?.some(
+          (emotion) =>
+            emotion.label.trim() &&
+            (emotion.intensity !== null ||
+              !value.before.emotionRatings?.some(
+                (before) =>
+                  before.id === emotion.id && before.label === emotion.label,
+              )),
+        );
+      const unchangedSavedAfter =
+        !!record?.after &&
+        JSON.stringify(after) === JSON.stringify(record.after) &&
+        value.attempted === record.attempted;
+      if (!hasNewAnswer && !unchangedSavedAfter) {
+        showError(
+          "Je nameting is nog leeg. Kies zelf een emotie, geef een score of vul in of je de activiteit hebt geprobeerd. Je kunt ook terug zonder een nameting op te slaan.",
+          "after",
+        );
+        return;
+      }
+    }
     const saved: Moment = {
       ...value,
       note: value.note.trim(),
@@ -1958,21 +2228,100 @@ function MomentView({
       );
     }
   }
-  function finish(kind: "before" | "after" | "delete", id: string) {
+  function finish(
+    kind: "before" | "after" | "delete" | "after-delete",
+    id: string,
+  ) {
     if (!onClear()) {
-      setError(null);
+      if (kind === "after-delete")
+        showError(
+          "Je nameting is verwijderd, maar het concept kon niet worden opgeruimd. Je check-in blijft bewaard. Probeer het afronden opnieuw.",
+          "after",
+        );
+      else setError(null);
       setPendingCompletion({ kind, id });
       return;
     }
     setPendingCompletion(null);
     setAfterOpen(false);
-    navigate(kind === "before" && value.activity ? `/moment/${id}` : "/today");
+    navigate(
+      (kind === "before" && value.activity) || kind === "after-delete"
+        ? `/moment/${id}${returnQuery}`
+        : returnTo,
+    );
     if (kind === "before" && value.activity)
       requestAnimationFrame(() => {
         activityHeadingRef.current?.focus({ preventScroll: true });
         activityHeadingRef.current?.scrollIntoView({ block: "center" });
       });
+    else if (kind === "after-delete") focusAfterRemoval();
   }
+  function focusAfterRemoval() {
+    requestAnimationFrame(() => {
+      const target =
+        activityHeadingRef.current ??
+        document.querySelector<HTMLElement>("main h1");
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: "center" });
+    });
+  }
+  function cancelAfterDelete() {
+    setDeletingAfter(false);
+    requestAnimationFrame(() => afterDeleteButtonRef.current?.focus());
+  }
+  function removeAfter() {
+    if (!record) return;
+    const cleared = {
+      after: null,
+      afterDate: null,
+      afterTime: null,
+      attempted: null,
+    };
+    const saved: Moment = { ...record, ...cleared };
+    if (
+      !onSave(
+        {
+          ...state,
+          moments: state.moments.map((item) =>
+            item.id === record.id ? saved : item,
+          ),
+        },
+        "Je nameting is verwijderd. Je check-in blijft bewaard.",
+      )
+    ) {
+      showError(
+        "Verwijderen is niet gelukt. Je check-in en nameting blijven bewaard.",
+        "after",
+      );
+      return;
+    }
+    const pending: Moment = { ...value, ...cleared };
+    setValue(pending);
+    setDeletingAfter(false);
+    setAfterOpen(false);
+    setRepairActivity(false);
+    setError(null);
+    if (JSON.stringify(pending) !== JSON.stringify(saved)) {
+      // Keep unsaved changes to the original check-in; deletion only affects its follow-up.
+      onDraft(pending);
+      focusAfterRemoval();
+    } else finish("after-delete", record.id);
+  }
+  if (pendingCompletion?.kind === "after-delete")
+    return (
+      <section className="dp-card dp-form-page">
+        <h1 tabIndex={-1}>Nameting verwijderd</h1>
+        <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
+          {error?.message}
+        </p>
+        <Button
+          primary
+          onClick={() => finish("after-delete", pendingCompletion.id)}
+        >
+          Afronden opnieuw proberen
+        </Button>
+      </section>
+    );
   if (pendingCompletion)
     return (
       <FinishSaved
@@ -1984,10 +2333,12 @@ function MomentView({
     <div className="dp-form-page">
       <button
         className="dp-text-button dp-back"
-        onClick={() => navigate("/today")}
+        onClick={() => navigate(returnTo)}
       >
         <ArrowLeft size={17} />
-        Terug naar Vandaag
+        {returnTo === "/history"
+          ? "Terug naar Terugkijken"
+          : "Terug naar Vandaag"}
       </button>
       <PageTitle
         kicker={record ? `${dateText(value.date)} · ${value.time}` : "Check-in"}
@@ -2042,7 +2393,9 @@ function MomentView({
                       );
                       return;
                     }
-                    navigate(`/exercise?moment=${record.id}`);
+                    navigate(
+                      `/exercise?moment=${record.id}${returnTo === "/history" ? "&returnTo=history" : ""}`,
+                    );
                   }}
                 >
                   <Compass size={19} />
@@ -2131,6 +2484,7 @@ function MomentView({
           </details>
           <RatingsEditor
             value={value.before}
+            savedValue={record?.before}
             onChange={(before) => update({ before })}
           />
           {value.emotions.length > 0 && (
@@ -2252,69 +2606,133 @@ function MomentView({
         <div className="dp-form-actions">
           <Button type="submit" primary>
             <Check size={18} />
-            Check-in opslaan
+            {record ? "Wijzigingen check-in opslaan" : "Check-in opslaan"}
           </Button>
-          <span>Op dit apparaat</span>
+          <span>
+            {afterOpen
+              ? "Je nameting bewaar je met de knop eronder."
+              : "Op dit apparaat"}
+          </span>
         </div>
       </form>
-      {value.activity && afterOpen && (
-        <form
-          className="dp-card dp-after-form"
-          onSubmit={(event) => submit(event, true)}
-        >
-          <p className="dp-kicker">Nameting · {value.activity}</p>
-          <h2 ref={afterHeadingRef} tabIndex={-1}>
-            {value.after ? "Je nameting" : "Hoe is het nu?"}
-          </h2>
-          <p>
-            Vul opnieuw in hoe het nu gaat: je stemming, spanning of emoties. De
-            eerdere check-in blijft apart bewaard. Je mag waarden leeg laten.
-          </p>
-          {value.afterDate && value.afterTime && (
+      {afterOpen &&
+        (value.activity || record?.after || record?.attempted != null) && (
+          <form
+            className="dp-card dp-after-form"
+            onSubmit={(event) => submit(event, true)}
+          >
+            <p className="dp-kicker">
+              Nameting · {value.activity || "Activiteit niet ingevuld"}
+            </p>
+            <h2 ref={afterHeadingRef} tabIndex={-1}>
+              {value.after ? "Je nameting" : "Hoe is het nu?"}
+            </h2>
+            <p>
+              Vul opnieuw in hoe het nu gaat: je stemming, spanning of emoties.
+              De eerdere check-in blijft apart bewaard. Je mag waarden leeg
+              laten.
+            </p>
+            {value.afterDate && value.afterTime && (
+              <p className="dp-hint">
+                Tijdstip nameting: {dateText(value.afterDate, true)} om{" "}
+                {value.afterTime}. Aanpassen behoudt dit tijdstip.
+              </p>
+            )}
+            <fieldset>
+              <legend>Heb je de activiteit geprobeerd? (optioneel)</legend>
+              <div className="dp-chip-list">
+                {[
+                  { value: true, label: "Ja" },
+                  { value: false, label: "Nee" },
+                  { value: null, label: "Niet ingevuld" },
+                ].map((item) => (
+                  <button
+                    type="button"
+                    key={item.label}
+                    aria-pressed={value.attempted === item.value}
+                    onClick={() => update({ attempted: item.value })}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <RatingsEditor
+              prefix="Na: "
+              value={value.after ?? followupRatings(value.before)}
+              savedValue={
+                record?.after ??
+                followupRatings(record?.before ?? blankRatings())
+              }
+              onChange={(after) => update({ after })}
+            />
             <p className="dp-hint">
-              Tijdstip nameting: {dateText(value.afterDate, true)} om{" "}
-              {value.afterTime}. Aanpassen behoudt dit tijdstip.
+              Een verschil is een observatie. Het zegt niet automatisch waardoor
+              je gevoel veranderde.
             </p>
-          )}
-          <fieldset>
-            <legend>Heb je de activiteit geprobeerd? (optioneel)</legend>
-            <div className="dp-chip-list">
-              {[
-                { value: true, label: "Ja" },
-                { value: false, label: "Nee" },
-                { value: null, label: "Niet ingevuld" },
-              ].map((item) => (
-                <button
-                  type="button"
-                  key={item.label}
-                  aria-pressed={value.attempted === item.value}
-                  onClick={() => update({ attempted: item.value })}
-                >
-                  {item.label}
-                </button>
-              ))}
+            {error?.form === "after" && (
+              <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
+                {error.message}
+              </p>
+            )}
+            <div className="dp-form-actions">
+              <Button type="submit" primary>
+                Nameting opslaan
+                <Check size={18} />
+              </Button>
             </div>
-          </fieldset>
-          <RatingsEditor
-            prefix="Na: "
-            value={value.after ?? followupRatings(value.before)}
-            onChange={(after) => update({ after })}
-          />
-          <p className="dp-hint">
-            Een verschil is een observatie. Het zegt niet automatisch waardoor
-            je gevoel veranderde.
-          </p>
-          {error?.form === "after" && (
-            <p className="dp-error" role="alert" tabIndex={-1} ref={errorRef}>
-              {error.message}
-            </p>
-          )}
-          <Button type="submit" primary>
-            Nameting opslaan
-            <Check size={18} />
-          </Button>
-        </form>
-      )}
+            {record && (record.after || record.attempted !== null) && (
+              <div className="dp-delete-area">
+                {deletingAfter ? (
+                  <div
+                    role="alertdialog"
+                    aria-labelledby={`${fieldErrorId}-after-delete`}
+                    aria-describedby={`${fieldErrorId}-after-delete-description`}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        cancelAfterDelete();
+                      }
+                    }}
+                  >
+                    <h3 id={`${fieldErrorId}-after-delete`}>
+                      Alleen deze nameting verwijderen?
+                    </h3>
+                    <p id={`${fieldErrorId}-after-delete-description`}>
+                      Je verwijdert de antwoorden en het tijdstip van de
+                      nameting, inclusief eventuele wijzigingen daarin. Je
+                      eerdere check-in blijft bewaard. Niet-opgeslagen
+                      wijzigingen aan je check-in blijven als concept staan. Dit
+                      kun je niet ongedaan maken.
+                    </p>
+                    <div className="dp-actions">
+                      <button
+                        type="button"
+                        className="dp-button"
+                        ref={afterDeleteCancelRef}
+                        onClick={cancelAfterDelete}
+                      >
+                        Behouden
+                      </button>
+                      <Button onClick={removeAfter}>
+                        Ja, nameting verwijderen
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="dp-text-button"
+                    ref={afterDeleteButtonRef}
+                    onClick={() => setDeletingAfter(true)}
+                  >
+                    Nameting verwijderen
+                  </button>
+                )}
+              </div>
+            )}
+          </form>
+        )}
       {record && (
         <div className="dp-delete-area">
           {error?.form === "delete" && (
@@ -2366,6 +2784,7 @@ function MomentView({
 
 function DayView({
   date,
+  returnTo = "/today",
   state,
   onSave,
   navigate,
@@ -2374,6 +2793,7 @@ function DayView({
   onClear,
 }: {
   date: string;
+  returnTo?: string;
   state: AppState;
   onSave: Save;
   navigate: (route: string) => void;
@@ -2382,6 +2802,7 @@ function DayView({
   onClear: () => boolean;
 }) {
   const record = state.days.find((item) => item.date === date);
+  const [chosenDate, setChosenDate] = useState(date);
   const [value, setValue] = useState<Day>(
     () =>
       draft ??
@@ -2419,7 +2840,7 @@ function DayView({
     setError("");
   };
   function finish(action: "saved" | "deleted") {
-    if (onClear()) navigate("/today");
+    if (onClear()) navigate(returnTo);
     else setPendingCompletion(action);
   }
   function cancelDelete() {
@@ -2438,16 +2859,50 @@ function DayView({
     <div className="dp-form-page">
       <button
         className="dp-text-button dp-back"
-        onClick={() => navigate("/today")}
+        onClick={() => navigate(returnTo)}
       >
         <ArrowLeft size={17} />
-        Terug naar Vandaag
+        {returnTo === "/history"
+          ? "Terug naar Terugkijken"
+          : "Terug naar Vandaag"}
       </button>
       <PageTitle
         kicker={dateText(date, true)}
         title="Mijn hele dag"
         description="Een terugblik op de dag als geheel. Je losse check-ins blijven aparte momenten."
       />
+      <form
+        className="dp-card dp-day-choice"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!validCalendarDate(chosenDate)) {
+            showError("Kies een geldige datum tussen 1900 en 2199.");
+            return;
+          }
+          navigate(
+            `/day/${chosenDate}${returnTo === "/history" ? "?returnTo=history" : ""}`,
+          );
+        }}
+      >
+        <label className="dp-field">
+          Dag kiezen
+          <input
+            type="date"
+            required
+            min="1900-01-01"
+            max="2199-12-31"
+            value={chosenDate}
+            onChange={(event) => setChosenDate(event.target.value)}
+          />
+        </label>
+        <Button type="submit" disabled={chosenDate === date}>
+          Dag openen
+        </Button>
+        <p className="dp-hint">
+          Ook een eerdere dag. Een bestaand dagoverzicht wordt geopend.
+          Niet-opgeslagen invoer blijft als concept bewaard.
+        </p>
+      </form>
       <form
         onInvalidCapture={revealInvalidField}
         onSubmit={(event) => {
@@ -2491,6 +2946,7 @@ function DayView({
           <RatingsEditor
             day
             value={value.ratings}
+            savedValue={record?.ratings}
             onChange={(ratings) => update({ ratings })}
           />
         </section>
@@ -2532,7 +2988,7 @@ function DayView({
         </section>
         <section className="dp-card dp-form-section">
           <label className="dp-field">
-            Wat wil je onthouden van vandaag?
+            Wat wil je onthouden van deze dag?
             <textarea
               rows={4}
               maxLength={4000}
@@ -2546,10 +3002,12 @@ function DayView({
             {error}
           </p>
         )}
-        <Button primary type="submit">
-          Dagoverzicht opslaan
-          <Check size={18} />
-        </Button>
+        <div className="dp-form-actions">
+          <Button primary type="submit">
+            Dagoverzicht opslaan
+            <Check size={18} />
+          </Button>
+        </div>
       </form>
       {record && (
         <section

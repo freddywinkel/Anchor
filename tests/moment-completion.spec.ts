@@ -133,7 +133,7 @@ test("dagfouten blijven zichtbaar; geslaagd opslaan met opruimfout is veilig opn
     .click();
   const form = page.locator("form");
   await page
-    .getByLabel("Wat wil je onthouden van vandaag?")
+    .getByLabel("Wat wil je onthouden van deze dag?")
     .fill("Een rustige avond.");
   const pending = await drafts(page);
   await failWrites(page, DATA);

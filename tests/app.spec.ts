@@ -47,13 +47,30 @@ async function expectToday(page: Page) {
   ).toBeVisible();
 }
 
+async function expectHistory(page: Page) {
+  await expect(page).toHaveURL(/#\/history$/);
+  await expect(
+    page.getByRole("heading", { name: "Terugkijken", exact: true }),
+  ).toBeVisible();
+}
+
+async function expandSaved(page: Page) {
+  const disclosure = page.locator(".dp-history-list details");
+  await expect(disclosure).toHaveCount(1);
+  if (
+    !(await disclosure.evaluate((element: HTMLDetailsElement) => element.open))
+  )
+    await disclosure.locator("summary").click();
+  await expect(disclosure).toHaveAttribute("open", "");
+}
+
 async function reopenSaved(page: Page, type: "craving" | "check-in") {
   await open(page, "/history");
   await page.getByLabel("Periode").selectOption("all");
   await page
     .getByLabel("Soort registratie")
     .selectOption(type === "craving" ? "craving" : "checkin");
-  await page.locator(".dp-history-list summary").click();
+  await expandSaved(page);
   await page
     .getByRole("button", { name: new RegExp(`^Bewerken: ${type} van`) })
     .click();
@@ -97,8 +114,8 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.getByRole("alert")).toContainText(
-    "ten minste één onderdeel",
+  await expect(page.getByRole("alert")).toHaveText(
+    "Schrijf iets bij je externe situatie, gedachte, lichamelijke sensatie, emotie of gedrag. Eén van deze tekstvelden is genoeg.",
   );
   expect(await state(page)).toBeNull();
   await page.getByLabel("Datum", { exact: true }).fill("2026-10-12");
@@ -147,13 +164,13 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
     .getByLabel(/^Gedrag \(wat deed je\?\)/)
     .fill("Ik belde iemand en ging wandelen.");
   await page.getByRole("button", { name: "Wijzigingen opslaan" }).click();
-  await expectToday(page);
+  await expectHistory(page);
   expect((await state(page)).cravings).toHaveLength(1);
   expect((await state(page)).cravings[0].id).toBe(first.cravings[0].id);
   await open(page, "/history");
   await page.getByLabel("Periode").selectOption("all");
   await page.getByLabel("Soort registratie").selectOption("craving");
-  await page.locator(".dp-history-list summary").click();
+  await expandSaved(page);
   await expect(
     page.getByText("Ik belde iemand en ging wandelen."),
   ).toBeVisible();
@@ -173,7 +190,7 @@ test("craving heeft uitsluitend de gevraagde velden; aanmaken, aanpassen en beve
   await page
     .getByRole("button", { name: "Ja, verwijderen", exact: true })
     .click();
-  await expectToday(page);
+  await expectHistory(page);
   expect((await state(page)).cravings).toHaveLength(0);
 });
 
@@ -713,7 +730,7 @@ test("meerdere check-ins, expliciete nameting en dagoverzicht blijven aparte reg
     .getByRole("button", { name: "Dagoverzicht invullen", exact: true })
     .click();
   await page
-    .getByLabel("Wat wil je onthouden van vandaag?")
+    .getByLabel("Wat wil je onthouden van deze dag?")
     .fill("Mijn terugblik is een apart geheel.");
   await page.getByLabel("Uren slaap").fill("7");
   await page.getByLabel("Minuten slaap").fill("30");
@@ -1475,10 +1492,10 @@ test("geïnstalleerde serviceworker opent offline en bewaart nieuwe registraties
     .getByLabel(/^Gedrag \(wat deed je\?\)/)
     .fill("Ook offline aangevuld.");
   await page.getByRole("button", { name: "Wijzigingen opslaan" }).click();
-  await expectToday(page);
+  await expectHistory(page);
   const savedDocument = await page.reload();
   expect(savedDocument?.fromServiceWorker()).toBe(true);
-  await expectToday(page);
+  await expectHistory(page);
   await reopenSaved(page, "craving");
   await expect(page.getByLabel(/^Gedrag \(wat deed je\?\)/)).toHaveValue(
     "Ook offline aangevuld.",

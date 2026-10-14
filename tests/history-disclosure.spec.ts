@@ -196,7 +196,7 @@ test("Terugkijken groepeert gesloten registraties en laat meerdere details met t
   await expect(page.locator("details.dp-history-record[open]")).toHaveCount(3);
   await expectUnchanged(page, before);
   await target.getByRole("button", { name: /^Bewerken: craving/ }).click();
-  await expect(page).toHaveURL(/#\/craving\/shared$/);
+  await expect(page).toHaveURL(/#\/craving\/shared\?returnTo=history$/);
   await expect(page.getByLabel("Gedachte", { exact: true })).toHaveValue(
     initial.cravings[0].thought,
   );
@@ -319,8 +319,8 @@ test("check-indetails behouden beide tijdstippen, onbekende antwoorden, nulmetin
   for (const [label, value] of [
     ["Datum en tijd", "20 mei 2024 · 09:05"],
     ["Nameting", "21 mei 2024 · 00:10"],
-    ["Stemming bij check-in", "0"],
-    ["Stemming bij nameting", "-1"],
+    ["Stemming bij check-in", "Neutraal (0)"],
+    ["Stemming bij nameting", "Laag (-1)"],
     ["Activiteit", "Buiten wandelen"],
     ["Activiteit geprobeerd", "Nee"],
     ["Emoties zonder gekoppelde score", "Moe, Opgelucht"],
@@ -396,7 +396,7 @@ test("dagoverzichten tonen nul uur en minuten los van niet ingevulde slaap en be
   }
   const details = body(record(page, "day", date));
   await expect(field(details, "Datum")).toHaveText("20 mei 2024");
-  await expect(field(details, "Stemming")).toHaveText("0");
+  await expect(field(details, "Stemming")).toHaveText("Neutraal (0)");
   expect(await field(details, "Notitie").textContent()).toBe(
     initial.days[0].note,
   );

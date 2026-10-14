@@ -973,7 +973,7 @@ describe("validated backups and explicit restore", () => {
       "not JSON",
       JSON.stringify(before),
       exportBackup(before).replace("anchor.app.backup", "anchor.preview"),
-      exportBackup(before).replace('"version": 1', '"version": 2'),
+      exportBackup(before).replace('"version":1', '"version":2'),
     ]) {
       assert.throws(() => parseBackup(input));
       assert.equal(store.values.get(STORAGE_KEY), raw);
@@ -1076,8 +1076,8 @@ describe("validated backups and explicit restore", () => {
 
   it("rejects prototype-polluting backup fields without affecting objects", () => {
     const raw = exportBackup(populated()).replace(
-      '"state": {',
-      '"state": {"__proto__":{"polluted":true},',
+      '"state":{',
+      '"state":{"__proto__":{"polluted":true},',
     );
     assert.throws(() => parseBackup(raw), /onbekende velden/);
     assert.equal(({} as { polluted?: boolean }).polluted, undefined);
@@ -1087,6 +1087,119 @@ describe("validated backups and explicit restore", () => {
     const backup = JSON.parse(exportBackup(populated()));
     backup.exportedAt = "2026-02-31T12:00:00.000Z";
     assert.throws(() => parseBackup(JSON.stringify(backup)), /exportdatum/);
+  });
+});
+
+describe("backups at the supported storage boundary", () => {
+  const uuid = (index: number) =>
+    `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+
+  function denseState(uuidIds: boolean, followup: boolean, unicode: boolean) {
+    const state = populated();
+    state.palette = "lavender";
+    state.moments = [];
+    const ratings = () => ({
+      mood: 0,
+      eis: null,
+      emotionRatings: Array.from({ length: 20 }, (_, index) => ({
+        id: uuidIds ? uuid(index + 1) : `e${index}`,
+        label: `${unicode ? "é界😊" : ""}${String.fromCharCode(65 + index)}`,
+        intensity: 0,
+      })),
+    });
+    let remaining = 2_000_000 - JSON.stringify(withoutPalette(state)).length;
+    for (let index = 0; ; index++) {
+      const entry: Moment = {
+        ...makeMoment(uuidIds ? uuid(index + 1) : `m${index}`),
+        before: ratings(),
+        after: followup ? ratings() : null,
+        afterDate: followup ? "2026-10-12" : null,
+        afterTime: followup ? "17:00" : null,
+        activity: followup ? "Rust nemen" : "",
+        attempted: followup ? false : null,
+        note: "",
+      };
+      const length = JSON.stringify(entry).length + (index === 0 ? 0 : 1);
+      if (length > remaining) break;
+      state.moments.push(entry);
+      remaining -= length;
+    }
+    for (const entry of state.moments) {
+      const length = Math.min(remaining, 4000);
+      entry.note = (unicode ? "界" : "x").repeat(length);
+      remaining -= length;
+      if (!remaining) break;
+    }
+    assert.equal(remaining, 0);
+    assert.equal(JSON.stringify(withoutPalette(state)).length, 2_000_000);
+    return validateState(state);
+  }
+
+  for (const uuidIds of [false, true]) {
+    for (const followup of [false, true]) {
+      for (const unicode of [false, true]) {
+        it(`round-trips a full state with ${uuidIds ? "UUID" : "short"} IDs, 20 emotions ${followup ? "before and after" : "before"}, and ${unicode ? "Unicode" : "ASCII"} text`, () => {
+          const state = denseState(uuidIds, followup, unicode);
+          const compact = exportBackup(state);
+          const legacy = JSON.stringify(JSON.parse(compact), null, 2);
+          assert.ok(!compact.includes("\n"));
+          assert.ok(Buffer.byteLength(compact) <= 8_000_000);
+          assert.ok(Buffer.byteLength(legacy) <= 8_000_000);
+          // The old pretty export fails its old import limit in these dense cases.
+          if (!uuidIds || (followup && !unicode))
+            assert.ok(legacy.length > 4_000_100);
+          assert.deepEqual(parseBackup(compact), state);
+          assert.deepEqual(parseBackup(legacy), state);
+          assert.equal(store.reads.length, 1);
+          assert.equal(store.writes.length, 0);
+          store.values.set("unrelated-app", "keep");
+          const restored = replaceFromBackup(parseBackup(legacy), 0, null);
+          assert.equal(restored.ok, true);
+          assert.deepEqual(loadState().state, { ...state, revision: 1 });
+          assert.equal(store.values.get("unrelated-app"), "keep");
+        });
+      }
+    }
+  }
+
+  it("restores a Unicode-heavy legacy export above four million bytes without expanding the state limit", () => {
+    const state = fullStateAtRevisionNine();
+    for (const entry of state.cravings)
+      entry.thought = "界".repeat(entry.thought.length);
+    const compact = exportBackup(state);
+    const legacy = JSON.stringify(JSON.parse(compact), null, 2);
+    assert.ok(Buffer.byteLength(legacy) > 4_000_000);
+    assert.ok(Buffer.byteLength(legacy) < 8_000_000);
+    assert.deepEqual(parseBackup(compact), state);
+    assert.deepEqual(parseBackup(legacy), state);
+  });
+
+  it("rejects oversized decoded data, invalid fields, and unbounded raw input without storage writes", () => {
+    const state = denseState(false, true, false);
+    const envelope = JSON.parse(exportBackup(state));
+    envelope.state.plan.action += "x";
+    assert.throws(() => parseBackup(JSON.stringify(envelope)), /te groot/);
+    assert.throws(
+      () => parseBackup(JSON.stringify(envelope, null, 2)),
+      /te groot/,
+    );
+    envelope.state = { ...createEmptyState(), unexpected: "x" };
+    assert.throws(
+      () => parseBackup(JSON.stringify(envelope)),
+      /onbekende velden/,
+    );
+    envelope.state = createEmptyState();
+    envelope.state.moments = [{ unexpected: "x" }];
+    assert.throws(
+      () => parseBackup(JSON.stringify(envelope)),
+      /onbekende velden/,
+    );
+    assert.throws(() => parseBackup(" ".repeat(8_000_001)), /te groot/);
+    assert.throws(
+      () => parseBackup(`${exportBackup(populated())}${" ".repeat(8_000_000)}`),
+      /te groot/,
+    );
+    assert.equal(store.writes.length, 0);
   });
 });
 

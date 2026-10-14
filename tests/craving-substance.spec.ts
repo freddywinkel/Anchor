@@ -223,8 +223,8 @@ test("oude cravings blijven zonder middelveld; alleen een middel kiezen vervangt
   await page
     .getByRole("button", { name: "Craving opslaan", exact: true })
     .click();
-  await expect(page.locator(".anchor-craving-form [role=alert]")).toContainText(
-    "ten minste één onderdeel",
+  await expect(page.locator(".anchor-craving-form [role=alert]")).toHaveText(
+    "Schrijf iets bij je externe situatie, gedachte, lichamelijke sensatie, emotie of gedrag. Eén van deze tekstvelden is genoeg.",
   );
   await expect(choice(page)).toHaveValue("Alcohol");
   expect((await state(page)).cravings).toEqual([legacy]);

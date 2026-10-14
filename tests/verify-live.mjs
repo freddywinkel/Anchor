@@ -851,7 +851,7 @@ try {
   });
   await page.goto(new URL(`#/day/${dayDate}`, base).href);
   await page
-    .getByLabel("Wat wil je onthouden van vandaag?")
+    .getByLabel("Wat wil je onthouden van deze dag?")
     .fill("Synthetische releasecontrole: rust genomen");
   await page
     .getByRole("button", { name: "Dagoverzicht opslaan", exact: true })

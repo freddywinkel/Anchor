@@ -107,11 +107,13 @@ export function RatingLine({
 
 function EmotionEditor({
   value,
+  savedValue,
   onChange,
   prefix,
   day,
 }: {
   value: Ratings;
+  savedValue?: Ratings;
   onChange: (value: Ratings) => void;
   prefix: string;
   day: boolean;
@@ -148,6 +150,30 @@ function EmotionEditor({
         onbekend.
       </p>
       {rows.map((emotion, index) => {
+        const normalizedLabel = emotion.label.trim().toLocaleLowerCase("nl-NL");
+        const duplicates = normalizedLabel
+          ? rows.filter(
+              (other) =>
+                other.id !== emotion.id &&
+                other.label.trim().toLocaleLowerCase("nl-NL") ===
+                  normalizedLabel,
+            )
+          : [];
+        const savedLabels = new Map(
+          savedValue?.emotionRatings?.map((row) => [
+            row.id,
+            row.label.trim().toLocaleLowerCase("nl-NL"),
+          ]) ?? [],
+        );
+        const newDuplicate = duplicates.some(
+          (other) =>
+            savedLabels.get(emotion.id) !== normalizedLabel ||
+            savedLabels.get(other.id) !== normalizedLabel,
+        );
+        const duplicateError = newDuplicate
+          ? "Deze emotie staat al in een andere rij. Kies een andere emotie of verwijder één van de twee rijen."
+          : "";
+        const duplicateId = `${hintId}-duplicate-${index}`;
         const custom =
           customIds.includes(emotion.id) ||
           (!emotion.label.trim() && emotion.intensity !== null) ||
@@ -159,6 +185,9 @@ function EmotionEditor({
                 Emotie{rows.length > 1 ? ` ${index + 1}` : ""}
                 <select
                   aria-label="Kies een emotie"
+                  ref={(element) => element?.setCustomValidity(duplicateError)}
+                  aria-invalid={newDuplicate || undefined}
+                  aria-describedby={newDuplicate ? duplicateId : undefined}
                   value={custom ? "__custom" : emotion.label}
                   onChange={(event) => {
                     const nextId = crypto.randomUUID();
@@ -176,7 +205,20 @@ function EmotionEditor({
                 >
                   <option value="">Kies een emotie</option>
                   {EMOTIONS.map((label) => (
-                    <option key={label}>{label}</option>
+                    <option
+                      key={label}
+                      disabled={
+                        label.toLocaleLowerCase("nl-NL") !== normalizedLabel &&
+                        rows.some(
+                          (other) =>
+                            other.id !== emotion.id &&
+                            other.label.trim().toLocaleLowerCase("nl-NL") ===
+                              label.toLocaleLowerCase("nl-NL"),
+                        )
+                      }
+                    >
+                      {label}
+                    </option>
                   ))}
                   <option value="__custom">Eigen emotie</option>
                 </select>
@@ -186,6 +228,11 @@ function EmotionEditor({
                   Eigen emotie
                   <input
                     aria-label="Eigen emotie"
+                    ref={(element) =>
+                      element?.setCustomValidity(duplicateError)
+                    }
+                    aria-invalid={newDuplicate || undefined}
+                    aria-describedby={newDuplicate ? duplicateId : undefined}
                     required={emotion.intensity !== null}
                     maxLength={150}
                     value={emotion.label}
@@ -220,6 +267,11 @@ function EmotionEditor({
                 </label>
               )}
             </div>
+            {newDuplicate && (
+              <p className="dp-error" role="alert" id={duplicateId}>
+                {duplicateError}
+              </p>
+            )}
             {(emotion.label || rows.length > 1 || custom) && (
               <button
                 type="button"
@@ -261,11 +313,13 @@ function EmotionEditor({
 
 export function RatingsEditor({
   value,
+  savedValue,
   onChange,
   prefix = "",
   day = false,
 }: {
   value: Ratings;
+  savedValue?: Ratings;
   onChange: (next: Ratings) => void;
   prefix?: string;
   day?: boolean;
@@ -345,6 +399,7 @@ export function RatingsEditor({
           <summary>Emoties van de dag toevoegen</summary>
           <EmotionEditor
             value={value}
+            savedValue={savedValue}
             onChange={onChange}
             prefix={prefix}
             day
@@ -353,6 +408,7 @@ export function RatingsEditor({
       ) : (
         <EmotionEditor
           value={value}
+          savedValue={savedValue}
           onChange={onChange}
           prefix={prefix}
           day={false}

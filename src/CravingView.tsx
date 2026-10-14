@@ -19,6 +19,7 @@ type CravingViewProps = {
   onClear: () => boolean;
   onCompleted: () => void;
   onSupport: () => void;
+  returnTo?: string;
 };
 
 const narrativeFields = [
@@ -63,6 +64,7 @@ export function CravingView({
   onClear,
   onCompleted,
   onSupport,
+  returnTo = "/today",
 }: CravingViewProps) {
   const [value, setValue] = useState<CravingRecord>(
     () =>
@@ -79,6 +81,7 @@ export function CravingView({
       },
   );
   const [error, setError] = useState<{ message: string } | null>(null);
+  const [resumedDraft] = useState(() => draft);
   const [pendingCompletion, setPendingCompletion] = useState<
     "saved" | "deleted" | null
   >(null);
@@ -116,7 +119,7 @@ export function CravingView({
   function complete(action: "saved" | "deleted") {
     if (onClear()) {
       if (action === "saved") onCompleted();
-      else navigate("/today");
+      else navigate(returnTo);
       return;
     }
     setPendingCompletion(action);
@@ -223,7 +226,7 @@ export function CravingView({
     }
     if (!narrativeFields.some((field) => value[field].trim())) {
       showError(
-        "Schrijf iets bij ten minste één onderdeel. Je hoeft niet alles in te vullen.",
+        "Schrijf iets bij je externe situatie, gedachte, lichamelijke sensatie, emotie of gedrag. Eén van deze tekstvelden is genoeg.",
       );
       return;
     }
@@ -304,22 +307,34 @@ export function CravingView({
     <article className="dp-form-page anchor-craving">
       <a
         className="dp-text-button dp-back"
-        href="#/today"
+        href={`#${returnTo}`}
         onClick={(event) => {
           event.preventDefault();
-          navigate("/today");
+          navigate(returnTo);
         }}
       >
-        <span aria-hidden="true">←</span> Terug naar Vandaag
+        <span aria-hidden="true">←</span>{" "}
+        {returnTo === "/history"
+          ? "Terug naar Terugkijken"
+          : "Terug naar Vandaag"}
       </a>
       <header className="anchor-craving-intro">
         <p className="dp-kicker">Een moment van drang</p>
         <h1 tabIndex={-1}>{record ? "Je craving" : "Craving vastleggen"}</h1>
         <p className="dp-muted">
-          Datum en tijd zijn nodig. Vul verder alleen in wat je wilt; één
-          onderdeel is genoeg. Je kunt later aanvullen.
+          Datum en tijd zijn nodig. Schrijf daarnaast iets bij één van de
+          beschrijvende tekstvelden. De andere velden mag je leeg laten.
         </p>
       </header>
+      {resumedDraft && (
+        <p className="dp-notice" role="status">
+          Je werkt verder aan een bewaard concept.{" "}
+          {validDate(resumedDraft.date) && resumedDraft.time
+            ? `Je tekst en het oorspronkelijke tijdstip zijn behouden: ${dayLabel(resumedDraft.date)} om ${resumedDraft.time}.`
+            : "Je tekst en de nog onvolledige datum of tijd zijn teruggezet."}{" "}
+          Pas de datum en tijd alleen aan als je een ander moment bedoelt.
+        </p>
+      )}
 
       <section
         className="dp-card dp-form-section"
@@ -520,10 +535,11 @@ export function CravingView({
         )}
         <div className="anchor-craving-save">
           <p className="dp-muted anchor-craving-save-note">
-            Datum en tijd zijn nodig. Van de andere onderdelen is één ingevuld
-            veld genoeg om op te slaan.
+            Eén beschrijving is genoeg: je externe situatie, gedachte,
+            lichamelijke sensatie, emotie of gedrag. Alleen een middel kiezen is
+            nog geen beschrijving.
           </p>
-          <div className="dp-actions">
+          <div className="dp-actions dp-form-actions anchor-craving-save-actions">
             <button className="dp-button primary" type="submit">
               {record ? "Wijzigingen opslaan" : "Craving opslaan"}
             </button>

@@ -71,3 +71,8 @@
 .dp .dp-week-observations .dp-rating-line {
   margin-block: 0.5rem;
 }
+.dp .dp-week-record-link {
+  margin-top: 0.25rem;
+  text-align: left;
+  white-space: normal;
+}

@@ -30,7 +30,11 @@ const draft = (page: Page, key: string) =>
       ],
     { storageKey: DRAFT_KEY, key },
   );
-const beforeForm = (page: Page) => page.locator("form").first();
+const beforeForm = (page: Page) =>
+  page
+    .locator("form")
+    .filter({ has: page.locator(".dp-ratings-editor") })
+    .first();
 const rows = (scope: Locator) => scope.locator(".dp-emotion-row");
 async function selectEmotion(scope: Locator, label: string, index = 0) {
   await rows(scope)
@@ -54,7 +58,9 @@ async function saveMoment(page: Page) {
     .locator(".dp-activity-section select")
     .inputValue());
   await page
-    .getByRole("button", { name: "Check-in opslaan", exact: true })
+    .getByRole("button", {
+      name: /^(Check-in opslaan|Wijzigingen check-in opslaan)$/,
+    })
     .click();
   if (!hasActivity) {
     await expect(page).toHaveURL(/#\/today$/);
@@ -473,7 +479,7 @@ test("een ongeldig oud intensiteitsconcept opent het verborgen veld en houdt de 
   });
   await expect(details).not.toHaveAttribute("open", "");
   await page
-    .getByRole("button", { name: "Check-in opslaan", exact: true })
+    .getByRole("button", { name: "Wijzigingen check-in opslaan", exact: true })
     .click();
   await expect(details).toHaveAttribute("open", "");
   await expect(invalid).toBeFocused();
@@ -754,7 +760,7 @@ test("nametingfouten staan bij het juiste formulier, krijgen telkens zichtbare f
   await expect(intensity(after, "Boos")).toHaveValue("42");
 
   await before
-    .getByRole("button", { name: "Check-in opslaan", exact: true })
+    .getByRole("button", { name: "Wijzigingen check-in opslaan", exact: true })
     .click();
   await expect(before.getByRole("alert")).toBeFocused();
   await expect(before.getByRole("alert")).toContainText(

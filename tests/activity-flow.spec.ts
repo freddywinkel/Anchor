@@ -42,7 +42,9 @@ async function saveMoment(page: Page) {
     .locator(".dp-activity-section select")
     .inputValue());
   await page
-    .getByRole("button", { name: "Check-in opslaan", exact: true })
+    .getByRole("button", {
+      name: /^(Check-in opslaan|Wijzigingen check-in opslaan)$/,
+    })
     .click();
   if (!hasActivity) {
     await expect(page).toHaveURL(/#\/today$/);
@@ -456,7 +458,12 @@ for (const hasSavedRecord of [true, false]) {
     const repaired = { ...pending, activity: repairedActivity };
     expect(await draft(page, `moment:${original.id}`)).toEqual(repaired);
     await beforeForm(page)
-      .getByRole("button", { name: "Check-in opslaan", exact: true })
+      .getByRole("button", {
+        name: hasSavedRecord
+          ? "Wijzigingen check-in opslaan"
+          : "Check-in opslaan",
+        exact: true,
+      })
       .click();
     await expect(beforeForm(page).getByRole("alert")).toContainText(
       "Gebruik Nameting opslaan",
