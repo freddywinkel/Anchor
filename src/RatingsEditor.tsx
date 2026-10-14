@@ -1,28 +1,9 @@
 import { useId, useState, type InvalidEvent } from "react";
 import type { EmotionRating, Ratings } from "./lib/storage";
 import { MoodIllustration, PanIllustration } from "./FeelingIllustrations";
+import { EMOTION_GROUPS, EMOTION_OPTIONS } from "./lib/emotions";
 
 export const MOODS = ["Erg laag", "Laag", "Neutraal", "Goed", "Erg goed"];
-const EMOTIONS = [
-  "Bang",
-  "Onrustig",
-  "Verdrietig",
-  "Boos",
-  "Gefrustreerd",
-  "Beschaamd",
-  "Schuldig",
-  "Eenzaam",
-  "Teleurgesteld",
-  "Onzeker",
-  "Machteloos",
-  "Blij",
-  "Opgelucht",
-  "Rustig",
-  "Hoopvol",
-  "Trots",
-  "Dankbaar",
-  "Verbonden",
-];
 
 export function revealInvalidField(event: InvalidEvent<HTMLElement>) {
   let parent = (event.target as HTMLElement).parentElement;
@@ -144,8 +125,8 @@ function EmotionEditor({
       </h3>
       <p className="dp-hint" id={hintId}>
         {day
-          ? "Kies een emotie die vandaag opviel. Noteer hoe sterk die op het opvallendste moment was; dit is geen gemiddelde van je check-ins."
-          : "Je kunt iedere emotie een eigen cijfer geven. Ook een prettig gevoel kan sterk zijn."}{" "}
+          ? "Kies één of meer emoties die vandaag opvielen. Noteer per emotie hoe sterk die op het opvallendste moment was; dit is geen gemiddelde van je check-ins."
+          : "Je kunt meerdere emoties kiezen, elk met een eigen cijfer. Ook een prettig gevoel kan sterk zijn."}{" "}
         0 = niet voelbaar · 100 = zeer sterk voor jou. Een leeg cijfer blijft
         onbekend.
       </p>
@@ -177,7 +158,7 @@ function EmotionEditor({
         const custom =
           customIds.includes(emotion.id) ||
           (!emotion.label.trim() && emotion.intensity !== null) ||
-          (!!emotion.label && !EMOTIONS.includes(emotion.label));
+          (!!emotion.label && !EMOTION_OPTIONS.includes(emotion.label));
         return (
           <div className="dp-emotion-row" key={index}>
             <div className="dp-emotion-fields">
@@ -204,23 +185,30 @@ function EmotionEditor({
                   }}
                 >
                   <option value="">Kies een emotie</option>
-                  {EMOTIONS.map((label) => (
-                    <option
-                      key={label}
-                      disabled={
-                        label.toLocaleLowerCase("nl-NL") !== normalizedLabel &&
-                        rows.some(
-                          (other) =>
-                            other.id !== emotion.id &&
-                            other.label.trim().toLocaleLowerCase("nl-NL") ===
-                              label.toLocaleLowerCase("nl-NL"),
-                        )
-                      }
-                    >
-                      {label}
-                    </option>
-                  ))}
                   <option value="__custom">Eigen emotie</option>
+                  {EMOTION_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((label) => (
+                        <option
+                          key={label}
+                          disabled={
+                            label.toLocaleLowerCase("nl-NL") !==
+                              normalizedLabel &&
+                            rows.some(
+                              (other) =>
+                                other.id !== emotion.id &&
+                                other.label
+                                  .trim()
+                                  .toLocaleLowerCase("nl-NL") ===
+                                  label.toLocaleLowerCase("nl-NL"),
+                            )
+                          }
+                        >
+                          {label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </label>
               {custom && (
@@ -236,9 +224,14 @@ function EmotionEditor({
                     required={emotion.intensity !== null}
                     maxLength={150}
                     value={emotion.label}
-                    onChange={(event) =>
-                      changeRow(emotion.id, { label: event.target.value })
-                    }
+                    onChange={(event) => {
+                      // A historical free-text word may become a preset while
+                      // typing. Keep this input open for the rest of the edit.
+                      setCustomIds((ids) =>
+                        ids.includes(emotion.id) ? ids : [...ids, emotion.id],
+                      );
+                      changeRow(emotion.id, { label: event.target.value });
+                    }}
                   />
                 </label>
               )}

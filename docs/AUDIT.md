@@ -2,6 +2,16 @@
 
 Auditdatum: 12 oktober 2026, aangevuld op 13 en 14 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
 
+## Uitgebreide emotiekeuze — versie 1.13.0, 14 oktober 2026
+
+De check-in bood achttien standaardwoorden en de cravingkeuze tweeëndertig. Eén gedeelde redactionele keuzehulp (`src/lib/emotions.ts`) biedt nu 108 unieke emoties en gevoelswoorden in twaalf herkenbare thema's. Alle eerdere woorden zijn exact behouden. Dezelfde lijst wordt gebruikt in check-in, nameting, dagoverzicht en craving; native optgroups houden de compacte dropdown bruikbaar zonder extra invoerveld. Eigen emotie staat vóór de thema's, meerdere emoties blijven mogelijk en cijfers blijven optioneel per emotie. De lijst pretendeert geen volledige of klinisch gevalideerde classificatie te zijn. Gevoel, gedachte en lichamelijke sensatie blijven afzonderlijk; ook het [CCI-werkblad over angstsignalen](https://www.cci.health.wa.gov.au/-/media/CCI/Mental-Health-Professionals/Anxiety/Anxiety---Worksheets/Anxiety-Worksheet---01---Anxiety-Symptoms-Worksheet.pdf) maakt dit onderscheid.
+
+De uitbreiding verandert alleen de keuzehulp, geen opgeslagen labels, ID's of scores. Vrije tekst wordt niet aan de catalogus getoetst of automatisch genormaliseerd. Een bestaande eigen emotie die nu ook in de lijst staat, blijft dezelfde waarneming. Een historisch vrij tekstvak blijft tijdens het bewerken open, ook als de gebruiker onderweg exact een standaardwoord typt. Cravings behouden hun bestaande vrije tekst; een gekozen woord wordt alleen toegevoegd, zonder automatische intensiteit of check-in.
+
+Zes nieuwe gebruikersflowtests controleren meerdere keuzes, nul versus leeg, concepten herladen, onafhankelijke nametingen, dagoverzichten, behoud van historische eigen woorden en aanvullen van cravingtekst. Opslagstructuur, manifestidentiteit, updates en back-ups blijven ongewijzigd. Er zijn geen nieuwe dependencies of externe diensten toegevoegd. Bewijzen voor deze release staan onder `tmp/emotion-options-20261014/`; de gepubliceerde versie wordt afzonderlijk gecontroleerd tegen de exacte broncommit.
+
+Lokale verificatie: alle 90 unitgevallen, 171 browsergevallen en 25 aanvullende controles slagen, evenals typecheck, productiebuild en PWA-controle. Twee echte workerupdateproeven slagen met elk 14 controles, waaronder de overgang vanaf `3412880`, behoud van zes conceptsoorten en offlinegebruik. De productie-dependencyaudit meldt nul kwetsbaarheden. WebKit-controles van de vier registratieflows bij 390 pixels en 320 pixels met 200% tekst behouden keuzes, vrije tekst, concepten en nul versus leeg; de bekeken screenshots tonen geen horizontale overloop. Alle 951 bronbestanden van de aangrenzende oude apps zijn ongewijzigd. Fysieke iOS-apparaten en de uitgeklapte native keuzelijst zijn niet visueel getest.
+
 ## Rustige formulieren en vernieuwd Terugkijken — versie 1.12.0, 14 oktober 2026
 
 Alle opslagacties staan na de laatste vraag in documentvolgorde: craving, check-in, nameting en dagoverzicht. De mobiele sticky-regels en hun tijdelijke viewportinstelling zijn verwijderd; focuscorrectie voor toetsenbord en navigatie blijft bestaan. Vensters scrollen zelfstandig.

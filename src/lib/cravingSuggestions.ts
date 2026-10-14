@@ -1,3 +1,5 @@
+import { EMOTION_GROUPS } from "./emotions";
+
 // Optional examples to help find words; these are not an exhaustive or clinical list.
 export const CRAVING_SUGGESTIONS = {
   thought: [
@@ -98,42 +100,7 @@ export const CRAVING_SUGGESTIONS = {
       ],
     },
   ],
-  emotion: [
-    {
-      label: "Angst en onzekerheid",
-      options: ["Bang", "Bezorgd", "Onzeker", "Zenuwachtig", "Overweldigd"],
-    },
-    {
-      label: "Boosheid en weerstand",
-      options: ["Boos", "Geïrriteerd", "Gefrustreerd", "Ongeduldig", "Jaloers"],
-    },
-    {
-      label: "Verdriet en gemis",
-      options: [
-        "Verdrietig",
-        "Eenzaam",
-        "Teleurgesteld",
-        "Neerslachtig",
-        "Weemoedig",
-      ],
-    },
-    {
-      label: "Schaamte en kwetsbaarheid",
-      options: ["Beschaamd", "Schuldig", "Verlegen", "Gekwetst", "Machteloos"],
-    },
-    {
-      label: "Plezier en verbinding",
-      options: ["Blij", "Enthousiast", "Dankbaar", "Trots", "Verbonden"],
-    },
-    {
-      label: "Rust en vertrouwen",
-      options: ["Rustig", "Tevreden", "Opgelucht", "Hoopvol", "Geborgen"],
-    },
-    {
-      label: "Verveling en nieuwsgierigheid",
-      options: ["Verveeld", "Nieuwsgierig"],
-    },
-  ],
+  emotion: EMOTION_GROUPS,
 } as const satisfies Record<
   "thought" | "bodySensation" | "emotion",
   readonly { label: string; options: readonly string[] }[]
