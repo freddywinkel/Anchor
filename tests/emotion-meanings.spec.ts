@@ -251,7 +251,8 @@ test("betekenissen zijn offline leesbaar en zoekbaar op 320 px met grote tekst z
   await context.setOffline(true);
   await page.reload();
   await expect(opener(page)).toBeVisible();
-  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+  // navigator.onLine is an OS/browser hint and can stay true after a cached
+  // navigation. Verify the actual connection with an uncached request below.
   const probeFailed = await page.evaluate(async () => {
     try {
       await fetch(`uncached-meaning-${crypto.randomUUID()}.txt`, {
@@ -263,6 +264,13 @@ test("betekenissen zijn offline leesbaar en zoekbaar op 320 px met grote tekst z
     }
   });
   expect(probeFailed).toBe(true);
+  await testInfo.attach("offline-connection", {
+    body: JSON.stringify({
+      browserHint: await page.evaluate(() => navigator.onLine),
+      uncachedRequestFailed: probeFailed,
+    }),
+    contentType: "application/json",
+  });
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "200%";
   });

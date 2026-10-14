@@ -8,6 +8,7 @@ import {
 import { CRAVING_SUGGESTIONS } from "./lib/cravingSuggestions";
 import { cravingSubstances, withCravingSubstances } from "./lib/substances";
 import { CravingSubstances } from "./CravingSubstances";
+import { CravingUseAction } from "./CravingUseAction";
 import "./craving.css";
 
 type CravingViewProps = {
@@ -18,7 +19,8 @@ type CravingViewProps = {
   onDraft: (value: CravingRecord) => void;
   draft?: CravingRecord;
   onClear: () => boolean;
-  onCompleted: () => void;
+  onCompleted: (id: string) => void;
+  onUseChange: (id: string, used: boolean) => boolean;
   onSupport: () => void;
   returnTo?: string;
 };
@@ -64,6 +66,7 @@ export function CravingView({
   draft,
   onClear,
   onCompleted,
+  onUseChange,
   onSupport,
   returnTo = "/today",
 }: CravingViewProps) {
@@ -94,7 +97,10 @@ export function CravingView({
   const dateHintId = `${prefix}-day`;
   const confirmationTitleId = `${prefix}-delete-title`;
   const confirmationDescriptionId = `${prefix}-delete-description`;
-  const dirty = !record || JSON.stringify(record) !== JSON.stringify(value);
+  const dirty =
+    !record ||
+    JSON.stringify({ ...record, usedAfterCraving: undefined }) !==
+      JSON.stringify({ ...value, usedAfterCraving: undefined });
 
   useEffect(() => {
     if (confirmDelete) cancelDeleteRef.current?.focus();
@@ -113,7 +119,7 @@ export function CravingView({
 
   function complete(action: "saved" | "deleted") {
     if (onClear()) {
-      if (action === "saved") onCompleted();
+      if (action === "saved") onCompleted(value.id);
       else navigate(returnTo);
       return;
     }
@@ -226,6 +232,14 @@ export function CravingView({
       return;
     }
     const nextRecord = withCravingSubstances(value, names);
+    // This post-save annotation is changed separately. A resumed draft must
+    // neither erase a newer annotation nor restore one explicitly removed.
+    const currentRecord = state.cravings.find(
+      (item) => item.id === nextRecord.id,
+    );
+    if (currentRecord?.usedAfterCraving === true)
+      nextRecord.usedAfterCraving = true;
+    else delete nextRecord.usedAfterCraving;
     for (const field of narrativeFields)
       nextRecord[field] = value[field].trim();
     const exists = state.cravings.some((item) => item.id === nextRecord.id);
@@ -524,6 +538,8 @@ export function CravingView({
           </p>
         </div>
       </form>
+
+      {record && <CravingUseAction record={record} onChange={onUseChange} />}
 
       {record && (
         <section

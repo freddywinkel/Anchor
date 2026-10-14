@@ -52,6 +52,7 @@ import {
 } from "./SecondaryViews";
 import { Dialog } from "./Dialog";
 import { CravingView } from "./CravingView";
+import { CravingUseAction } from "./CravingUseAction";
 import { cravingSubstances } from "./lib/substances";
 import "./secondary.css";
 import {
@@ -174,7 +175,7 @@ export function App() {
   const [draftRecoveryDownloaded, setDraftRecoveryDownloaded] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
-  const [offerSupport, setOfferSupport] = useState(false);
+  const [offerSupport, setOfferSupport] = useState<string | null>(null);
   const [modal, setModal] = useState<
     "menu" | "import" | "privacy" | "drafts" | "draft-recovery" | null
   >(null);
@@ -224,7 +225,7 @@ export function App() {
     ? `/help?craving=${encodeURIComponent(path.split("/")[2])}${returnQuery ? `&${returnQuery}` : ""}`
     : `/help${helpQuery}`;
   const navigate = (to: string) => {
-    setOfferSupport(false);
+    setOfferSupport(null);
     importSequence.current++;
     setPendingDraftCompletion(null);
     setModal(null);
@@ -399,7 +400,7 @@ export function App() {
   }, [dialogError]);
   useEffect(() => {
     setPendingDraftCompletion(null);
-    if (path !== "/today") setOfferSupport(false);
+    if (path !== "/today") setOfferSupport(null);
   }, [path]);
   useEffect(() => {
     const navigation = document.querySelector<HTMLElement>(".dp-bottom-nav");
@@ -557,6 +558,27 @@ export function App() {
     setToast(message);
     return true;
   };
+  function changeCravingUse(id: string, used: boolean) {
+    const existing = state.cravings.find((item) => item.id === id);
+    if (!existing) {
+      setError(
+        "Deze craving is niet meer beschikbaar. Open Terugkijken opnieuw.",
+      );
+      return false;
+    }
+    if (!writer || blocked) return save(state, "");
+    if ((existing.usedAfterCraving === true) === used) return true;
+    const next = { ...existing };
+    if (used) next.usedAfterCraving = true;
+    else delete next.usedAfterCraving;
+    return save(
+      {
+        ...state,
+        cravings: state.cravings.map((item) => (item.id === id ? next : item)),
+      },
+      used ? "Gebruik aangegeven." : "Markering verwijderd.",
+    );
+  }
   function cacheDraft(key: string, value: unknown | null) {
     if (!writer || blocked) return false;
     // A failed removal keeps the draft visible in loadDrafts for a later retry.
@@ -846,13 +868,17 @@ export function App() {
                 currentDate={currentDate}
                 navigate={navigate}
                 offerSupport={offerSupport}
-                onDismissSupport={() => setOfferSupport(false)}
+                onDismissSupport={() => setOfferSupport(null)}
+                onCravingUseChange={changeCravingUse}
+                readOnly={!writer || blocked}
               />
             )}
             {path === "/history" && (
               <>
                 <HistoryView
                   state={state}
+                  onCravingUseChange={changeCravingUse}
+                  readOnly={!writer || blocked}
                   currentDate={currentDate}
                   session={historySession}
                   onSessionChange={setHistorySession}
@@ -994,9 +1020,10 @@ export function App() {
                   }
                   onDraft={(value) => cacheDraft(`craving:${cravingId}`, value)}
                   onClear={() => cacheDraft(`craving:${cravingId}`, null)}
-                  onCompleted={() => {
+                  onUseChange={changeCravingUse}
+                  onCompleted={(id) => {
                     navigate(returnTo);
-                    setOfferSupport(returnTo === "/today");
+                    setOfferSupport(returnTo === "/today" ? id : null);
                   }}
                   onSupport={() => navigate(supportDestination)}
                 />
@@ -1414,12 +1441,16 @@ function Today({
   navigate,
   offerSupport,
   onDismissSupport,
+  onCravingUseChange,
+  readOnly,
 }: {
   state: AppState;
   currentDate: string;
   navigate: (path: string) => void;
-  offerSupport: boolean;
+  offerSupport: string | null;
   onDismissSupport: () => void;
+  onCravingUseChange: (id: string, used: boolean) => boolean;
+  readOnly: boolean;
 }) {
   const current = [
     ...state.moments
@@ -1431,13 +1462,16 @@ function Today({
   ].sort((a, b) => b.item.time.localeCompare(a.item.time));
   const day = state.days.find((item) => item.date === currentDate);
   const favorite = state.growth.find((item) => item.favorite);
+  const justSavedCraving = state.cravings.find(
+    (item) => item.id === offerSupport,
+  );
   return (
     <>
       <PageTitle
         kicker={dateText(currentDate, true)}
         title="Vandaag, op jouw tempo."
       />
-      {offerSupport && (
+      {justSavedCraving && (
         <section
           className="dp-card dp-form-section"
           aria-labelledby="craving-next-step"
@@ -1463,6 +1497,11 @@ function Today({
               Klaar voor nu
             </Button>
           </div>
+          <CravingUseAction
+            record={justSavedCraving}
+            onChange={onCravingUseChange}
+            disabled={readOnly}
+          />
         </section>
       )}
       <section className="dp-now-panel">
@@ -1544,6 +1583,9 @@ function Today({
                           <p className="dp-hint">
                             Gedrag: {(item as CravingRecord).behavior}
                           </p>
+                        )}
+                        {(item as CravingRecord).usedAfterCraving === true && (
+                          <p className="dp-hint">Gebruikt</p>
                         )}
                       </>
                     ) : (

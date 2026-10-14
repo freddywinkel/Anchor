@@ -33,6 +33,7 @@ import { MOODS } from "./RatingsEditor";
 import { Dialog } from "./Dialog";
 import { MoodPlot } from "./MoodPlot";
 import { EmotionGlossary } from "./EmotionGlossary";
+import { CravingUseAction } from "./CravingUseAction";
 import "./history.css";
 import "./secondary.css";
 
@@ -229,11 +230,15 @@ function HistoryRecord({
   onEdit,
   open,
   onToggle,
+  onCravingUseChange,
+  readOnly,
 }: {
   entry: HistoryEntry;
   onEdit: () => void;
   open: boolean;
   onToggle: (open: boolean) => void;
+  onCravingUseChange: (id: string, used: boolean) => boolean;
+  readOnly: boolean;
 }) {
   const substances =
     entry.type === "craving"
@@ -271,9 +276,14 @@ function HistoryRecord({
             )}
           </span>
           {entry.type === "craving" && (
-            <span className="dp-history-preview">
-              {substanceLabel}: {substances.join(", ") || "Niet ingevuld"}
-            </span>
+            <>
+              <span className="dp-history-preview">
+                {substanceLabel}: {substances.join(", ") || "Niet ingevuld"}
+              </span>
+              {entry.item.usedAfterCraving === true && (
+                <span className="dp-craving-use-badge">Gebruikt</span>
+              )}
+            </>
           )}
           {entry.type === "moment" && (
             <>
@@ -312,6 +322,9 @@ function HistoryRecord({
                 ["Lichamelijke sensatie", entry.item.bodySensation],
                 ["Emotie", entry.item.emotion],
                 ["Gedrag", entry.item.behavior],
+                ...(entry.item.usedAfterCraving === true
+                  ? [["Gebruik na craving", "Gebruikt"] as const]
+                  : []),
               ]}
             />
           ) : entry.type === "moment" ? (
@@ -389,6 +402,13 @@ function HistoryRecord({
               />
             </>
           )}
+          {entry.type === "craving" && (
+            <CravingUseAction
+              record={entry.item}
+              onChange={onCravingUseChange}
+              disabled={readOnly}
+            />
+          )}
           <button
             type="button"
             className="dp-button quiet"
@@ -408,12 +428,16 @@ function HistoryGroup({
   session,
   onSessionChange,
   onEdit,
+  onCravingUseChange,
+  readOnly,
 }: {
   type: HistoryEntry["type"];
   entries: HistoryEntry[];
   session: HistorySession;
   onSessionChange: Dispatch<SetStateAction<HistorySession>>;
   onEdit: (entry: HistoryEntry) => void;
+  onCravingUseChange: (id: string, used: boolean) => boolean;
+  readOnly: boolean;
 }) {
   const visibleCount = session.visible[type];
   const listRef = useRef<HTMLOListElement>(null);
@@ -454,6 +478,8 @@ function HistoryGroup({
                     }))
                   }
                   onEdit={() => onEdit(entry)}
+                  onCravingUseChange={onCravingUseChange}
+                  readOnly={readOnly}
                 />
               </li>
             );
@@ -506,6 +532,8 @@ export function HistoryView({
   onOpenMoment,
   onOpenDay,
   onOpenCraving,
+  onCravingUseChange,
+  readOnly,
 }: {
   state: AppState;
   currentDate: string;
@@ -514,6 +542,8 @@ export function HistoryView({
   onOpenMoment: (id: string) => void;
   onOpenDay: (date: string) => void;
   onOpenCraving: (id: string) => void;
+  onCravingUseChange: (id: string, used: boolean) => boolean;
+  readOnly: boolean;
 }) {
   const { period, kind, query } = session;
   const [reveal, setReveal] = useState<WeekRecordTarget | null>(null);
@@ -608,7 +638,7 @@ export function HistoryView({
           (period === "all" ||
             (item.date >= start && item.date <= currentDate)) &&
           (kind === "all" || kind === "craving") &&
-          `${cravingSubstances(item).join(" ")} ${item.situation} ${item.thought} ${item.bodySensation} ${item.emotion} ${item.behavior} craving drang`
+          `${cravingSubstances(item).join(" ")} ${item.situation} ${item.thought} ${item.bodySensation} ${item.emotion} ${item.behavior} craving drang ${item.usedAfterCraving === true ? "gebruik na craving gebruikt" : ""}`
             .toLocaleLowerCase("nl-NL")
             .includes(search),
       )
@@ -927,6 +957,27 @@ export function HistoryView({
                 entries={entries.filter((entry) => entry.type === type)}
                 session={session}
                 onSessionChange={onSessionChange}
+                readOnly={readOnly}
+                onCravingUseChange={(id, used) => {
+                  if (!onCravingUseChange(id, used)) return false;
+                  requestAnimationFrame(() => {
+                    // Removing a mark can remove this card from search results.
+                    if (
+                      !document.getElementById(
+                        historyElementId(`craving:${id}`),
+                      )
+                    ) {
+                      const heading =
+                        document.getElementById("dp-history-entries");
+                      heading?.focus({ preventScroll: true });
+                      heading?.scrollIntoView({
+                        block: "start",
+                        behavior: "instant",
+                      });
+                    }
+                  });
+                  return true;
+                }}
                 onEdit={(entry) => {
                   onSessionChange((current) => ({
                     ...current,

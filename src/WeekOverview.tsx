@@ -152,6 +152,7 @@ function WeekDayDetails({
           element: (
             <li key={`craving:${value.id}`} tabIndex={-1}>
               <strong>Craving · {value.time}</strong>
+              {value.usedAfterCraving === true && <p>Gebruikt</p>}
               <p className="dp-preserve-lines">
                 {cravingSubstances(value).length > 1
                   ? "Middelen of gedrag"

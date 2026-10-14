@@ -42,6 +42,9 @@ export type CravingRecord = {
   time: string;
   substance?: string;
   substances?: string[];
+  // Only an explicit user mark; absence means unknown, never "did not use".
+  // This does not identify which, if any, listed substances were used.
+  usedAfterCraving?: true;
   situation: string;
   thought: string;
   bodySensation: string;
@@ -422,6 +425,7 @@ function craving(value: unknown, draft = false): CravingRecord {
   const input = object(value, "Drangregistratie");
   const hasSubstance = Object.hasOwn(input, "substance");
   const hasSubstances = Object.hasOwn(input, "substances");
+  const hasUsedAfterCraving = Object.hasOwn(input, "usedAfterCraving");
   if (hasSubstance && hasSubstances)
     return invalid("Middel en middelen mogen niet tegelijk zijn ingevuld.");
   const item = fields(
@@ -437,9 +441,12 @@ function craving(value: unknown, draft = false): CravingRecord {
       "behavior",
       ...(hasSubstance ? ["substance"] : []),
       ...(hasSubstances ? ["substances"] : []),
+      ...(hasUsedAfterCraving ? ["usedAfterCraving"] : []),
     ],
     "Drangregistratie",
   );
+  if (hasUsedAfterCraving && item.usedAfterCraving !== true)
+    return invalid("De gebruiksmarkering moet ontbreken of waar zijn.");
   return {
     id: identifier(item.id),
     date: draftDate(item.date, draft),
@@ -456,6 +463,8 @@ function craving(value: unknown, draft = false): CravingRecord {
     ...(hasSubstances
       ? { substances: cravingSubstanceNames(item.substances, draft) }
       : {}),
+    // Additive v1 field: never derive use from free text or substance choices.
+    ...(hasUsedAfterCraving ? { usedAfterCraving: true as const } : {}),
   };
 }
 
