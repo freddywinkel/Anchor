@@ -47,6 +47,11 @@
   font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
+.dp .dp-history-filter-label {
+  flex-basis: 100%;
+  color: var(--dp-ink);
+  font-weight: 600;
+}
 .dp .dp-history-selection > p > span + span {
   border-inline-start: 1px solid var(--dp-border);
   padding-inline-start: 1rem;

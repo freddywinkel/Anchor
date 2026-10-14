@@ -733,6 +733,7 @@ export function HistoryView({
       </header>
       <div className="dp-history-selection">
         <p id="dp-history-selection">
+          <strong className="dp-history-filter-label">Filter:</strong>
           <span>{period === "week" ? "Afgelopen 7 dagen" : "Alle dagen"}</span>
           <span>
             {
