@@ -42,7 +42,7 @@ export function EmotionGlossary({ onClose }: { onClose: () => void }) {
     0,
   );
   return (
-    <Dialog title="Emoties en betekenissen" onClose={onClose}>
+    <Dialog title="Emoties en betekenissen" onClose={onClose} dismissOnBackdrop>
       <div className="dp-emotion-glossary">
         <p className="dp-muted" id={helpId}>
           Gevoelens kunnen overlappen en voor iedereen anders aanvoelen. Deze

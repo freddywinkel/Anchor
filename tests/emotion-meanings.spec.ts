@@ -8,7 +8,7 @@ const DRAFTS = "anchor.app.drafts.v1";
 const UNRELATED = "synthetic.emotion-meaning.keep";
 const errors = new WeakMap<Page, string[]>();
 const opener = (page: Page) =>
-  page.getByRole("button", { name: "Bekijk de betekenissen", exact: true });
+  page.getByRole("button", { name: "Meer opties", exact: true });
 const dialog = (page: Page) =>
   page.getByRole("dialog", { name: "Emoties en betekenissen", exact: true });
 const search = (page: Page) =>
@@ -20,6 +20,7 @@ const snapshot = (page: Page) =>
   );
 
 test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   errors.set(page, []);
   page.on("pageerror", (error) => errors.get(page)!.push(error.message));
   const state = createEmptyState();
@@ -98,24 +99,61 @@ test.afterEach(async ({ page }) => {
   ).toEqual([]);
 });
 
-async function openSettings(page: Page) {
-  await page.goto("./#/settings");
-  await expect(
-    page.getByRole("heading", { name: "Instellingen", exact: true }),
-  ).toBeVisible();
+async function openApp(page: Page, route = "today") {
+  await page.goto(`./#/${route}`);
+  await expect(opener(page)).toBeVisible();
   await expect(
     page.getByText("Je gegevens worden geopend…", { exact: true }),
   ).toHaveCount(0);
 }
 async function openMeanings(page: Page) {
   await opener(page).click();
+  await page
+    .getByRole("dialog", { name: "Meer in Anchor", exact: true })
+    .getByRole("button", { name: "Emoties en betekenissen", exact: true })
+    .click();
   await expect(dialog(page)).toBeVisible();
 }
+
+async function outsidePoint(page: Page, target = dialog(page)) {
+  const bounds = await target.boundingBox();
+  const viewport = page.viewportSize();
+  expect(bounds).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  if (bounds!.x > 2) return { x: bounds!.x / 2, y: viewport!.height / 2 };
+  expect(bounds!.y).toBeGreaterThan(2);
+  return { x: viewport!.width / 2, y: bounds!.y / 2 };
+}
+
+test("de betekenissen staan onder Meer op telefoon en desktop en niet meer als onderdeel van Instellingen", async ({
+  page,
+}) => {
+  await openApp(page, "settings");
+  await expect(
+    page.getByRole("heading", { name: "Instellingen", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Emoties en betekenissen", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Bekijk de betekenissen", exact: true }),
+  ).toHaveCount(0);
+  const before = await snapshot(page);
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(opener(page)).toBeVisible();
+    await openMeanings(page);
+    await page.keyboard.press("Escape");
+    await expect(opener(page)).toBeFocused();
+    await expect(page).toHaveURL(/#\/settings$/);
+  }
+  expect(await snapshot(page)).toEqual(before);
+});
 
 test("alle aangeboden emoties hebben een leesbare betekenis in gesloten categorieën zonder gegevens te wijzigen", async ({
   page,
 }) => {
-  await openSettings(page);
+  await openApp(page);
   const before = await snapshot(page);
   await openMeanings(page);
   await expect(dialog(page).locator("details")).toHaveCount(
@@ -164,7 +202,7 @@ test("alle aangeboden emoties hebben een leesbare betekenis in gesloten categori
 test("zoeken vindt emotiewoorden, uitleg en woorden zonder accenten; wissen herstelt de categorieën en zoekfocus", async ({
   page,
 }) => {
-  await openSettings(page);
+  await openApp(page);
   const before = await snapshot(page);
   await openMeanings(page);
   await search(page).fill("NERVEUS");
@@ -220,10 +258,10 @@ test("zoeken vindt emotiewoorden, uitleg en woorden zonder accenten; wissen hers
 });
 
 for (const close of ["button", "Escape"] as const) {
-  test(`sluiten met ${close} bewaart gegevens en concepten en brengt focus terug naar de betekenissenknop`, async ({
+  test(`sluiten met ${close} bewaart gegevens en concepten en brengt focus terug naar Meer`, async ({
     page,
   }) => {
-    await openSettings(page);
+    await openApp(page);
     const before = await snapshot(page);
     await openMeanings(page);
     await search(page).fill("Nerveus");
@@ -238,12 +276,88 @@ for (const close of ["button", "Escape"] as const) {
   });
 }
 
+for (const pointer of ["mouse", "touch"] as const) {
+  test.describe(`achtergrond sluiten met ${pointer}`, () => {
+    test.use({ hasTouch: pointer === "touch" });
+    test("ook onderaan de lange lijst sluit een achtergrondtik zonder invoer te wijzigen", async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 320, height: 900 });
+      await openApp(page);
+      const before = await snapshot(page);
+      await openMeanings(page);
+      await search(page).fill("je");
+      await dialog(page).locator("dd").last().scrollIntoViewIfNeeded();
+      expect(
+        await dialog(page).evaluate((element) => element.scrollTop),
+      ).toBeGreaterThan(500);
+      const point = await outsidePoint(page);
+      if (pointer === "touch") await page.touchscreen.tap(point.x, point.y);
+      else await page.mouse.click(point.x, point.y);
+      await expect(dialog(page)).toHaveCount(0);
+      await expect(opener(page)).toBeFocused();
+      expect(await snapshot(page)).toEqual(before);
+    });
+  });
+}
+
+test("binnenruimte en sleepbewegingen over de vensterrand sluiten de betekenissen niet", async ({
+  page,
+}) => {
+  await openApp(page);
+  const before = await snapshot(page);
+  await openMeanings(page);
+  const bounds = (await dialog(page).boundingBox())!;
+  await page.mouse.click(bounds.x + 3, bounds.y + 3);
+  await expect(dialog(page)).toBeVisible();
+  const heading = (await dialog(page)
+    .getByRole("heading", { name: "Emoties en betekenissen", exact: true })
+    .boundingBox())!;
+  const inside = {
+    x: heading.x + heading.width / 2,
+    y: heading.y + heading.height / 2,
+  };
+  const outside = await outsidePoint(page);
+  for (const [start, end] of [
+    [inside, outside],
+    [outside, inside],
+  ]) {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(end.x, end.y, { steps: 3 });
+    await page.mouse.up();
+    await expect(dialog(page)).toBeVisible();
+  }
+  await page.keyboard.press("Escape");
+  await expect(opener(page)).toBeFocused();
+  expect(await snapshot(page)).toEqual(before);
+});
+
+test("achtergrondklikken veranderen het bestaande sluitgedrag van andere vensters niet", async ({
+  page,
+}) => {
+  await openApp(page);
+  const before = await snapshot(page);
+  await opener(page).click();
+  const menu = page.getByRole("dialog", {
+    name: "Meer in Anchor",
+    exact: true,
+  });
+  await expect(menu).toBeVisible();
+  const point = await outsidePoint(page, menu);
+  await page.mouse.click(point.x, point.y);
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(opener(page)).toBeFocused();
+  expect(await snapshot(page)).toEqual(before);
+});
+
 test("betekenissen zijn offline leesbaar en zoekbaar op 320 px met grote tekst zonder lokale gegevens te wijzigen", async ({
   page,
   context,
 }, testInfo) => {
   await page.setViewportSize({ width: 320, height: 900 });
-  await openSettings(page);
+  await openApp(page);
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.reload();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);

@@ -5,14 +5,30 @@ export function Dialog({
   title,
   children,
   onClose,
+  dismissOnBackdrop = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  dismissOnBackdrop?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const focusFrame = useRef(0);
+  const backdropPointer = useRef<number | null>(null);
   const titleId = useId();
+  function outsideDialog(
+    dialog: HTMLDialogElement,
+    clientX: number,
+    clientY: number,
+  ) {
+    const bounds = dialog.getBoundingClientRect();
+    return (
+      clientX < bounds.left ||
+      clientX > bounds.right ||
+      clientY < bounds.top ||
+      clientY > bounds.bottom
+    );
+  }
   useEffect(() => {
     const dialog = ref.current!;
     const previous = document.activeElement;
@@ -56,6 +72,29 @@ export function Dialog({
       className="dp-dialog"
       ref={ref}
       aria-labelledby={titleId}
+      onPointerDown={(event) => {
+        backdropPointer.current =
+          dismissOnBackdrop &&
+          event.isPrimary &&
+          event.button === 0 &&
+          event.target === event.currentTarget &&
+          outsideDialog(event.currentTarget, event.clientX, event.clientY)
+            ? event.pointerId
+            : null;
+      }}
+      onPointerUp={(event) => {
+        const beganOutside = backdropPointer.current === event.pointerId;
+        backdropPointer.current = null;
+        if (
+          dismissOnBackdrop &&
+          beganOutside &&
+          outsideDialog(event.currentTarget, event.clientX, event.clientY)
+        )
+          onClose();
+      }}
+      onPointerCancel={() => {
+        backdropPointer.current = null;
+      }}
       onFocusCapture={(event) => {
         const dialog = event.currentTarget;
         const target = event.target;

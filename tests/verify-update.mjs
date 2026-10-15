@@ -14,6 +14,7 @@ const approvedBaselines = [
   "a8262d9113c1f7940cd730f83a2ad0c4a78eefac",
   "34128808396c3a71ad8d497f0cd78415def3d688",
   "b95a3c3a0a0762b643309e566ef0b54fd23340cb",
+  "056bad78b0e389cd94e180b63931fe18f94b9353",
 ];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
@@ -34,7 +35,7 @@ if (baselineRef) {
   );
   if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9, 3412880 or b95a3c3.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9, 3412880, b95a3c3 or 056bad7.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -149,11 +150,14 @@ const legacyBaseline = approvedBaselines.slice(0, 2).includes(baselineCommit);
 const multipleSubstancesBaseline =
   baselineCommit === null ||
   approvedBaselines.slice(5).includes(baselineCommit);
-// The published 1.15.0 baseline and current source understand the additive marker.
+// Published releases from 1.15.0 understand the additive use marker.
 const useMarkerBaseline =
   baselineCommit === null ||
-  baselineCommit === "b95a3c3a0a0762b643309e566ef0b54fd23340cb";
-const useConfirmationTimeBaseline = baselineCommit === null;
+  approvedBaselines.slice(6).includes(baselineCommit);
+const useConfirmationTimeBaseline =
+  baselineCommit === null ||
+  baselineCommit === "056bad78b0e389cd94e180b63931fe18f94b9353";
+const cravingLinksBaseline = baselineCommit === null;
 function expectConfirmationInstant(value, earliest, latest) {
   expect(value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   expect(new Date(value).toISOString()).toBe(value);
@@ -428,6 +432,9 @@ try {
           attempted: false,
           emotions: [],
           note: "Fictieve check-in met onafhankelijke scores.",
+          ...(cravingLinksBaseline
+            ? { cravingId: JSON.parse(saved).cravings[0].id }
+            : {}),
         },
       ],
       days: [
@@ -726,6 +733,9 @@ try {
       note: "Bewaarde check-inwijziging voor de update.",
     });
     expect(snapshot.days).toHaveLength(1);
+    if (cravingLinksBaseline)
+      expect(snapshot.moments[0].cravingId).toBe(snapshot.cravings[0].id);
+    else expect(Object.hasOwn(snapshot.moments[0], "cravingId")).toBe(false);
     expect(snapshot.days[0]).toMatchObject({
       date: fixtureDay,
       sleepHours: "7",
@@ -1030,10 +1040,10 @@ try {
   await expect(
     page.getByRole("button", { name: "Markering verwijderen", exact: true }),
   ).toBeVisible();
-  const finalRaw = await page.evaluate(() =>
+  let finalRaw = await page.evaluate(() =>
     localStorage.getItem("anchor.app.data.v1"),
   );
-  const finalState = JSON.parse(finalRaw);
+  let finalState = JSON.parse(finalRaw);
   const combinedCraving = finalState.cravings.at(-1);
   expect(combinedCraving.usedAfterCraving).toBe(true);
   expectConfirmationInstant(
@@ -1095,6 +1105,82 @@ try {
   expect(
     await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
   ).toBe(finalRaw);
+
+  const beforeLinkedCheckin = finalState;
+  await page
+    .getByRole("region", { name: "Later inchecken", exact: true })
+    .getByRole("button", {
+      name: "Nieuwe check-in bij deze craving",
+      exact: true,
+    })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`#/moment/new\\?craving=${combinedCraving.id}$`),
+  );
+  await page.getByRole("button", { name: "0 Neutraal", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Kies een emotie", exact: true })
+    .first()
+    .selectOption({ label: "Nerveus" });
+  await page.getByLabel("Intensiteit van Nerveus", { exact: true }).fill("0");
+  const linkedNote =
+    "Fictieve latere check-in na de echte update.\nMijn eigen woorden blijven bewaard.";
+  await page.getByLabel(/^In je eigen woorden/).fill(linkedNote);
+  const linkedDraftRaw = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    draftKey,
+  );
+  expect(JSON.parse(linkedDraftRaw).records["moment:new"]).toMatchObject({
+    cravingId: combinedCraving.id,
+    before: {
+      mood: 0,
+      eis: null,
+      emotionRatings: [{ label: "Nerveus", intensity: 0 }],
+    },
+    note: linkedNote,
+  });
+  await page.reload();
+  await expect(page.getByLabel(/^In je eigen woorden/)).toHaveValue(linkedNote);
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toBe(linkedDraftRaw);
+  expect(
+    await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
+  ).toBe(finalRaw);
+  await page
+    .getByRole("button", { name: "Check-in opslaan", exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`#/craving/${combinedCraving.id}$`));
+  finalRaw = await page.evaluate(() =>
+    localStorage.getItem("anchor.app.data.v1"),
+  );
+  finalState = JSON.parse(finalRaw);
+  const linkedCheckin = finalState.moments.at(-1);
+  expect(linkedCheckin).toMatchObject({
+    cravingId: combinedCraving.id,
+    before: {
+      mood: 0,
+      eis: null,
+      emotionRatings: [{ label: "Nerveus", intensity: 0 }],
+    },
+    note: linkedNote,
+  });
+  expect(finalState).toEqual({
+    ...beforeLinkedCheckin,
+    revision: beforeLinkedCheckin.revision + 1,
+    moments: [...beforeLinkedCheckin.moments, linkedCheckin],
+  });
+  expect(await draftRecords()).toEqual({});
+  const linkedReadout = page.locator(
+    `[data-linked-checkin-id="${linkedCheckin.id}"]`,
+  );
+  await expect(linkedReadout).toContainText(linkedNote);
+  await expect(linkedReadout).toContainText("Nerveus: 0/100");
+  await page.reload();
+  await expect(linkedReadout).toContainText(linkedNote);
+  expect(
+    await page.evaluate(() => localStorage.getItem("anchor.app.data.v1")),
+  ).toBe(finalRaw);
   await go("/settings");
   const backupDownload = page.waitForEvent("download");
   await page
@@ -1111,6 +1197,7 @@ try {
     "after activation, offline multi-substance creation with a custom name, save, reload and validated backup preserve all historical records and settings",
     "after activation from every baseline, an explicit use mark is saved through the UI, survives offline reload and is included in the validated backup without assigning use to individual substances",
     "a new confirmation receives a canonical UTC instant bounded by the actual button click, displays its time and elapsed interval, and retains that exact timestamp through offline reload and the validated backup",
+    "after activation from every baseline, an explicitly linked new check-in preserves its craving ID, zero mood and emotion score, custom note and all earlier data through offline draft reload, save, record reload and validated backup",
   );
   if (useMarkerBaseline) {
     // A normal explicit activation requires resolving drafts first (tested
@@ -1118,17 +1205,23 @@ try {
     // activate naturally: that path must preserve both saved data and drafts.
     // Use a separate synthetic profile, never force skipWaiting past the guard.
     const lifecycleState = structuredClone(finalState);
-    // 1.15.0 supports the true marker, but its strict parser cannot read the
-    // new timestamp. Adapt only this isolated pre-update fixture, never the
-    // actual main-profile data or byte-equality assertions above.
+    // Historical strict parsers cannot read fields introduced after their
+    // release. Adapt only this isolated pre-update fixture, never the actual
+    // main-profile data or byte-equality assertions above.
     if (!useConfirmationTimeBaseline)
       for (const craving of lifecycleState.cravings)
         delete craving.usedConfirmedAt;
-    const lifecycleRaw = useConfirmationTimeBaseline
-      ? finalRaw
-      : JSON.stringify(lifecycleState);
+    if (!cravingLinksBaseline)
+      for (const moment of lifecycleState.moments) delete moment.cravingId;
+    const lifecycleRaw =
+      useConfirmationTimeBaseline && cravingLinksBaseline
+        ? finalRaw
+        : JSON.stringify(lifecycleState);
     const lifecycleCraving = lifecycleState.cravings.find(
       (entry) => entry.id === combinedCraving.id,
+    );
+    const lifecycleMoment = lifecycleState.moments.find(
+      (entry) => entry.id === linkedCheckin.id,
     );
     const lifecycleContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -1163,10 +1256,28 @@ try {
       await lifecyclePage
         .getByLabel("Gedachte", { exact: true })
         .fill(draftText);
+      const momentRoute = `http://127.0.0.1:8801/Anchor/#/moment/${lifecycleMoment.id}`;
+      await lifecyclePage.goto(momentRoute);
+      const checkinDraftText =
+        "Een open check-inconcept blijft met zijn eigen koppeling behouden.";
+      await lifecyclePage
+        .getByLabel(/^In je eigen woorden/)
+        .fill(checkinDraftText);
       const markerDraftRaw = await lifecyclePage.evaluate(
         (key) => localStorage.getItem(key),
         draftKey,
       );
+      const checkinDraft =
+        JSON.parse(markerDraftRaw).records[`moment:${lifecycleMoment.id}`];
+      expect(checkinDraft).toEqual({
+        ...lifecycleMoment,
+        note: checkinDraftText,
+      });
+      expect(Object.hasOwn(checkinDraft, "cravingId")).toBe(
+        cravingLinksBaseline,
+      );
+      if (cravingLinksBaseline)
+        expect(checkinDraft.cravingId).toBe(lifecycleCraving.id);
       const markerDraft =
         JSON.parse(markerDraftRaw).records[`craving:${lifecycleCraving.id}`];
       expect(markerDraft).toEqual({ ...lifecycleCraving, thought: draftText });
@@ -1184,6 +1295,7 @@ try {
           .locator('script[type="module"]')
           .getAttribute("src"),
       ).toBe(originalModule);
+      await lifecyclePage.goto(route);
 
       root = path.resolve(`${directory}/update-b`);
       const nextWorkerPromise = lifecycleContext.waitForEvent("serviceworker");
@@ -1277,11 +1389,26 @@ try {
           draftKey,
         ),
       ).toBe(markerDraftRaw);
+      await lifecyclePage.goto(momentRoute);
+      await expect(
+        lifecyclePage.getByLabel(/^In je eigen woorden/),
+      ).toHaveValue(checkinDraftText);
+      expect(
+        await lifecyclePage.evaluate(() =>
+          localStorage.getItem("anchor.app.data.v1"),
+        ),
+      ).toBe(lifecycleRaw);
+      expect(
+        await lifecyclePage.evaluate(
+          (key) => localStorage.getItem(key),
+          draftKey,
+        ),
+      ).toBe(markerDraftRaw);
       await lifecycleContext.setOffline(true);
       await lifecyclePage.reload();
       await expect(
-        lifecyclePage.getByLabel("Gedachte", { exact: true }),
-      ).toHaveValue(draftText);
+        lifecyclePage.getByLabel(/^In je eigen woorden/),
+      ).toHaveValue(checkinDraftText);
       expect(
         await lifecyclePage.evaluate(() =>
           localStorage.getItem("anchor.app.data.v1"),
@@ -1296,8 +1423,11 @@ try {
       currentGuardChecks.push(
         "a marked saved craving and marked edit draft survive natural worker activation after closing the last app page, then an offline reopen, with both storage strings byte-identical; the explicit update button correctly blocks while the draft is open",
         useConfirmationTimeBaseline
-          ? "saved and draft confirmation timestamps survive natural current-to-current activation byte-exactly"
+          ? "saved and draft confirmation timestamps survive natural activation byte-exactly"
           : "older marked records and drafts retain unknown confirmation times after natural activation without invented timestamps",
+        cravingLinksBaseline
+          ? "a linked saved check-in and linked edit draft survive natural activation after closing the last page and offline reopen, preserving both complete storage strings byte-exactly"
+          : "historical unlinked check-ins and open edit drafts remain unlinked after natural activation and offline reopen, without inferring any craving association",
       );
     } catch (error) {
       await lifecyclePage

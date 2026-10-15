@@ -51,6 +51,7 @@ import {
   createHistorySession,
 } from "./SecondaryViews";
 import { Dialog } from "./Dialog";
+import { EmotionGlossary } from "./EmotionGlossary";
 import { CravingView } from "./CravingView";
 import { CravingUseAction } from "./CravingUseAction";
 import { cravingSubstances } from "./lib/substances";
@@ -99,6 +100,14 @@ const dateText = (date: string, long = false) =>
         year: "numeric",
         ...(long ? { weekday: "long" as const } : {}),
       }).format(new Date(`${date}T12:00:00`));
+function recordIdFromPath(path: string, prefix: string): string | null {
+  if (!path.startsWith(prefix)) return null;
+  try {
+    return decodeURIComponent(path.slice(prefix.length).split("/")[0]);
+  } catch {
+    return null;
+  }
+}
 const emptyMoment = (): Moment => ({
   id: uid(),
   date: today(),
@@ -178,7 +187,13 @@ export function App() {
   const [toast, setToast] = useState("");
   const [offerSupport, setOfferSupport] = useState<string | null>(null);
   const [modal, setModal] = useState<
-    "menu" | "import" | "privacy" | "drafts" | "draft-recovery" | null
+    | "menu"
+    | "emotions"
+    | "import"
+    | "privacy"
+    | "drafts"
+    | "draft-recovery"
+    | null
   >(null);
   const [imported, setImported] = useState<AppState | null>(null);
   const [importError, setImportError] = useState("");
@@ -658,9 +673,9 @@ export function App() {
       ))}
     </nav>
   );
-  const momentId = path.startsWith("/moment/") ? path.split("/")[2] : null;
+  const momentId = recordIdFromPath(path, "/moment/");
   const moment = state.moments.find((item) => item.id === momentId);
-  const cravingId = path.startsWith("/craving/") ? path.split("/")[2] : null;
+  const cravingId = recordIdFromPath(path, "/craving/");
   const craving = state.cravings.find((item) => item.id === cravingId);
   const dayDate = path.startsWith("/day/") ? path.split("/")[2] : null;
   return (
@@ -751,7 +766,7 @@ export function App() {
               {state.theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
             </Button>
             <Button
-              className="dp-mobile-menu dp-icon-button"
+              className="dp-more-menu dp-icon-button"
               aria-label="Meer opties"
               onClick={() => setModal("menu")}
             >
@@ -975,7 +990,7 @@ export function App() {
                 onBack={(id) =>
                   navigate(
                     id
-                      ? `/moment/${id}?after=1${returnQuery ? `&${returnQuery}` : ""}`
+                      ? `/moment/${id}?after=1${returnQuery ? `&${returnQuery}` : ""}${routeQuery.get("returnCraving") ? `&returnCraving=${encodeURIComponent(routeQuery.get("returnCraving")!)}` : ""}`
                       : new URLSearchParams(route.split("?")[1]).has("support")
                         ? `/help${helpQuery}`
                         : "/tools",
@@ -994,7 +1009,14 @@ export function App() {
                 <MomentView
                   key={momentId}
                   record={moment}
-                  returnTo={returnTo}
+                  returnTo={
+                    state.cravings.some(
+                      (item) => item.id === routeQuery.get("returnCraving"),
+                    ) && moment?.cravingId === routeQuery.get("returnCraving")
+                      ? `/craving/${encodeURIComponent(moment.cravingId!)}`
+                      : returnTo
+                  }
+                  cravingIntentId={routeQuery.get("craving")}
                   state={state}
                   onSave={save}
                   navigate={navigate}
@@ -1082,6 +1104,10 @@ export function App() {
       {modal === "menu" && (
         <Dialog title="Meer in Anchor" onClose={() => setModal(null)}>
           <div className="dp-menu-links">
+            <Button onClick={() => setModal("emotions")}>
+              Emoties en betekenissen
+              <BookOpen size={20} />
+            </Button>
             <Button onClick={openDrafts}>
               Open concepten ({draftCount})
               <BookOpen size={20} />
@@ -1096,6 +1122,9 @@ export function App() {
             </a>
           </div>
         </Dialog>
+      )}
+      {modal === "emotions" && (
+        <EmotionGlossary onClose={() => setModal(null)} />
       )}
       {modal === "drafts" && (
         <Dialog title="Open concepten" onClose={() => setModal(null)}>
@@ -1907,6 +1936,7 @@ function MomentView({
   onClear,
   afterInitially,
   activityIntent,
+  cravingIntentId = null,
   returnTo = "/today",
 }: {
   record?: Moment;
@@ -1918,6 +1948,7 @@ function MomentView({
   onClear: () => boolean;
   afterInitially: boolean;
   activityIntent: string | null;
+  cravingIntentId?: string | null;
   returnTo?: string;
 }) {
   const [value, setValue] = useState<Moment>(
@@ -1926,6 +1957,11 @@ function MomentView({
       record ?? {
         ...emptyMoment(),
         activity: activityIntent === "grounding" ? "5-4-3-2-1" : "",
+        ...(!record &&
+        cravingIntentId &&
+        state.cravings.some((item) => item.id === cravingIntentId)
+          ? { cravingId: cravingIntentId }
+          : {}),
       },
   );
   const [resumedDraft] = useState(() => !!draft);
@@ -1969,14 +2005,34 @@ function MomentView({
   const activityLocked =
     !repairActivity && (!!value.after || value.attempted !== null);
   const changedSinceSave =
-    !!record && JSON.stringify(value) !== JSON.stringify(record);
+    !!record &&
+    JSON.stringify({ ...value, cravingId: undefined }) !==
+      JSON.stringify({ ...record, cravingId: undefined });
   const activityEntry =
     activityIntent === "choose" || activityIntent === "grounding";
   const differentDraft =
     resumedDraft &&
     activityIntent === "grounding" &&
     value.activity !== "5-4-3-2-1";
-  const returnQuery = returnTo === "/history" ? "?returnTo=history" : "";
+  const currentCravingId = record ? record.cravingId : value.cravingId;
+  const linkedCraving = state.cravings.find(
+    (item) => item.id === currentCravingId,
+  );
+  const conflictingCravingDraft =
+    !record &&
+    !!cravingIntentId &&
+    !!draft &&
+    draft.cravingId !== cravingIntentId;
+  const destination =
+    !record && linkedCraving && !conflictingCravingDraft
+      ? `/craving/${encodeURIComponent(linkedCraving.id)}`
+      : returnTo;
+  const returnQuery =
+    destination === "/history"
+      ? "?returnTo=history"
+      : destination.startsWith("/craving/")
+        ? `?returnCraving=${encodeURIComponent(recordIdFromPath(destination, "/craving/")!)}`
+        : "";
   useEffect(() => {
     if (deletingAfter) afterDeleteCancelRef.current?.focus();
   }, [deletingAfter]);
@@ -2072,6 +2128,19 @@ function MomentView({
       return;
     }
     if (
+      !record &&
+      linkedCraving &&
+      `${value.date}T${value.time}` <
+        `${linkedCraving.date}T${linkedCraving.time}`
+    ) {
+      showError(
+        "Kies voor deze terugblik een datum en tijd op of na de craving.",
+        "before",
+        "date",
+      );
+      return;
+    }
+    if (
       !hasRating(value.before) &&
       !value.note.trim() &&
       !value.activity.trim() &&
@@ -2143,6 +2212,12 @@ function MomentView({
           }
         : {}),
     };
+    if (record) {
+      // Linking is a separate explicit action. An old edit draft cannot undo it.
+      const current = state.moments.find((item) => item.id === record.id);
+      if (current?.cravingId !== undefined) saved.cravingId = current.cravingId;
+      else delete saved.cravingId;
+    }
     if (
       onSave(
         {
@@ -2186,7 +2261,7 @@ function MomentView({
     navigate(
       (kind === "before" && value.activity) || kind === "after-delete"
         ? `/moment/${id}${returnQuery}`
-        : returnTo,
+        : destination,
     );
     if (kind === "before" && value.activity)
       requestAnimationFrame(() => {
@@ -2235,6 +2310,8 @@ function MomentView({
       return;
     }
     const pending: Moment = { ...value, ...cleared };
+    if (record.cravingId !== undefined) pending.cravingId = record.cravingId;
+    else delete pending.cravingId;
     setValue(pending);
     setDeletingAfter(false);
     setAfterOpen(false);
@@ -2268,16 +2345,41 @@ function MomentView({
         onRetry={() => finish(pendingCompletion.kind, pendingCompletion.id)}
       />
     );
+  if (conflictingCravingDraft)
+    return (
+      <section className="dp-card dp-form-page">
+        <h1 tabIndex={-1}>Je hebt al een open check-in</h1>
+        <p>
+          Je eerdere invoer blijft behouden. Rond dat concept eerst af. Daarna
+          kun je een nieuwe check-in bij deze craving maken of een opgeslagen
+          check-in koppelen.
+        </p>
+        <div className="dp-actions">
+          <Button primary onClick={() => navigate("/moment/new")}>
+            Verder met bestaand concept
+          </Button>
+          <Button
+            onClick={() =>
+              navigate(`/craving/${encodeURIComponent(cravingIntentId!)}`)
+            }
+          >
+            Terug naar craving
+          </Button>
+        </div>
+      </section>
+    );
   return (
     <div className="dp-form-page">
       <button
         className="dp-text-button dp-back"
-        onClick={() => navigate(returnTo)}
+        onClick={() => navigate(destination)}
       >
         <ArrowLeft size={17} />
-        {returnTo === "/history"
-          ? "Terug naar Terugkijken"
-          : "Terug naar Vandaag"}
+        {destination.startsWith("/craving/")
+          ? "Terug naar craving"
+          : destination === "/history"
+            ? "Terug naar Terugkijken"
+            : "Terug naar Vandaag"}
       </button>
       <PageTitle
         kicker={record ? `${dateText(value.date)} · ${value.time}` : "Check-in"}
@@ -2288,6 +2390,71 @@ function MomentView({
             : "Vul alleen in wat je wilt vastleggen."
         }
       />
+      {currentCravingId && (
+        <section
+          className="dp-card dp-form-section"
+          aria-label="Gekoppelde craving"
+        >
+          <h2>Terugblik bij een craving</h2>
+          {linkedCraving ? (
+            <>
+              <p>
+                {dateText(linkedCraving.date, true)} om {linkedCraving.time}
+                {cravingSubstances(linkedCraving).length
+                  ? ` · ${cravingSubstances(linkedCraving).join(", ")}`
+                  : ""}
+              </p>
+              <p>
+                Leg vast hoe het op het tijdstip van deze check-in met je gaat.
+                Je stemming en emoties blijven eigen waarnemingen.
+              </p>
+              <Button
+                className="quiet"
+                onClick={() =>
+                  navigate(`/craving/${encodeURIComponent(linkedCraving.id)}`)
+                }
+              >
+                Gekoppelde craving bekijken
+              </Button>
+            </>
+          ) : (
+            <p>
+              De gekoppelde craving is niet meer beschikbaar. Deze check-in en
+              je tekst blijven bewaard.
+            </p>
+          )}
+          {record && (
+            <Button
+              className="quiet"
+              onClick={() => {
+                const moments = state.moments.map((item) => {
+                  if (item.id !== record.id) return item;
+                  const next = { ...item };
+                  delete next.cravingId;
+                  return next;
+                });
+                if (
+                  !onSave(
+                    { ...state, moments },
+                    "De koppeling is verwijderd. Je check-in blijft bewaard.",
+                  )
+                )
+                  showError(
+                    "De koppeling kon niet worden verwijderd. Je check-in en je tekst blijven bewaard.",
+                  );
+                else
+                  requestAnimationFrame(() =>
+                    beforeFormRef.current
+                      ?.querySelector<HTMLElement>("summary")
+                      ?.focus(),
+                  );
+              }}
+            >
+              Koppeling met craving verwijderen
+            </Button>
+          )}
+        </section>
+      )}
       {resumedDraft && (
         <p className="dp-notice" role="status">
           Je werkt verder aan een bewaard concept. Je eerdere invoer is
@@ -2333,7 +2500,7 @@ function MomentView({
                       return;
                     }
                     navigate(
-                      `/exercise?moment=${record.id}${returnTo === "/history" ? "&returnTo=history" : ""}`,
+                      `/exercise?moment=${record.id}${returnQuery ? `&${returnQuery.slice(1)}` : ""}`,
                     );
                   }}
                 >

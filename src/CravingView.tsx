@@ -9,6 +9,7 @@ import { CRAVING_SUGGESTIONS } from "./lib/cravingSuggestions";
 import { cravingSubstances, withCravingSubstances } from "./lib/substances";
 import { CravingSubstances } from "./CravingSubstances";
 import { CravingUseAction } from "./CravingUseAction";
+import { CravingCheckins } from "./CravingCheckins";
 import "./craving.css";
 
 type CravingViewProps = {
@@ -554,6 +555,15 @@ export function CravingView({
       </form>
 
       {record && <CravingUseAction record={record} onChange={onUseChange} />}
+
+      {record && (
+        <CravingCheckins
+          record={record}
+          state={state}
+          onSave={onSave}
+          navigate={navigate}
+        />
+      )}
 
       {record && (
         <section

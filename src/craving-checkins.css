@@ -1,0 +1,56 @@
+.dp .dp-craving-checkins {
+  margin-block: 1.5rem;
+  min-width: 0;
+}
+.dp .dp-craving-checkins > h2 {
+  margin-top: 0;
+}
+.dp .dp-craving-checkins > .dp-button {
+  white-space: normal;
+}
+.dp .dp-craving-checkin-list {
+  display: grid;
+  gap: 1rem;
+  padding: 0;
+  margin-block: 1.5rem;
+  list-style: none;
+}
+.dp .dp-craving-checkin-list article {
+  min-width: 0;
+  padding-block: 1.25rem;
+  border-block: 1px solid var(--dp-border);
+  scroll-margin-block: 6rem;
+}
+.dp .dp-craving-checkin-list h3 {
+  margin-top: 0;
+  font-size: 1rem;
+}
+.dp .dp-linked-checkin-readout {
+  min-width: 0;
+}
+.dp .dp-linked-checkin-readout .dp-preserve-lines {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dp .dp-craving-checkin-note {
+  margin-block: 1rem;
+}
+.dp .dp-craving-checkin-after {
+  padding-block: 0.5rem 1rem;
+}
+.dp .dp-craving-checkin-list .dp-actions {
+  margin-top: 1rem;
+}
+.dp .dp-craving-checkin-list .dp-button {
+  white-space: normal;
+}
+.dp .dp-craving-checkin-existing {
+  margin-top: 1.25rem;
+}
+.dp .dp-craving-checkin-feedback {
+  margin-bottom: 0;
+  font-size: 0.875rem;
+}
+.dp .dp-craving-checkin-feedback:empty {
+  margin: 0;
+}

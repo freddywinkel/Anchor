@@ -28,6 +28,8 @@ export type Moment = {
   attempted: boolean | null;
   emotions: string[];
   note: string;
+  // Optional user-chosen link; keep orphaned IDs if a craving is removed.
+  cravingId?: string;
 };
 export type Day = {
   date: string;
@@ -303,8 +305,10 @@ function unique<T>(items: T[], key: (item: T) => string, label: string): T[] {
 }
 
 function moment(value: unknown, draft = false): Moment {
+  const input = object(value, "Check-in");
+  const hasCravingId = Object.hasOwn(input, "cravingId");
   const item = fields(
-    value,
+    input,
     [
       "id",
       "date",
@@ -318,6 +322,7 @@ function moment(value: unknown, draft = false): Moment {
       "attempted",
       "emotions",
       "note",
+      ...(hasCravingId ? ["cravingId"] : []),
     ],
     "Check-in",
   );
@@ -346,6 +351,7 @@ function moment(value: unknown, draft = false): Moment {
       30,
     ),
     note: string(item.note, "Notitie"),
+    ...(hasCravingId ? { cravingId: identifier(item.cravingId) } : {}),
   };
   if (!draft) {
     if (

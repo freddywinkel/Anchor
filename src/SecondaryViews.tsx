@@ -32,8 +32,8 @@ import { WeekOverview, type WeekRecordTarget } from "./WeekOverview";
 import { MOODS } from "./RatingsEditor";
 import { Dialog } from "./Dialog";
 import { MoodPlot } from "./MoodPlot";
-import { EmotionGlossary } from "./EmotionGlossary";
 import { CravingUseAction } from "./CravingUseAction";
+import { LinkedCravingCheckin } from "./CravingCheckins";
 import { cravingUseConfirmation } from "./lib/cravingUse";
 import "./history.css";
 import "./secondary.css";
@@ -92,7 +92,7 @@ function ratingsSearchText(ratings: Ratings | null) {
   return `${ratings?.emotionRatings?.map((emotion) => emotion.label).join(" ") || ""} ${ratings?.pans != null ? `pannetjes ${ratings.pans}/5` : ""}`;
 }
 function momentSearchText(moment: Moment) {
-  return `${moment.note} ${moment.activity} ${moment.emotions.join(" ")} ${ratingsSearchText(moment.before)} ${ratingsSearchText(moment.after)} check-in`.toLocaleLowerCase(
+  return `${moment.note} ${moment.activity} ${moment.emotions.join(" ")} ${ratingsSearchText(moment.before)} ${ratingsSearchText(moment.after)} check-in ${moment.cravingId ? "gekoppelde craving terugblik" : ""}`.toLocaleLowerCase(
     "nl-NL",
   );
 }
@@ -228,6 +228,7 @@ function HistoryFields({
 }
 function HistoryRecord({
   entry,
+  state,
   onEdit,
   open,
   onToggle,
@@ -235,6 +236,7 @@ function HistoryRecord({
   readOnly,
 }: {
   entry: HistoryEntry;
+  state: AppState;
   onEdit: () => void;
   open: boolean;
   onToggle: (open: boolean) => void;
@@ -300,6 +302,11 @@ function HistoryRecord({
           )}
           {entry.type === "moment" && (
             <>
+              {entry.item.cravingId && (
+                <span className="dp-history-preview">
+                  Gekoppeld aan een craving
+                </span>
+              )}
               {entry.item.activity && (
                 <span className="dp-history-preview">
                   Activiteit: {entry.item.activity}
@@ -416,10 +423,44 @@ function HistoryRecord({
             </>
           )}
           {entry.type === "craving" && (
-            <CravingUseAction
-              record={entry.item}
-              onChange={onCravingUseChange}
-              disabled={readOnly}
+            <>
+              <CravingUseAction
+                record={entry.item}
+                onChange={onCravingUseChange}
+                disabled={readOnly}
+              />
+              {state.moments.some(
+                (moment) => moment.cravingId === entry.item.id,
+              ) && (
+                <section
+                  aria-label="Gekoppelde check-ins"
+                  className="dp-linked-history"
+                >
+                  <h3>Gekoppelde check-ins</h3>
+                  {state.moments
+                    .filter((moment) => moment.cravingId === entry.item.id)
+                    .map((moment) => (
+                      <LinkedCravingCheckin key={moment.id} moment={moment} />
+                    ))}
+                </section>
+              )}
+            </>
+          )}
+          {entry.type === "moment" && entry.item.cravingId && (
+            <HistoryFields
+              fields={[
+                [
+                  "Gekoppelde craving",
+                  (() => {
+                    const craving = state.cravings.find(
+                      (item) => item.id === entry.item.cravingId,
+                    );
+                    return craving
+                      ? `${dateLabel(craving.date, true)} · ${craving.time}${cravingSubstances(craving).length ? ` · ${cravingSubstances(craving).join(", ")}` : ""}`
+                      : "De gekoppelde craving is niet meer beschikbaar. Deze check-in blijft bewaard.";
+                  })(),
+                ],
+              ]}
             />
           )}
           <button
@@ -437,6 +478,7 @@ function HistoryRecord({
 }
 function HistoryGroup({
   type,
+  state,
   entries,
   session,
   onSessionChange,
@@ -445,6 +487,7 @@ function HistoryGroup({
   readOnly,
 }: {
   type: HistoryEntry["type"];
+  state: AppState;
   entries: HistoryEntry[];
   session: HistorySession;
   onSessionChange: Dispatch<SetStateAction<HistorySession>>;
@@ -479,6 +522,7 @@ function HistoryGroup({
               <li key={id} data-history-id={id}>
                 <HistoryRecord
                   entry={entry}
+                  state={state}
                   open={session.expanded.includes(historyKey(entry))}
                   onToggle={(open) =>
                     onSessionChange((current) => ({
@@ -967,6 +1011,7 @@ export function HistoryView({
               <HistoryGroup
                 key={type}
                 type={type}
+                state={state}
                 entries={entries.filter((entry) => entry.type === type)}
                 session={session}
                 onSessionChange={onSessionChange}
@@ -2206,7 +2251,6 @@ export function SettingsView({
 }) {
   const [error, setError] = useState("");
   const errorField = useRef<HTMLParagraphElement>(null);
-  const [showEmotionMeanings, setShowEmotionMeanings] = useState(false);
   const save = (next: AppState, message: string) => {
     const saved = onSave(next, message);
     setError(
@@ -2216,30 +2260,6 @@ export function SettingsView({
   };
   return (
     <div className="dp-settings">
-      <section
-        className="dp-settings-section dp-card"
-        aria-labelledby="dp-emotion-meanings-title"
-      >
-        <h2 id="dp-emotion-meanings-title">Emoties en betekenissen</h2>
-        <p>
-          Zoek een gevoelswoord of blader door de groepen. Bij elk woord vind je
-          een korte uitleg.
-        </p>
-        <button
-          type="button"
-          className="dp-button"
-          aria-haspopup="dialog"
-          onClick={(event) => {
-            event.currentTarget.focus({ preventScroll: true });
-            setShowEmotionMeanings(true);
-          }}
-        >
-          Bekijk de betekenissen
-        </button>
-      </section>
-      {showEmotionMeanings && (
-        <EmotionGlossary onClose={() => setShowEmotionMeanings(false)} />
-      )}
       <section
         className="dp-settings-section dp-card"
         aria-labelledby="dp-appearance"

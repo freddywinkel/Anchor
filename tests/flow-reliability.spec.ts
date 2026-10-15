@@ -152,7 +152,7 @@ test("conceptvenster toont fouten binnen het venster en behoudt invoer en toetse
   ).toBeFocused();
 });
 
-test("vensters herstellen desktopfocus naar de opener of de nieuwe paginatitel", async ({
+test("vensters herstellen desktopfocus naar de opener of Meer wanneer de opener verdwijnt", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -190,7 +190,9 @@ test("vensters herstellen desktopfocus naar de opener of de nieuwe paginatitel",
     dialog.getByText("Je hebt geen open concepten.", { exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: "Meer opties", exact: true }),
+  ).toBeFocused();
 });
 
 test("alle Houvast-ingangen bewaren craving en terugkeer naar de geschiedenis", async ({
