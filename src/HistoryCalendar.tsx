@@ -167,7 +167,10 @@ export function HistoryCalendar({
     <section className="dp-card dp-history-calendar" aria-label="Maandkalender">
       <div className="dp-calendar-intro">
         <h2>Kalender</h2>
-        <p className="dp-muted">Kies een dag om je momenten terug te zien.</p>
+        <p className="dp-muted">
+          Blader naar een maand en kies een dag voor je tijdlijn. Bladeren
+          verandert je selectie niet.
+        </p>
       </div>
       <div className="dp-calendar-header">
         <h3 id={titleId} aria-live="polite" aria-atomic="true">

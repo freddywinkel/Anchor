@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { applyHistoryFilters } from "./history-filters";
+import { applyHistoryFilters, openHistoryWeek } from "./history-filters";
 import {
   createEmptyState,
   validateState,
@@ -145,6 +145,7 @@ test("weekoverzicht toont meerdere en historische middelen en opent dezelfde vol
   await open(page, "history");
   const before = await snapshot(page);
   await applyHistoryFilters(page, { period: "week" });
+  await openHistoryWeek(page);
   const week = page.getByRole("region", {
     name: "Rustig terugkijken op je week",
   });

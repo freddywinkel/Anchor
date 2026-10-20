@@ -1,0 +1,20 @@
+.dp .dp-linked-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dp .dp-linked-history-list > li {
+  min-width: 0;
+  padding-block: 1rem;
+}
+.dp .dp-linked-history-list > li + li {
+  border-top: 1px solid var(--dp-border);
+}
+.dp .dp-linked-history-list > li:focus {
+  outline: 3px solid var(--dp-accent);
+  outline-offset: 4px;
+}
+.dp .dp-linked-history > .dp-button {
+  max-width: 100%;
+  white-space: normal;
+}

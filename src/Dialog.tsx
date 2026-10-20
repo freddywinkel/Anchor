@@ -6,16 +6,20 @@ export function Dialog({
   children,
   onClose,
   dismissOnBackdrop = false,
+  restoreFocus,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   dismissOnBackdrop?: boolean;
+  restoreFocus?: () => boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const focusFrame = useRef(0);
   const backdropPointer = useRef<number | null>(null);
   const titleId = useId();
+  const restoreFocusRef = useRef(restoreFocus);
+  restoreFocusRef.current = restoreFocus;
   function outsideDialog(
     dialog: HTMLDialogElement,
     clientX: number,
@@ -46,6 +50,7 @@ export function Dialog({
           return;
         }
         if (location.hash !== previousRoute) return;
+        if (restoreFocusRef.current?.()) return;
         if (
           previous instanceof HTMLElement &&
           previous.isConnected &&

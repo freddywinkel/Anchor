@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { applyHistoryFilters } from "./history-filters";
+import { applyHistoryFilters, openHistoryChart } from "./history-filters";
 import {
   createEmptyState,
   type AppState,
@@ -155,6 +155,10 @@ test("geschiedenis koppelt alleen dezelfde emotie en houdt nul, leeg, pannetjes 
   await expect(ratingRow(legacy, "Pannetjes")).toHaveCount(0);
   await expect(
     page.getByRole("img", { name: /^1 stemmingsmetingen/ }),
+  ).toHaveCount(0);
+  await openHistoryChart(page);
+  await expect(
+    page.getByRole("img", { name: /^1 stemmingsmetingen/ }),
   ).toBeVisible();
   await expect(page.locator(".dp-mood-plot circle")).toHaveCount(1);
   expect(
@@ -214,6 +218,7 @@ test("zoeken vindt emoties uit beide metingen en de dag, zonder intensiteit als 
     },
   ];
   await openHistory(page, state);
+  await openHistoryChart(page);
   for (const term of ["OVERPRIKKELD", "Opgelucht"]) {
     await applyHistoryFilters(page, { query: term });
     await expandVisible(page);

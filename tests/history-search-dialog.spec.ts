@@ -157,7 +157,7 @@ test("resultaten tonen past de drie filters samen toe en een later geannuleerde 
     .click();
   await expect(
     dialog.getByRole("combobox", { name: "Periode", exact: true }),
-  ).toHaveValue("all");
+  ).toHaveValue("week");
   await expect(
     dialog.getByRole("combobox", { name: "Soort registratie", exact: true }),
   ).toHaveValue("all");

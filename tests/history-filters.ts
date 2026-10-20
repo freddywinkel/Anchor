@@ -1,8 +1,8 @@
 import { expect, type Page } from "@playwright/test";
 
 type HistoryFilters = {
-  period?: "all" | "week";
-  kind?: "all" | "checkin" | "craving" | "day";
+  period?: "all" | "week" | "day";
+  kind?: "all" | "checkin" | "craving" | "day" | "growth";
   query?: string;
 };
 
@@ -57,4 +57,43 @@ export async function expectHistoryFilters(
     ).toHaveValue(filters.query);
   await dialog.getByRole("button", { name: "Annuleren", exact: true }).click();
   await expect(dialog).not.toBeVisible();
+}
+
+// These views are optional: only tests that examine them should open them.
+export async function openHistoryChart(page: Page) {
+  const summary = page.locator("summary").filter({
+    hasText: /^Stemmingsverloop bekijken$/,
+  });
+  await expect(summary).toBeVisible();
+  if (
+    !(await summary.evaluate(
+      (node) => (node.parentElement as HTMLDetailsElement).open,
+    ))
+  )
+    await summary.click();
+  const chart = page.getByRole("region", {
+    name: "Stemming per moment",
+    exact: true,
+  });
+  await expect(chart).toBeVisible();
+  return chart;
+}
+
+export async function openHistoryWeek(page: Page) {
+  const summary = page.locator("summary").filter({
+    hasText: /^Weekoverzicht bekijken$/,
+  });
+  await expect(summary).toBeVisible();
+  if (
+    !(await summary.evaluate(
+      (node) => (node.parentElement as HTMLDetailsElement).open,
+    ))
+  )
+    await summary.click();
+  const week = page.getByRole("region", {
+    name: "Rustig terugkijken op je week",
+    exact: true,
+  });
+  await expect(week).toBeVisible();
+  return week;
 }

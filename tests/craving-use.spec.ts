@@ -6,7 +6,7 @@ import {
   type AppState,
   type CravingRecord,
 } from "../src/lib/storage";
-import { applyHistoryFilters } from "./history-filters";
+import { applyHistoryFilters, openHistoryWeek } from "./history-filters";
 
 const DATA = "anchor.app.data.v1";
 const DRAFTS = "anchor.app.drafts.v1";
@@ -565,6 +565,7 @@ test("bevestigingstijd en verstreken tijd blijven zichtbaar in Vandaag, geschied
 
   await open(page);
   await applyHistoryFilters(page, { period: "week" });
+  await openHistoryWeek(page);
   const week = page.getByRole("region", {
     name: "Rustig terugkijken op je week",
     exact: true,

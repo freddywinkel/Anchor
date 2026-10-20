@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   applyHistoryFilters,
   expectHistoryFilters,
+  openHistoryChart,
 } from "./history-filters.ts";
 import {
   createEmptyState,
@@ -16,7 +17,9 @@ import {
 } from "../src/lib/storage.ts";
 const base = "http://127.0.0.1:8800/Anchor/";
 const root = fileURLToPath(new URL("../", import.meta.url));
-const artifacts = join(root, "tmp", "secondary-qa");
+const artifacts = process.env.ANCHOR_SECONDARY_ARTIFACTS
+  ? join(root, process.env.ANCHOR_SECONDARY_ARTIFACTS)
+  : join(root, "tmp", "secondary-qa");
 await mkdir(artifacts, { recursive: true });
 let server;
 let browser;
@@ -744,6 +747,7 @@ try {
     ).toHaveCount(1);
   }
   await expect(hp.locator(".dp-history-body")).toHaveCount(0);
+  await openHistoryChart(hp);
   await expect(
     hp.getByRole("img", { name: /2 stemmingsmetingen/ }),
   ).toBeVisible();
@@ -1025,9 +1029,7 @@ try {
       historyGroup(historyPage, kind).locator(".dp-history-list > li"),
     ).toHaveCount(50);
   await expect(historyPage.locator(".dp-history-body")).toHaveCount(0);
-  await expect(
-    historyPage.locator(".dp-mood-plot .dp-observation-details li"),
-  ).toHaveCount(40);
+  await expect(historyPage.locator(".dp-mood-plot")).toHaveCount(0);
   await expect(
     historyPage.getByText("3120 gevonden", { exact: true }),
   ).toBeVisible();
@@ -1035,6 +1037,10 @@ try {
     () => document.querySelectorAll("*").length,
   );
   expect(report.historyInitialNodeCount).toBeLessThan(2000);
+  await openHistoryChart(historyPage);
+  await expect(
+    historyPage.locator(".dp-mood-plot .dp-observation-details li"),
+  ).toHaveCount(40);
   for (const [kind, button, count] of [
     ["moment", "Meer check-ins tonen", 100],
     ["craving", "Meer cravings tonen", 60],
@@ -1087,7 +1093,7 @@ try {
   expect(await historyStorage()).toEqual(beforeHistoryReads);
   await historyContext.close();
   saveCheck(
-    "A 3120-record history initially renders 50 closed entries per group and 40 text observations; independent pagination/focus, full-history search and filters preserve saved data and drafts byte-for-byte",
+    "A 3120-record history initially renders 50 closed entries per group with optional insights collapsed; opening its plot stays bounded to 40 text observations, and independent pagination/focus, full-history search and filters preserve saved data and drafts byte-for-byte",
   );
   expect(report.errors).toEqual([]);
   saveCheck("No browser runtime errors");

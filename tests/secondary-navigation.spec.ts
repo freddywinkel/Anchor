@@ -1,5 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
-import { applyHistoryFilters, expectHistoryFilters } from "./history-filters";
+import {
+  applyHistoryFilters,
+  expectHistoryFilters,
+  openHistoryWeek,
+} from "./history-filters";
 import {
   createEmptyState,
   validateState,
@@ -128,9 +132,7 @@ for (const target of ["moment", "craving", "day"] as const) {
     await expect(
       page.getByRole("heading", { name: "Geen registraties gevonden" }),
     ).toBeVisible();
-    const week = page.getByRole("region", {
-      name: "Rustig terugkijken op je week",
-    });
+    const week = await openHistoryWeek(page);
     await week.locator(".dp-week-days > li").last().locator("summary").click();
     await week
       .getByRole("button", {
@@ -227,7 +229,7 @@ for (const change of ["delete", "date", "search"] as const) {
   });
 }
 
-test("lege geschiedenis geeft één uitnodiging zonder lege grafiek of drie extra lege groepen", async ({
+test("lege geschiedenis geeft één uitnodiging zonder lege inzichten of extra lege groepen", async ({
   page,
 }) => {
   await open(page, createEmptyState(), "history");
@@ -239,6 +241,12 @@ test("lege geschiedenis geeft één uitnodiging zonder lege grafiek of drie extr
   ).toBeVisible();
   await expect(page.locator(".dp-history-group")).toHaveCount(0);
   await expect(page.locator(".dp-mood-plot")).toHaveCount(0);
+  await expect(
+    page.locator("summary").filter({ hasText: /^Stemmingsverloop bekijken$/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("summary").filter({ hasText: /^Weekoverzicht bekijken$/ }),
+  ).toHaveCount(0);
   await page.getByRole("link", { name: "Naar Vandaag", exact: true }).click();
   await expect(page).toHaveURL(/#\/today$/);
 });
@@ -280,6 +288,7 @@ test("dezelfde weekselectie verschuift op een nieuwe dag zonder opgeslagen data 
   await open(page, state, "history");
   const before = await stored(page);
   await applyHistoryFilters(page, { period: "week", kind: "craving" });
+  await openHistoryWeek(page);
   await expect(page.locator(".dp-history-record")).toHaveCount(2);
   await page.clock.setFixedTime(new Date("2026-10-15T00:01:00+02:00"));
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));

@@ -16,9 +16,11 @@ const approvedBaselines = [
   "b95a3c3a0a0762b643309e566ef0b54fd23340cb",
   "056bad78b0e389cd94e180b63931fe18f94b9353",
   "79a9befe8a80d82d227d8161ded5a66609feb568",
+  "c9fd82db2a6bc17bb5dfb48495157f98933be0e9",
 ];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
+let baselineBuildToolPatch = null;
 await mkdir(directory, { recursive: true });
 const command = (executable, args, cwd = repositoryRoot) => {
   const result = spawnSync(executable, args, { cwd, encoding: "utf8" });
@@ -36,7 +38,7 @@ if (baselineRef) {
   );
   if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9, 3412880, b95a3c3, 056bad7 or 79a9bef.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9, 3412880, b95a3c3, 056bad7, 79a9bef or c9fd82d.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -58,15 +60,34 @@ if (baselineRef) {
   ]);
   command("tar", ["-xf", archive, "-C", baselineRoot]);
   // Ancestor resolution shares the existing node_modules without an install or
-  // symlink. Confirm the pinned dependencies are the same for this release.
+  // symlink. Historical application source is compiled with the installed build
+  // tools. Permit only the reviewed Vite security patch below; every runtime
+  // dependency and every other development dependency must remain identical.
   const oldPackage = JSON.parse(
     await readFile(path.join(baselineRoot, "package.json"), "utf8"),
   );
   const currentPackage = JSON.parse(
     await readFile(path.join(repositoryRoot, "package.json"), "utf8"),
   );
-  for (const kind of ["dependencies", "devDependencies"])
-    expect(oldPackage[kind]).toEqual(currentPackage[kind]);
+  for (const kind of ["dependencies", "devDependencies"]) {
+    const expectedCurrent = { ...oldPackage[kind] };
+    if (
+      kind === "devDependencies" &&
+      approvedBaselines.includes(baselineCommit) &&
+      oldPackage.devDependencies.vite === "7.3.6" &&
+      currentPackage.devDependencies.vite === "7.3.7"
+    ) {
+      expectedCurrent.vite = "7.3.7";
+      baselineBuildToolPatch = {
+        name: "vite",
+        historicalVersion: "7.3.6",
+        buildVersion: "7.3.7",
+        reason:
+          "Historical application source rebuilt with the reviewed security patch for GHSA-698v-4r3x-3vcv.",
+      };
+    }
+    expect(currentPackage[kind]).toEqual(expectedCurrent);
+  }
 }
 const build = (
   name,
@@ -160,7 +181,7 @@ const useConfirmationTimeBaseline =
   approvedBaselines.slice(7).includes(baselineCommit);
 const cravingLinksBaseline =
   baselineCommit === null ||
-  baselineCommit === "79a9befe8a80d82d227d8161ded5a66609feb568";
+  approvedBaselines.slice(8).includes(baselineCommit);
 function expectConfirmationInstant(value, earliest, latest) {
   expect(value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   expect(new Date(value).toISOString()).toBe(value);
@@ -1485,6 +1506,7 @@ try {
   const result = {
     passed: true,
     baselineCommit,
+    baselineBuildToolPatch,
     checks: [
       baselineCommit
         ? "historical release to current real worker update"

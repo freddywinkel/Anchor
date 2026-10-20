@@ -412,7 +412,7 @@ test("een dagkeuze en zoekcriteria vervangen elkaar expliciet; annuleren verande
   ).toBeVisible();
   await expect(dateButton(page)).toHaveAttribute("data-calendar-records", "7");
   await selectDate(page);
-  await expectHistoryFilters(page, { kind: "all", query: "", period: "all" });
+  await expectHistoryFilters(page, { kind: "all", query: "", period: "day" });
   await expect(timeline(page).locator("[data-timeline-kind]")).toHaveCount(7);
   await page
     .getByRole("button", { name: "Alle registraties", exact: true })

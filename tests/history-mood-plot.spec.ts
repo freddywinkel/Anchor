@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { applyHistoryFilters } from "./history-filters";
+import { applyHistoryFilters, openHistoryChart } from "./history-filters";
 import {
   createEmptyState,
   validateState,
@@ -69,6 +69,7 @@ async function open(page: Page, state: AppState) {
   await expect(
     page.getByText("Je gegevens worden geopend…", { exact: true }),
   ).toHaveCount(0);
+  await openHistoryChart(page);
 }
 const chart = (page: Page) =>
   page.getByRole("region", { name: "Stemming per moment", exact: true });

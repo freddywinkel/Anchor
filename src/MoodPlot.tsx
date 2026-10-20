@@ -182,8 +182,8 @@ export function MoodPlot({
             )}
           </div>
           <p className="anchor-mood-order" id={`${prefix}-order`}>
-            Van links naar rechts: registratievolgorde. Afstanden tonen geen
-            tijdsduur.
+            Van links naar rechts: volgorde van datum en tijd. Afstanden tonen
+            geen tijdsduur.
           </p>
           <div className="anchor-mood-selected">
             <div
@@ -255,8 +255,8 @@ export function MoodPlot({
         </>
       ) : (
         <p className="dp-empty-inline anchor-mood-empty">
-          Geen stemmingsscores gevonden binnen deze selectie. Hieronder staan de
-          registraties die bij je filters passen.
+          Geen stemmingsscores gevonden binnen deze selectie. Je registraties
+          blijven beschikbaar in het overzicht.
         </p>
       )}
     </section>

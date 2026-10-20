@@ -251,8 +251,9 @@ export function WeekOverview({
         niet in te halen.
       </p>
       <p className="dp-muted">
-        Dit overzicht gebruikt alle notities in deze week. De filters voor soort
-        en zoeken gelden voor de grafiek en registraties eronder.
+        Dit overzicht gebruikt alle notities van de afgelopen zeven dagen, los
+        van je gekozen dag of zoekfilters. De grafiek volgt je geselecteerde
+        registraties.
       </p>
       <dl className="dp-week-counts">
         <div>

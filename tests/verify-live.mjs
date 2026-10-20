@@ -8,6 +8,8 @@ import {
   applyHistoryFilters,
   expectHistoryFilters,
   openHistoryFilters,
+  openHistoryChart,
+  openHistoryWeek,
 } from "./history-filters.ts";
 
 const base = new URL(
@@ -26,7 +28,9 @@ assert.match(
   /^[a-f0-9]{40}$/i,
   "EXPECTED_COMMIT must be the exact deployed Git commit",
 );
-const directory = path.resolve("tmp/live-validation");
+const directory = path.resolve(
+  process.env.ANCHOR_LIVE_ARTIFACTS || "tmp/live-validation",
+);
 await mkdir(directory, { recursive: true });
 const browser = await chromium.launch();
 const context = await browser.newContext({
@@ -856,6 +860,7 @@ try {
     query: expectedSubstances[0],
   });
   await applyHistoryFilters(page, { kind: "all", query: "" });
+  await openHistoryChart(page);
   const moodPlot = page.getByRole("region", {
     name: "Stemming per moment",
     exact: true,
@@ -1047,6 +1052,7 @@ try {
   assert.equal((await stored()).raw, themed.raw);
   await page.goto(new URL("#/history", base).href);
   await applyHistoryFilters(page, { period: "week" });
+  await openHistoryWeek(page);
   const week = page.getByRole("region", {
     name: "Rustig terugkijken op je week",
   });

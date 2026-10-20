@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { applyHistoryFilters } from "./history-filters";
+import { applyHistoryFilters, openHistoryWeek } from "./history-filters";
 import {
   createEmptyState,
   type AppState,
@@ -38,6 +38,7 @@ async function openWeek(page: Page, state: AppState) {
   );
   await page.goto("./#/history");
   await applyHistoryFilters(page, { period: "week" });
+  await openHistoryWeek(page);
   await expect(
     page.getByRole("heading", { name: "Rustig terugkijken op je week" }),
   ).toBeVisible();
@@ -48,6 +49,9 @@ test("een lege week toont alle dagen zonder ontbrekende notities als nulscore of
   page,
 }) => {
   const state = createEmptyState();
+  // There is saved history, but no entry in the current seven-day overview.
+  // A completely empty app deliberately omits optional history cards.
+  state.moments = [moment("outside-week", { date: "2026-10-01" })];
   const week = await openWeek(page, state);
   await expect(
     week.getByText("7 oktober 2026 tot en met 13 oktober 2026", {
@@ -182,7 +186,7 @@ test("week houdt scores, slaap en soorten apart, blijft leesbaar op klein scherm
       .locator("dd"),
   ).toHaveText("2");
   await expect(week).toContainText(
-    "De filters voor soort en zoeken gelden voor de grafiek en registraties eronder.",
+    "Dit overzicht gebruikt alle notities van de afgelopen zeven dagen, los van je gekozen dag of zoekfilters. De grafiek volgt je geselecteerde registraties.",
   );
   const dimensions = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth,

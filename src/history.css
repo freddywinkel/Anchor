@@ -1,6 +1,6 @@
 .dp .dp-history .dp-history-title {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 1rem;
   margin-bottom: 1.25rem;
@@ -28,33 +28,69 @@
   border: 2px solid var(--dp-surface);
   font-size: 0.75rem;
 }
+.dp .dp-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--dp-border);
+}
 .dp .dp-history-selection {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  border-block: 1px solid var(--dp-border);
-  padding-block: 0.65rem;
-  color: var(--dp-muted);
-}
-.dp .dp-history-selection > p {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem 1rem;
+  flex: 1 1 16rem;
+  gap: 0.5rem;
   margin: 0;
   min-width: 0;
-  font-size: 0.875rem;
+  color: var(--dp-muted);
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
-.dp .dp-history-filter-label {
-  flex-basis: 100%;
-  color: var(--dp-ink);
-  font-weight: 600;
+.dp .dp-history-selection > span {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--dp-border);
+  border-radius: 12px;
+  background: var(--dp-raised);
+  max-width: 100%;
 }
-.dp .dp-history-selection > p > span + span {
-  border-inline-start: 1px solid var(--dp-border);
-  padding-inline-start: 1rem;
+.dp .dp-history-selection strong {
+  color: var(--dp-ink);
+}
+.dp .dp-history-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dp .dp-history-toolbar .dp-history-search-trigger {
+  flex: 0 0 50px;
+}
+.dp .dp-history-toolbar .dp-button.quiet {
+  min-width: 0;
+  overflow-wrap: normal;
+}
+.dp .dp-history-count-note {
+  margin: 0 0 1.25rem;
+  font-size: 0.8125rem;
+}
+.dp .dp-card.dp-history-insight > summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  font-weight: 600;
+  color: var(--dp-ink);
+}
+.dp .dp-card.dp-history-insight > .dp-card {
+  padding: 1.25rem 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.dp .dp-day-timeline .dp-button {
+  overflow-wrap: normal;
 }
 .dp .dp-history-search-form {
   width: min(28rem, 100%);
