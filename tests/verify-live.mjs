@@ -837,7 +837,13 @@ try {
     name: "Registraties",
     exact: true,
   });
-  await expect(registrations.locator(".dp-history-group")).toHaveCount(3);
+  expect(
+    await registrations
+      .locator(".dp-history-group")
+      .evaluateAll((groups) =>
+        groups.map((group) => group.getAttribute("data-history-kind")),
+      ),
+  ).toEqual(["moment", "craving", "day", "growth"]);
   await applyHistoryFilters(page, {
     kind: "craving",
     query: expectedSubstances[0],
