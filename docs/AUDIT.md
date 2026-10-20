@@ -1,6 +1,20 @@
 # Anchor — product- en technische audit
 
-Auditdatum: 12 oktober 2026, aangevuld op 13, 14 en 15 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
+Auditdatum: 12 oktober 2026, aangevuld op 13, 14, 15 en 20 oktober 2026. Dit document beschrijft de zelfstandige Anchor-app en de lokale verificatie. Publieke releases worden afzonderlijk gecontroleerd met `pnpm verify:live`; installatie op een fysiek apparaat is niet met deze tests aangetoond.
+
+## Maandkalender en dagtijdlijn — versie 1.18.0, 20 oktober 2026
+
+Terugkijken begint met een maandkalender, met maandag als eerste dag, vorige/volgende maand en terugkeer naar de huidige maand. Een neutrale stip betekent dat iets is vastgelegd, geen complete dag, beoordeling of streak. De toegankelijke datumnaam vermeldt het aantal bewaarde onderdelen. Alleen opgeslagen check-ins, cravings, nametingen, dagoverzichten en kleine momenten tellen mee; concepten en bevestigingsmetadata maken geen eigen kalendergebeurtenis.
+
+Een gekozen dag toont een gezamenlijke tijdlijn met het nieuwste bekende tijdstip bovenaan, zoals Vandaag. Nametingen staan op hun eigen datum/tijd, met een verwijzing naar de oorspronkelijke check-in. Dagoverzichten en kleine momenten hebben geen opgeslagen tijd: zij staan apart onder **Over deze dag**, met **Tijdstip niet vastgelegd**. Geen ontbrekende score of tijd wordt aangevuld. De bestaande uitklapbare registraties tonen alle tekst, middelen, emoties, gebruiksbevestigingen en expliciete cravingkoppelingen; bewerken behoudt de dag, maand, geopende kaart en terugkeerplek. Per dag worden eerst maximaal vijftig gebeurtenissen geladen.
+
+**Alle registraties** behoudt de bestaande groepen en grafiek. Zoeken blijft in het venster achter het vergrootglas. Een dag kiezen wist actieve zoekcriteria, zodat de dagtijdlijn volledig is; zoekcriteria toepassen verlaat de dagselectie. Annuleren behoudt de gekozen dag. Lege en uitsluitend met kleine momenten gevulde dagen blijven leesbaar. Kalenderbediening ondersteunt pijltjes, Home/End en Page Up/Down, met zichtbare focus en maandgrenzen. De herhaalde pictogrammen en dagmarkeringen gebruiken beperkte schermopbouw, zodat de bestaande prestatiegrens voor grote geschiedenissen behouden kan blijven.
+
+Alle veranderingen zijn een afgeleide leesweergave en tijdelijke schermkeuzes. Opslagformaat, gegevenssleutels, concepten, back-ups, manifestidentiteit, dependencies en gebruikersgestuurde updateactivering blijven gelijk. Er is geen migratie of extra externe dienst. Tests gebruiken uitsluitend geïsoleerde synthetische gegevens. Bewijs: `tmp/history-calendar-20261020/`.
+
+Lokale verificatie: 139 unitgevallen en de volledige browserreeks van 226 gevallen geslaagd. Na de beperkte DOM-optimalisatie zijn alle 14 kalendergevallen, 25 bestaande geschiedenisgevallen en 25 aanvullende controles opnieuw groen; de geschiedenis met 3.120 registraties rendert aanvankelijk 1.911 elementen binnen de bestaande grens van 2.000. Daarnaast slagen 13 niet-offlinegevallen in Windows WebKit en onafhankelijke weergavecontroles bij 390, 320/200% en 820 pixels. Offlinegebruik is werkelijk in Chromium getest. Typecheck, formattering, productiebuild/PWA-controle en volledige dependency-audit slagen. De aangrenzende apps behouden hun 951 bronbestanden, HEAD en bestaande lokale wijzigingen. Fysieke iPhone/iPad-installatie en WebKit-offlineherladen blijven onbevestigd; publieke verificatie volgt afzonderlijk na deployment.
+
+Beide echte workerupdateproeven (current→current en publieke 1.17.0 `79a9befe`→1.18.0) slagen op dezelfde eindbron met elk 22 controles en nul paginafouten. Na natuurlijke activatie kan de kalender offline worden geopend; de dagtijdlijn toont opgeslagen tekst naast een afwijkend open concept zonder die te verwarren. De gegevens- en conceptopslag blijven bytegelijk, inclusief expliciete koppelingen en gebruiksbevestigingen.
 
 ## Emotie-uitleg onder Meer en gekoppelde terugblik — versie 1.17.0, 15 oktober 2026
 

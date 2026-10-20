@@ -15,6 +15,7 @@ const approvedBaselines = [
   "34128808396c3a71ad8d497f0cd78415def3d688",
   "b95a3c3a0a0762b643309e566ef0b54fd23340cb",
   "056bad78b0e389cd94e180b63931fe18f94b9353",
+  "79a9befe8a80d82d227d8161ded5a66609feb568",
 ];
 const baselineRef = process.env.ANCHOR_BASELINE_REF;
 let baselineCommit = null;
@@ -35,7 +36,7 @@ if (baselineRef) {
   );
   if (!approvedBaseline)
     throw new Error(
-      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9, 3412880, b95a3c3 or 056bad7.",
+      "ANCHOR_BASELINE_REF must identify approved release 2072cf1, a42fc3b, bc176fd, 8090e44, a8262d9, 3412880, b95a3c3, 056bad7 or 79a9bef.",
     );
   baselineCommit = command("git", [
     "rev-parse",
@@ -156,8 +157,10 @@ const useMarkerBaseline =
   approvedBaselines.slice(6).includes(baselineCommit);
 const useConfirmationTimeBaseline =
   baselineCommit === null ||
-  baselineCommit === "056bad78b0e389cd94e180b63931fe18f94b9353";
-const cravingLinksBaseline = baselineCommit === null;
+  approvedBaselines.slice(7).includes(baselineCommit);
+const cravingLinksBaseline =
+  baselineCommit === null ||
+  baselineCommit === "79a9befe8a80d82d227d8161ded5a66609feb568";
 function expectConfirmationInstant(value, earliest, latest) {
   expect(value).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   expect(new Date(value).toISOString()).toBe(value);
@@ -1420,6 +1423,41 @@ try {
           draftKey,
         ),
       ).toBe(markerDraftRaw);
+      await lifecyclePage.goto("http://127.0.0.1:8801/Anchor/#/history");
+      const calendar = lifecyclePage.getByRole("region", {
+        name: "Maandkalender",
+        exact: true,
+      });
+      await expect(calendar).toBeVisible();
+      const recordedDay = calendar.locator(
+        `[data-calendar-date="${lifecycleCraving.date}"]`,
+      );
+      expect(
+        Number(await recordedDay.getAttribute("data-calendar-records")),
+      ).toBeGreaterThan(0);
+      await recordedDay.click();
+      await expect(
+        lifecyclePage.locator(
+          `[data-timeline-id="craving:${lifecycleCraving.id}"]`,
+        ),
+      ).toBeVisible();
+      const savedCheckin = lifecyclePage.locator(
+        `[data-timeline-id="checkin:${lifecycleMoment.id}"]`,
+      );
+      await savedCheckin.locator("summary").click();
+      await expect(savedCheckin).toContainText(lifecycleMoment.note);
+      await expect(savedCheckin).not.toContainText(checkinDraftText);
+      expect(
+        await lifecyclePage.evaluate(() =>
+          localStorage.getItem("anchor.app.data.v1"),
+        ),
+      ).toBe(lifecycleRaw);
+      expect(
+        await lifecyclePage.evaluate(
+          (key) => localStorage.getItem(key),
+          draftKey,
+        ),
+      ).toBe(markerDraftRaw);
       currentGuardChecks.push(
         "a marked saved craving and marked edit draft survive natural worker activation after closing the last app page, then an offline reopen, with both storage strings byte-identical; the explicit update button correctly blocks while the draft is open",
         useConfirmationTimeBaseline
@@ -1428,6 +1466,7 @@ try {
         cravingLinksBaseline
           ? "a linked saved check-in and linked edit draft survive natural activation after closing the last page and offline reopen, preserving both complete storage strings byte-exactly"
           : "historical unlinked check-ins and open edit drafts remain unlinked after natural activation and offline reopen, without inferring any craving association",
+        "the new calendar and selected-day timeline are usable offline after worker activation, display saved records rather than open draft text, and preserve both stored data and drafts byte-exactly",
       );
     } catch (error) {
       await lifecyclePage

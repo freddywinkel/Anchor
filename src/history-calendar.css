@@ -1,0 +1,149 @@
+.dp .dp-card.dp-history-calendar {
+  min-width: 0;
+  padding: clamp(16px, 3vw, 28px);
+}
+.dp .dp-calendar-intro h2 {
+  margin: 0 0 0.4rem;
+}
+.dp .dp-calendar-intro > p {
+  margin-bottom: 1.25rem;
+}
+.dp .dp-calendar-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.dp .dp-calendar-header h3 {
+  min-width: 0;
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.35;
+  overflow-wrap: normal;
+}
+.dp .dp-calendar-navigation {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+.dp .dp-calendar-month-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--dp-border);
+  border-radius: 14px;
+  background: var(--dp-raised);
+  color: var(--dp-ink);
+}
+.dp .dp-calendar-grid {
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 2px 4px;
+}
+.dp .dp-calendar-grid th,
+.dp .dp-calendar-grid td {
+  width: calc(100% / 7);
+  min-width: 0;
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+}
+.dp .dp-calendar-grid th {
+  padding-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--dp-muted);
+}
+.dp .dp-calendar-grid abbr {
+  text-decoration: none;
+}
+.dp .dp-calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 5px 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--dp-ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: normal;
+}
+.dp .dp-calendar-day:hover {
+  background: var(--dp-raised);
+}
+.dp .dp-calendar-day[aria-current="date"] {
+  border-color: var(--dp-border);
+}
+.dp .dp-calendar-day[aria-pressed="true"] {
+  border-color: var(--dp-accent);
+  background: var(--dp-raised);
+  box-shadow: inset 0 0 0 1px var(--dp-accent);
+}
+.dp .dp-calendar-day:focus-visible {
+  outline-offset: 1px;
+}
+.dp .dp-calendar-day::after {
+  content: "";
+  display: block;
+  width: 5px;
+  height: 5px;
+  margin-block: 0.5px;
+  border-radius: 50%;
+  background: var(--dp-muted);
+  flex: 0 0 auto;
+}
+.dp .dp-calendar-day[data-calendar-records="0"]::after {
+  visibility: hidden;
+}
+.dp .dp-calendar-marker {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dp-muted);
+  flex: 0 0 auto;
+}
+.dp .dp-calendar-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.dp .dp-calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+.dp .dp-calendar-footer > .dp-button {
+  white-space: normal;
+}
+@media (max-width: 420px) {
+  .dp .dp-card.dp-history-calendar {
+    padding-inline: 8px;
+  }
+  .dp .dp-calendar-day {
+    font-size: 0.875rem;
+  }
+}

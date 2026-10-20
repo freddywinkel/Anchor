@@ -121,3 +121,50 @@
     width: 100%;
   }
 }
+
+.dp .dp-day-timeline .dp-records-header h2 {
+  text-transform: none;
+  overflow-wrap: anywhere;
+}
+.dp .dp-day-timeline .dp-history-preview {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.dp .dp-day-timeline-list {
+  border-inline-start: 2px solid var(--dp-border);
+  padding-inline-start: clamp(10px, 2.5vw, 22px);
+}
+.dp .dp-day-timeline-list > li {
+  position: relative;
+}
+.dp .dp-day-timeline-list > li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: calc(-1 * clamp(10px, 2.5vw, 22px) - 6px);
+  top: 1.8rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--dp-surface);
+  background: var(--dp-accent);
+}
+.dp .dp-day-untimed {
+  margin-top: 1.5rem;
+}
+.dp .dp-history-no-time {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--dp-muted);
+  font-size: 0.8rem;
+}
+.dp .dp-history-chevron-mark {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0.25rem 0.2rem 0.2rem;
+  border-inline-end: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+.dp .dp-history-record[open] > summary .dp-history-chevron-mark {
+  transform: rotate(225deg);
+}

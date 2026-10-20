@@ -35,6 +35,11 @@ import { MoodPlot } from "./MoodPlot";
 import { CravingUseAction } from "./CravingUseAction";
 import { LinkedCravingCheckin } from "./CravingCheckins";
 import { cravingUseConfirmation } from "./lib/cravingUse";
+import { HistoryCalendar } from "./HistoryCalendar";
+import {
+  historyDayTimeline,
+  type HistoryTimelineEvent,
+} from "./lib/historyCalendar";
 import "./history.css";
 import "./secondary.css";
 
@@ -186,6 +191,9 @@ export type HistorySession = {
   visible: Record<HistoryEntry["type"], number>;
   scrollY: number;
   returnRecord: string | null;
+  calendarMonth: string | null;
+  selectedDate: string | null;
+  timelineVisible: number;
 };
 export const createHistorySession = (): HistorySession => ({
   period: "all",
@@ -195,6 +203,9 @@ export const createHistorySession = (): HistorySession => ({
   visible: { moment: 50, craving: 50, day: 50 },
   scrollY: 0,
   returnRecord: null,
+  calendarMonth: null,
+  selectedDate: null,
+  timelineVisible: 50,
 });
 const historyKey = (entry: HistoryEntry) =>
   `${entry.type}:${entry.type === "day" ? entry.date : entry.item.id}`;
@@ -234,6 +245,7 @@ function HistoryRecord({
   onToggle,
   onCravingUseChange,
   readOnly,
+  timeline = false,
 }: {
   entry: HistoryEntry;
   state: AppState;
@@ -242,6 +254,7 @@ function HistoryRecord({
   onToggle: (open: boolean) => void;
   onCravingUseChange: (id: string, used: boolean) => boolean;
   readOnly: boolean;
+  timeline?: boolean;
 }) {
   const substances =
     entry.type === "craving"
@@ -302,6 +315,12 @@ function HistoryRecord({
           )}
           {entry.type === "moment" && (
             <>
+              {timeline && (
+                <span className="dp-history-preview">
+                  Stemming: {moodLabel(entry.item.before.mood)}
+                  {entry.item.note ? ` · ${entry.item.note}` : ""}
+                </span>
+              )}
               {entry.item.cravingId && (
                 <span className="dp-history-preview">
                   Gekoppeld aan een craving
@@ -323,10 +342,17 @@ function HistoryRecord({
               )}
             </>
           )}
+          {timeline && entry.type === "craving" && (
+            <span className="dp-history-preview">
+              {entry.item.situation ||
+                entry.item.thought ||
+                entry.item.emotion ||
+                "Klap open voor de details"}
+            </span>
+          )}
         </span>
-        <ChevronDown
-          size={22}
-          className="dp-history-chevron"
+        <span
+          className="dp-history-chevron dp-history-chevron-mark"
           aria-hidden="true"
         />
       </summary>
@@ -581,6 +607,293 @@ function HistoryGroup({
   );
 }
 
+function HistoryDayTimeline({
+  state,
+  date,
+  session,
+  onSessionChange,
+  onOpenMoment,
+  onOpenDay,
+  onOpenCraving,
+  onCravingUseChange,
+  readOnly,
+}: {
+  state: AppState;
+  date: string;
+  session: HistorySession;
+  onSessionChange: Dispatch<SetStateAction<HistorySession>>;
+  onOpenMoment: (id: string) => void;
+  onOpenDay: (date: string) => void;
+  onOpenCraving: (id: string) => void;
+  onCravingUseChange: (id: string, used: boolean) => boolean;
+  readOnly: boolean;
+}) {
+  const events = useMemo(
+    () =>
+      historyDayTimeline(state, date).sort((a, b) => {
+        if (a.time === b.time) return 0;
+        if (a.time === null) return 1;
+        if (b.time === null) return -1;
+        return b.time.localeCompare(a.time);
+      }),
+    [state, date],
+  );
+  const visible = events.slice(0, session.timelineVisible);
+  const listRef = useRef<HTMLDivElement>(null);
+  const toggle = (key: string, open: boolean) =>
+    onSessionChange((current) => ({
+      ...current,
+      expanded: open
+        ? [...new Set([...current.expanded, key])]
+        : current.expanded.filter((item) => item !== key),
+    }));
+  const edit = (event: HistoryTimelineEvent, key: string) => {
+    onSessionChange((current) => ({
+      ...current,
+      scrollY: window.scrollY,
+      returnRecord: key,
+    }));
+    if (event.kind === "craving") onOpenCraving(event.recordId);
+    else if (event.kind === "day") onOpenDay(event.date);
+    else if (event.kind === "checkin" || event.kind === "after")
+      onOpenMoment(event.recordId);
+  };
+  const renderEvent = (event: HistoryTimelineEvent) => {
+    const entry: HistoryEntry | null =
+      event.kind === "checkin"
+        ? {
+            type: "moment",
+            item: event.moment,
+            date: event.date,
+            time: event.time,
+          }
+        : event.kind === "craving"
+          ? {
+              type: "craving",
+              item: event.craving,
+              date: event.date,
+              time: event.time,
+            }
+          : event.kind === "day"
+            ? { type: "day", item: event.day, date: event.date, time: "" }
+            : null;
+    const key = entry ? historyKey(entry) : event.id;
+    const open = session.expanded.includes(key);
+    return (
+      <li
+        key={event.id}
+        data-timeline-id={event.id}
+        data-timeline-kind={event.kind}
+        data-timeline-time={event.time || ""}
+      >
+        {entry ? (
+          <HistoryRecord
+            entry={entry}
+            state={state}
+            timeline
+            open={open}
+            onToggle={(value) => toggle(key, value)}
+            onEdit={() => edit(event, key)}
+            onCravingUseChange={onCravingUseChange}
+            readOnly={readOnly}
+          />
+        ) : (
+          <details
+            id={historyElementId(key)}
+            className="dp-history-record"
+            open={open}
+            onToggle={(e) => {
+              if (e.currentTarget.open !== open)
+                toggle(key, e.currentTarget.open);
+            }}
+          >
+            <summary className="dp-history-summary">
+              <span className="dp-history-summary-text">
+                <strong className="dp-history-type">
+                  {event.kind === "after" ? "Nameting" : "Klein moment"}
+                </strong>
+                <span className="dp-history-date">
+                  <time dateTime={event.date}>
+                    {dateLabel(event.date, true)}
+                  </time>
+                  {event.time && (
+                    <time dateTime={`${event.date}T${event.time}`}>
+                      {event.time}
+                    </time>
+                  )}
+                </span>
+                <span className="dp-history-preview">
+                  {event.kind === "after"
+                    ? `Stemming: ${moodLabel(event.ratings.mood)}`
+                    : event.kind === "growth"
+                      ? event.growth.text
+                      : ""}
+                </span>
+              </span>
+              <ChevronDown
+                size={22}
+                className="dp-history-chevron"
+                aria-hidden="true"
+              />
+            </summary>
+            {open && (
+              <div className="dp-history-body dp-history-entry">
+                {event.kind === "after" ? (
+                  <>
+                    <HistoryFields
+                      fields={[
+                        [
+                          "Nameting",
+                          `${dateLabel(event.date, true)} · ${event.time || "Tijdstip niet vastgelegd"}`,
+                        ],
+                        [
+                          "Stemming bij nameting",
+                          moodLabel(event.ratings.mood),
+                        ],
+                        [
+                          "Bij check-in van",
+                          `${dateLabel(event.moment.date, true)} · ${event.moment.time}`,
+                        ],
+                      ]}
+                    />
+                    <HistoryRatings before={event.ratings} />
+                    <HistoryFields
+                      fields={[
+                        ["Activiteit bij check-in", event.moment.activity],
+                        [
+                          "Activiteit geprobeerd",
+                          event.moment.attempted === true
+                            ? "Ja"
+                            : event.moment.attempted === false
+                              ? "Nee"
+                              : "Niet ingevuld",
+                        ],
+                        ["Notitie bij check-in", event.moment.note],
+                      ]}
+                    />
+                    <button
+                      type="button"
+                      className="dp-button quiet"
+                      onClick={() => edit(event, key)}
+                    >
+                      <Pencil size={17} aria-hidden="true" /> Check-in bekijken
+                      of bewerken
+                    </button>
+                  </>
+                ) : event.kind === "growth" ? (
+                  <>
+                    <HistoryFields
+                      fields={[["Klein moment", event.growth.text]]}
+                    />
+                    {event.growth.favorite && (
+                      <p className="dp-muted">Bewaard als favoriet</p>
+                    )}
+                    <a
+                      className="dp-button quiet"
+                      href="#/growth"
+                      onClick={() =>
+                        onSessionChange((current) => ({
+                          ...current,
+                          scrollY: window.scrollY,
+                          returnRecord: key,
+                        }))
+                      }
+                    >
+                      Kleine momenten bekijken
+                    </a>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </details>
+        )}
+        {event.time === null && (
+          <p className="dp-history-no-time">Tijdstip niet vastgelegd</p>
+        )}
+      </li>
+    );
+  };
+  const timed = visible.filter((event) => event.time !== null);
+  const untimed = visible.filter((event) => event.time === null);
+  return (
+    <section
+      className="dp-records-section dp-day-timeline"
+      aria-label={`Tijdlijn van ${dateLabel(date, true)}`}
+    >
+      <div className="dp-section-head dp-records-header">
+        <div>
+          <p className="dp-kicker">Tijdlijn van deze dag</p>
+          <h2 id="dp-history-entries" tabIndex={-1}>
+            {new Intl.DateTimeFormat("nl-NL", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            }).format(new Date(`${date}T12:00:00`))}
+          </h2>
+          <p className="dp-muted">
+            Nieuwste moment bovenaan. Klap open om alles terug te lezen.
+          </p>
+        </div>
+        <p className="dp-muted" role="status">
+          {events.length} {events.length === 1 ? "registratie" : "registraties"}
+        </p>
+      </div>
+      {!events.length && (
+        <div className="dp-empty-inline">
+          <h3>Geen registraties op deze dag</h3>
+          <p>
+            Kies een gemarkeerde dag om je bewaarde momenten terug te lezen.
+          </p>
+        </div>
+      )}
+      <div ref={listRef}>
+        {timed.length > 0 && (
+          <ol className="dp-history-list dp-day-timeline-list">
+            {timed.map(renderEvent)}
+          </ol>
+        )}
+        {untimed.length > 0 && (
+          <section className="dp-day-untimed" aria-label="Over deze dag">
+            <h3>Over deze dag</h3>
+            <p className="dp-muted">
+              Deze onderdelen hebben een datum, maar geen vastgelegd tijdstip.
+            </p>
+            <ol className="dp-history-list">{untimed.map(renderEvent)}</ol>
+          </section>
+        )}
+      </div>
+      {events.length > 50 && (
+        <div className="dp-history-pagination">
+          <p className="dp-muted" role="status">
+            Je ziet {visible.length} van {events.length} registraties.
+          </p>
+          {session.timelineVisible < events.length && (
+            <button
+              type="button"
+              className="dp-button"
+              onClick={() => {
+                const firstAdded = visible.length;
+                onSessionChange((current) => ({
+                  ...current,
+                  timelineVisible: current.timelineVisible + 50,
+                }));
+                requestAnimationFrame(() =>
+                  listRef.current
+                    ?.querySelectorAll<HTMLElement>("li > details > summary")
+                    [firstAdded]?.focus(),
+                );
+              }}
+            >
+              Meer momenten tonen
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function HistoryView({
   state,
   currentDate,
@@ -602,7 +915,7 @@ export function HistoryView({
   onCravingUseChange: (id: string, used: boolean) => boolean;
   readOnly: boolean;
 }) {
-  const { period, kind, query } = session;
+  const { period, kind, query, selectedDate } = session;
   const [reveal, setReveal] = useState<WeekRecordTarget | null>(null);
   const [searchDraft, setSearchDraft] = useState<Pick<
     HistorySession,
@@ -649,6 +962,7 @@ export function HistoryView({
       ...current,
       ...patch,
       visible: { moment: 50, craving: 50, day: 50 },
+      selectedDate: null,
       scrollY: 0,
       returnRecord: null,
     }));
@@ -795,7 +1109,7 @@ export function HistoryView({
           <p className="dp-kicker">Jouw aantekeningen</p>
           <h1 tabIndex={-1}>Terugkijken</h1>
           <p className="dp-lead">
-            Klap een registratie open om alles terug te lezen.
+            Kies een dag in de kalender om je tijdlijn terug te lezen.
           </p>
         </div>
         <button
@@ -819,10 +1133,49 @@ export function HistoryView({
           )}
         </button>
       </header>
+      <HistoryCalendar
+        state={state}
+        today={currentDate}
+        month={session.calendarMonth || currentDate.slice(0, 7)}
+        selectedDate={selectedDate}
+        onMonthChange={(month) =>
+          onSessionChange((current) => ({
+            ...current,
+            calendarMonth: month,
+            selectedDate: null,
+            returnRecord: null,
+            scrollY: 0,
+          }))
+        }
+        onSelectDate={(date) => {
+          onSessionChange((current) => ({
+            ...current,
+            calendarMonth: date.slice(0, 7),
+            selectedDate: date,
+            period: "all",
+            kind: "all",
+            query: "",
+            timelineVisible: 50,
+            returnRecord: null,
+            scrollY: 0,
+          }));
+          requestAnimationFrame(() => {
+            const heading = document.getElementById("dp-history-entries");
+            heading?.focus({ preventScroll: true });
+            heading?.scrollIntoView({ block: "start", behavior: "instant" });
+          });
+        }}
+      />
       <div className="dp-history-selection">
         <p id="dp-history-selection">
           <strong className="dp-history-filter-label">Filter:</strong>
-          <span>{period === "week" ? "Afgelopen 7 dagen" : "Alle dagen"}</span>
+          <span>
+            {selectedDate
+              ? dateLabel(selectedDate, true)
+              : period === "week"
+                ? "Afgelopen 7 dagen"
+                : "Alle dagen"}
+          </span>
           <span>
             {
               {
@@ -835,6 +1188,25 @@ export function HistoryView({
           </span>
           {query.trim() && <span>Zoekterm: ‘{query.trim()}’</span>}
         </p>
+        {selectedDate && (
+          <button
+            type="button"
+            className="dp-button quiet"
+            onClick={() => {
+              changeFilter({ period: "all", kind: "all", query: "" });
+              requestAnimationFrame(() => {
+                const heading = document.getElementById("dp-history-entries");
+                heading?.focus({ preventScroll: true });
+                heading?.scrollIntoView({
+                  block: "start",
+                  behavior: "instant",
+                });
+              });
+            }}
+          >
+            Alle registraties
+          </button>
+        )}
         {activeFilters > 0 && (
           <button
             type="button"
@@ -930,7 +1302,7 @@ export function HistoryView({
           </form>
         </Dialog>
       )}
-      {period === "week" && (
+      {!selectedDate && period === "week" && (
         <WeekOverview
           state={state}
           currentDate={currentDate}
@@ -951,106 +1323,124 @@ export function HistoryView({
           }}
         />
       )}
-      {hasRecords && (kind === "all" || kind === "checkin") && (
-        <MoodPlot observations={observations} />
-      )}
-      <section
-        className="dp-records-section"
-        aria-labelledby="dp-history-entries"
-      >
-        <div className="dp-section-head dp-records-header">
-          <div>
-            <p className="dp-kicker">Je bewaarde momenten</p>
-            <h2 id="dp-history-entries" tabIndex={-1}>
-              Registraties
-            </h2>
-            <p className="dp-muted">
-              Check-ins, cravings en dagoverzichten, elk in hun eigen groep.
-            </p>
-          </div>
-          <p className="dp-muted" role="status">
-            {entries.length} gevonden
-          </p>
-        </div>
-        {!entries.length && (
-          <div className="dp-empty-inline">
-            <h3>
-              {hasRecords
-                ? "Geen registraties gevonden"
-                : "Je hebt nog geen registraties"}
-            </h3>
-            <p>
-              {hasRecords
-                ? "Probeer een andere periode of verwijder je zoekterm."
-                : "Je eerste check-in, craving of dagoverzicht verschijnt hier zodra je iets bewaart."}
-            </p>
-            {hasRecords ? (
-              <button
-                className="dp-button quiet"
-                onClick={() => {
-                  changeFilter({ period: "all", kind: "all", query: "" });
-                }}
-              >
-                Alle registraties tonen
-              </button>
-            ) : (
-              <a className="dp-button quiet" href="#/today">
-                Naar Vandaag
-              </a>
-            )}
-          </div>
+      {!selectedDate &&
+        hasRecords &&
+        (kind === "all" || kind === "checkin") && (
+          <MoodPlot observations={observations} />
         )}
-        {!!entries.length &&
-          (["moment", "craving", "day"] as const)
-            .filter(
-              (type) =>
-                kind === "all" ||
-                kind === (type === "moment" ? "checkin" : type),
-            )
-            .map((type) => (
-              <HistoryGroup
-                key={type}
-                type={type}
-                state={state}
-                entries={entries.filter((entry) => entry.type === type)}
-                session={session}
-                onSessionChange={onSessionChange}
-                readOnly={readOnly}
-                onCravingUseChange={(id, used) => {
-                  if (!onCravingUseChange(id, used)) return false;
-                  requestAnimationFrame(() => {
-                    // Removing a mark can remove this card from search results.
-                    if (
-                      !document.getElementById(
-                        historyElementId(`craving:${id}`),
-                      )
-                    ) {
-                      const heading =
-                        document.getElementById("dp-history-entries");
-                      heading?.focus({ preventScroll: true });
-                      heading?.scrollIntoView({
-                        block: "start",
-                        behavior: "instant",
-                      });
-                    }
-                  });
-                  return true;
-                }}
-                onEdit={(entry) => {
-                  onSessionChange((current) => ({
-                    ...current,
-                    scrollY: window.scrollY,
-                    returnRecord: historyKey(entry),
-                  }));
-                  entry.type === "day"
-                    ? onOpenDay(entry.date)
-                    : entry.type === "craving"
-                      ? onOpenCraving(entry.item.id)
-                      : onOpenMoment(entry.item.id);
-                }}
-              />
-            ))}
-      </section>
+      {selectedDate ? (
+        <HistoryDayTimeline
+          state={state}
+          date={selectedDate}
+          session={session}
+          onSessionChange={onSessionChange}
+          onOpenMoment={onOpenMoment}
+          onOpenDay={onOpenDay}
+          onOpenCraving={onOpenCraving}
+          onCravingUseChange={onCravingUseChange}
+          readOnly={readOnly}
+        />
+      ) : (
+        <section
+          className="dp-records-section"
+          aria-labelledby="dp-history-entries"
+        >
+          <div className="dp-section-head dp-records-header">
+            <div>
+              <p className="dp-kicker">Je bewaarde momenten</p>
+              <h2 id="dp-history-entries" tabIndex={-1}>
+                Registraties
+              </h2>
+              <p className="dp-muted">
+                Check-ins, cravings en dagoverzichten, elk in hun eigen groep.
+              </p>
+            </div>
+            <p className="dp-muted" role="status">
+              {entries.length} gevonden
+            </p>
+          </div>
+          {!entries.length && (
+            <div className="dp-empty-inline">
+              <h3>
+                {hasRecords
+                  ? "Geen registraties gevonden"
+                  : state.growth.length
+                    ? "Nog geen check-ins, cravings of dagoverzichten"
+                    : "Je hebt nog geen registraties"}
+              </h3>
+              <p>
+                {hasRecords
+                  ? "Probeer een andere periode of verwijder je zoekterm."
+                  : "Je eerste check-in, craving of dagoverzicht verschijnt hier zodra je iets bewaart."}
+              </p>
+              {hasRecords ? (
+                <button
+                  className="dp-button quiet"
+                  onClick={() => {
+                    changeFilter({ period: "all", kind: "all", query: "" });
+                  }}
+                >
+                  Alle registraties tonen
+                </button>
+              ) : (
+                <a className="dp-button quiet" href="#/today">
+                  Naar Vandaag
+                </a>
+              )}
+            </div>
+          )}
+          {!!entries.length &&
+            (["moment", "craving", "day"] as const)
+              .filter(
+                (type) =>
+                  kind === "all" ||
+                  kind === (type === "moment" ? "checkin" : type),
+              )
+              .map((type) => (
+                <HistoryGroup
+                  key={type}
+                  type={type}
+                  state={state}
+                  entries={entries.filter((entry) => entry.type === type)}
+                  session={session}
+                  onSessionChange={onSessionChange}
+                  readOnly={readOnly}
+                  onCravingUseChange={(id, used) => {
+                    if (!onCravingUseChange(id, used)) return false;
+                    requestAnimationFrame(() => {
+                      // Removing a mark can remove this card from search results.
+                      if (
+                        !document.getElementById(
+                          historyElementId(`craving:${id}`),
+                        )
+                      ) {
+                        const heading =
+                          document.getElementById("dp-history-entries");
+                        heading?.focus({ preventScroll: true });
+                        heading?.scrollIntoView({
+                          block: "start",
+                          behavior: "instant",
+                        });
+                      }
+                    });
+                    return true;
+                  }}
+                  onEdit={(entry) => {
+                    onSessionChange((current) => ({
+                      ...current,
+                      scrollY: window.scrollY,
+                      returnRecord: historyKey(entry),
+                    }));
+                    entry.type === "day"
+                      ? onOpenDay(entry.date)
+                      : entry.type === "craving"
+                        ? onOpenCraving(entry.item.id)
+                        : onOpenMoment(entry.item.id);
+                  }}
+                />
+              ))}
+        </section>
+      )}
     </div>
   );
 }
